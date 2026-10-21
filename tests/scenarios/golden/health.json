@@ -1,0 +1,71 @@
+{
+  "every_file_is_current": {
+    "case_sha256": "d15dbfcc44354e72cc1514e98ae6b986761c9234a6b23f32907792a1d1c47368",
+    "rows": {
+      "example-daily.jsonl": "{\"date\": \"2026-09-21\", \"n\": 1}\n{\"date\": \"2026-09-22\", \"n\": 1}\n{\"date\": \"2026-09-23\", \"n\": 1}\n",
+      "example-lagging.jsonl": "{\"date\": \"2026-09-20\", \"n\": 1}\n{\"date\": \"2026-09-21\", \"n\": 1}\n{\"date\": \"2026-09-22\", \"n\": 1}\n",
+      "health.jsonl": "{\"date\": \"2026-09-23\", \"script_version\": \"0.0.0-example\", \"script_hash\": \"0123456789ab\", \"checked\": 2, \"stale_count\": 0, \"stale\": [], \"failed_count\": 0, \"failed\": [], \"gap_window_days\": 14, \"gap_count\": 0, \"gaps\": [], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "an_empty_folder": {
+    "case_sha256": "07978d4777510f26424504a85e3cca450461221a83b638bb4946a949d1488a8c",
+    "rows": {
+      "health.jsonl": "{\"date\": \"2026-09-23\", \"script_version\": \"0.0.0-example\", \"script_hash\": \"0123456789ab\", \"checked\": 0, \"stale_count\": 0, \"stale\": [], \"failed_count\": 0, \"failed\": [], \"gap_window_days\": 14, \"gap_count\": 0, \"gaps\": [], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "stale_files": {
+    "case_sha256": "f94dba9a78f2d21d32dbaad77ada4199db7b999e15a6d675014aaf4a40dc91e5",
+    "rows": {
+      "example-ahead.jsonl": "{\"date\": \"2026-09-24\", \"n\": 1}\n",
+      "example-behind.jsonl": "{\"date\": \"2026-09-20\", \"n\": 1}\n{\"date\": \"2026-09-21\", \"n\": 1}\n",
+      "example-empty.jsonl": "",
+      "example-lagging-behind.jsonl": "{\"date\": \"2026-09-20\", \"n\": 1}\n",
+      "example-lagging.jsonl": "{\"date\": \"2026-09-21\", \"n\": 1}\n",
+      "example-undated.jsonl": "{\"n\": 1}\nnot json\n",
+      "health.jsonl": "{\"date\": \"2026-09-23\", \"script_version\": \"0.0.0-example\", \"script_hash\": \"0123456789ab\", \"checked\": 6, \"stale_count\": 4, \"stale\": [{\"file\": \"example-behind.jsonl\", \"last\": \"2026-09-21\", \"age_days\": 2}, {\"file\": \"example-empty.jsonl\", \"last\": null, \"age_days\": null}, {\"file\": \"example-lagging-behind.jsonl\", \"last\": \"2026-09-20\", \"age_days\": 3}, {\"file\": \"example-undated.jsonl\", \"last\": null, \"age_days\": null}], \"failed_count\": 0, \"failed\": [], \"gap_window_days\": 14, \"gap_count\": 0, \"gaps\": [], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "failed_files_with_their_streak": {
+    "case_sha256": "f0c5abd147b91a6ec4de6120779923dcb4999bd3f9a50dc2f353a9f88b68965c",
+    "rows": {
+      "example-failing.jsonl": "{\"date\": \"2026-09-18\", \"n\": 1}\n{\"date\": \"2026-09-19\", \"n\": 1}\n{\"date\": \"2026-09-21\", \"status\": \"fetch_failed\", \"reason\": \"request failed\"}\n{\"date\": \"2026-09-22\", \"status\": \"partial\", \"reason\": \"request failed\"}\n{\"date\": \"2026-09-23\", \"status\": \"fetch_failed\", \"reason\": \"request failed\"}\n",
+      "example-never-good.jsonl": "{\"date\": \"2026-09-22\", \"status\": \"fetch_failed\", \"reason\": \"request failed\"}\n{\"date\": \"2026-09-23\", \"status\": \"fetch_failed\", \"reason\": \"request failed\"}\n",
+      "example-once.jsonl": "{\"date\": \"2026-09-22\", \"n\": 1}\n{\"date\": \"2026-09-23\", \"status\": \"rate_limited\", \"reason\": \"request failed\"}\n",
+      "example-status-ok.jsonl": "{\"date\": \"2026-09-22\", \"n\": 1, \"status\": \"ok\"}\n{\"date\": \"2026-09-23\", \"n\": 1, \"status\": \"ok\"}\n",
+      "health.jsonl": "{\"date\": \"2026-09-23\", \"script_version\": \"0.0.0-example\", \"script_hash\": \"0123456789ab\", \"checked\": 4, \"stale_count\": 0, \"stale\": [], \"failed_count\": 3, \"failed\": [{\"file\": \"example-failing.jsonl\", \"last\": \"2026-09-23\", \"status\": \"fetch_failed\", \"streak\": 3, \"since\": \"2026-09-21\"}, {\"file\": \"example-never-good.jsonl\", \"last\": \"2026-09-23\", \"status\": \"fetch_failed\", \"streak\": 2, \"since\": \"2026-09-22\"}, {\"file\": \"example-once.jsonl\", \"last\": \"2026-09-23\", \"status\": \"rate_limited\", \"streak\": 1, \"since\": \"2026-09-23\"}], \"gap_window_days\": 14, \"gap_count\": 3, \"gaps\": [{\"file\": \"example-failing.jsonl\", \"window\": \"2026-09-18..2026-09-23\", \"missing_count\": 1, \"missing\": [\"2026-09-20\"], \"empty_count\": 3, \"empty\": [\"2026-09-21\", \"2026-09-22\", \"2026-09-23\"]}, {\"file\": \"example-never-good.jsonl\", \"window\": \"2026-09-22..2026-09-23\", \"missing_count\": 0, \"missing\": [], \"empty_count\": 2, \"empty\": [\"2026-09-22\", \"2026-09-23\"]}, {\"file\": \"example-once.jsonl\", \"window\": \"2026-09-22..2026-09-23\", \"missing_count\": 0, \"missing\": [], \"empty_count\": 1, \"empty\": [\"2026-09-23\"]}], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "gaps_in_the_last_14_days": {
+    "case_sha256": "5bcfc542808607c672ee712a6b30c2c6c3624a6aef90623c5160b9de80a01769",
+    "rows": {
+      "example-holes.jsonl": "{\"date\": \"2026-09-01\", \"n\": 1}\n{\"date\": \"2026-09-05\", \"n\": 1}\n{\"date\": \"2026-09-10\", \"n\": 1}\n{\"date\": \"2026-09-23\", \"n\": 1}\n",
+      "example-lagging.jsonl": "{\"date\": \"2026-09-18\", \"n\": 1}\n{\"date\": \"2026-09-20\", \"n\": 1}\n",
+      "example-new.jsonl": "{\"date\": \"2026-09-20\", \"n\": 1}\n{\"date\": \"2026-09-22\", \"status\": \"parse_failed\", \"reason\": \"request failed\"}\n{\"date\": \"2026-09-23\", \"n\": 1}\n",
+      "health.jsonl": "{\"date\": \"2026-09-23\", \"script_version\": \"0.0.0-example\", \"script_hash\": \"0123456789ab\", \"checked\": 3, \"stale_count\": 1, \"stale\": [{\"file\": \"example-lagging.jsonl\", \"last\": \"2026-09-20\", \"age_days\": 3}], \"failed_count\": 0, \"failed\": [], \"gap_window_days\": 14, \"gap_count\": 3, \"gaps\": [{\"file\": \"example-holes.jsonl\", \"window\": \"2026-09-10..2026-09-23\", \"missing_count\": 12, \"missing\": [\"2026-09-11\", \"2026-09-12\", \"2026-09-13\", \"2026-09-14\", \"2026-09-15\", \"2026-09-16\", \"2026-09-17\", \"2026-09-18\", \"2026-09-19\", \"2026-09-20\"], \"empty_count\": 0, \"empty\": []}, {\"file\": \"example-lagging.jsonl\", \"window\": \"2026-09-18..2026-09-20\", \"missing_count\": 1, \"missing\": [\"2026-09-19\"], \"empty_count\": 0, \"empty\": []}, {\"file\": \"example-new.jsonl\", \"window\": \"2026-09-20..2026-09-23\", \"missing_count\": 1, \"missing\": [\"2026-09-21\"], \"empty_count\": 1, \"empty\": [\"2026-09-22\"]}], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "the_last_line_for_a_date_wins": {
+    "case_sha256": "5d3a5a2f2b8cfa4bbe5bdcc4d64e3527fed0d5a351761165acda15678d75cfa5",
+    "rows": {
+      "example-broke.jsonl": "{\"date\": \"2026-09-22\", \"n\": 1}\n{\"date\": \"2026-09-23\", \"n\": 1}\n{\"date\": \"2026-09-23\", \"status\": \"fetch_failed\", \"reason\": \"request failed\"}\n",
+      "example-healed.jsonl": "{\"date\": \"2026-09-22\", \"n\": 1}\n{\"date\": \"2026-09-23\", \"status\": \"fetch_failed\", \"reason\": \"request failed\"}\n\n{\"date\": \"2026-09-23\", \"n\": 1}\n",
+      "example-unordered.jsonl": "{\"date\": \"2026-09-23\", \"n\": 1}\n{\"date\": \"2026-09-21\", \"n\": 1}\nnot json\n{\"date\": \"\"}\n{\"date\": null}\n{\"date\": \"2026-09-22\", \"n\": 1}\n",
+      "health.jsonl": "{\"date\": \"2026-09-23\", \"script_version\": \"0.0.0-example\", \"script_hash\": \"0123456789ab\", \"checked\": 3, \"stale_count\": 0, \"stale\": [], \"failed_count\": 1, \"failed\": [{\"file\": \"example-broke.jsonl\", \"last\": \"2026-09-23\", \"status\": \"fetch_failed\", \"streak\": 1, \"since\": \"2026-09-23\"}], \"gap_window_days\": 14, \"gap_count\": 1, \"gaps\": [{\"file\": \"example-broke.jsonl\", \"window\": \"2026-09-22..2026-09-23\", \"missing_count\": 0, \"missing\": [], \"empty_count\": 1, \"empty\": [\"2026-09-23\"]}], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "a_rerun_replaces_the_days_health_row": {
+    "case_sha256": "02f6f9ebf015f6e6f62cabdcde134287948a02290d4c52d39c827c1bb440265b",
+    "rows": {
+      "example-daily.jsonl": "{\"date\": \"2026-09-21\", \"n\": 1}\n{\"date\": \"2026-09-22\", \"n\": 1}\n{\"date\": \"2026-09-23\", \"n\": 1}\n",
+      "example-lagging.jsonl": "{\"date\": \"2026-09-20\", \"n\": 1}\n{\"date\": \"2026-09-21\", \"n\": 1}\n{\"date\": \"2026-09-22\", \"n\": 1}\n",
+      "health.jsonl": "{\"date\": \"2026-09-22\", \"checked\": 7}\n{\"date\": \"2026-09-23\", \"script_version\": \"0.0.0-example\", \"script_hash\": \"0123456789ab\", \"checked\": 2, \"stale_count\": 0, \"stale\": [], \"failed_count\": 0, \"failed\": [], \"gap_window_days\": 14, \"gap_count\": 0, \"gaps\": [], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "a_line_that_is_not_a_row_is_skipped": {
+    "case_sha256": "7bc17746a2bb70cd45dc8065affe743470bd9af4647782a70bfc60fc8289271c",
+    "rows": {
+      "example-daily.jsonl": "{\"date\": \"2026-09-21\", \"n\": 1}\n{\"date\": \"2026-09-22\", \"n\": 1}\n{\"date\": \"2026-09-23\", \"n\": 1}\nnull\n[1]\n{\"date\": 5}\n{\"date\": \"not-a-date\"}\n{\"date\": \"20260901\"}\n",
+      "example-lagging.jsonl": "{\"date\": \"2026-09-20\", \"n\": 1}\n{\"date\": \"2026-09-21\", \"n\": 1}\n{\"date\": \"2026-09-22\", \"n\": 1}\n"
+    }
+  }
+}

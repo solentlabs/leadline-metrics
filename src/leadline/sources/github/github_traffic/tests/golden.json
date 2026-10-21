@@ -1,0 +1,72 @@
+{
+  "snapshot_with_the_top_five_referrers": {
+    "case_sha256": "1782773cc2b21a49e19f809d50c5a9b116d2fcf145808a9daeab6d34a55138fa",
+    "rows": {
+      "github-traffic.jsonl": "{\"date\": \"2026-09-23\", \"window_end\": \"2026-09-23\", \"views_unique\": 82, \"views_total\": 553, \"views_ratio\": 6.74, \"clones_unique\": 37, \"clones_total\": 96, \"clones_ratio\": 2.59, \"top_referrers\": [{\"ref\": \"github.com\", \"count\": 40, \"unique\": 12}, {\"ref\": \"example.com\", \"count\": 35, \"unique\": 11}, {\"ref\": \"forum.example\", \"count\": 30, \"unique\": 10}, {\"ref\": \"search.example\", \"count\": 25, \"unique\": 9}, {\"ref\": \"news.example\", \"count\": 20, \"unique\": 8}], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "failed_referrers_leave_the_list_empty": {
+    "case_sha256": "7c7d05b988658b7f490abbce03342693b101fbc0d5e7d0c143f9e55b9d0dc05c",
+    "rows": {
+      "github-traffic.jsonl": "{\"date\": \"2026-09-23\", \"window_end\": \"2026-09-23\", \"views_unique\": 82, \"views_total\": 553, \"views_ratio\": 6.74, \"clones_unique\": 37, \"clones_total\": 96, \"clones_ratio\": 2.59, \"top_referrers\": [], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "a_window_ending_before_the_run_date": {
+    "case_sha256": "e0d19f5a92848c473a1559a32ae35e5ddc8ec944f9de8500daa4c4b2091ed4f6",
+    "rows": {
+      "github-traffic.jsonl": "{\"date\": \"2026-09-23\", \"window_end\": \"2026-09-21\", \"views_unique\": 69, \"views_total\": 438, \"views_ratio\": 6.35, \"clones_unique\": 32, \"clones_total\": 83, \"clones_ratio\": 2.59, \"top_referrers\": [{\"ref\": \"github.com\", \"count\": 40, \"unique\": 12}, {\"ref\": \"example.com\", \"count\": 35, \"unique\": 11}, {\"ref\": \"forum.example\", \"count\": 30, \"unique\": 10}, {\"ref\": \"search.example\", \"count\": 25, \"unique\": 9}, {\"ref\": \"news.example\", \"count\": 20, \"unique\": 8}], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "items_without_a_timestamp": {
+    "case_sha256": "be0d2607fea4ece82929b30d6c016249fb19e2dee9d89e194b56ce957151cda9",
+    "rows": {
+      "github-traffic.jsonl": "{\"date\": \"2026-09-22\", \"views_total\": 5}\n{\"date\": \"2026-09-23\", \"window_end\": \"2026-09-22\", \"views_unique\": 82, \"views_total\": 553, \"views_ratio\": 6.74, \"clones_unique\": 37, \"clones_total\": 96, \"clones_ratio\": 2.59, \"top_referrers\": [{\"ref\": \"github.com\", \"count\": 40, \"unique\": 12}, {\"ref\": \"example.com\", \"count\": 35, \"unique\": 11}, {\"ref\": \"forum.example\", \"count\": 30, \"unique\": 10}, {\"ref\": \"search.example\", \"count\": 25, \"unique\": 9}, {\"ref\": \"news.example\", \"count\": 20, \"unique\": 8}], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "an_escaped_quote_in_the_referrers_writes_nothing": {
+    "case_sha256": "a57c667f8a77d4f0f7dd68a23193fbd14e31aeae81d259a87cdc061cc92461cf",
+    "rows": {
+      "github-traffic.jsonl": "{\"date\": \"2026-09-22\", \"views_total\": 5}\n"
+    }
+  },
+  "triple_quotes_in_the_referrers_write_nothing": {
+    "case_sha256": "6fd154aaa221e6e148d4f7d9f0cf6a652c74e4b9ab0779a5bb078ebb24ca3497",
+    "rows": {
+      "github-traffic.jsonl": "{\"date\": \"2026-09-22\", \"views_total\": 5}\n"
+    }
+  },
+  "referrers_not_a_list_write_nothing": {
+    "case_sha256": "6431e1abe82debad13323c871d86fee92c5b116eb22e2f419730d52ddd73860c",
+    "rows": {
+      "github-traffic.jsonl": "{\"date\": \"2026-09-22\", \"views_total\": 5}\n"
+    }
+  },
+  "unparseable_views_write_nothing": {
+    "case_sha256": "4056e133f1299a5263dbd8dd5557d519c399d12bd74b06b6873403e599e11d92",
+    "rows": {
+      "github-traffic.jsonl": "{\"date\": \"2026-09-22\", \"views_total\": 5}\n"
+    }
+  },
+  "an_empty_window": {
+    "case_sha256": "d1c22d3922532cb2decefb20671f5211559880b87b8a990452a9fc72a35c5ee3",
+    "rows": {
+      "github-traffic.jsonl": "{\"date\": \"2026-09-22\", \"views_total\": 5}\n{\"date\": \"2026-09-23\", \"window_end\": null, \"views_unique\": 0, \"views_total\": 0, \"views_ratio\": 0, \"clones_unique\": 0, \"clones_total\": 0, \"clones_ratio\": 0, \"top_referrers\": [], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "failed_views_write_nothing": {
+    "case_sha256": "74a5865308afaebf9d61398eaf7ece2a219c5f402b72f450870cb411fe204da0",
+    "rows": {
+      "github-traffic.jsonl": "{\"date\": \"2026-09-22\", \"views_total\": 5}\n"
+    }
+  },
+  "failed_clones_write_nothing": {
+    "case_sha256": "e7d9de674d8c339e336c316a7620f52ab67f749931d57bf0965afd0dfc2cb25f",
+    "rows": {
+      "github-traffic.jsonl": "{\"date\": \"2026-09-22\", \"views_total\": 5}\n"
+    }
+  },
+  "skips_without_a_token": {
+    "case_sha256": "4368708d702b9fd9641ee8c4ebe96c744012b65f7cab33ff1c8c6b369ef94ab3",
+    "rows": {}
+  }
+}

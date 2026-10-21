@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make *)",
+      "Bash(.venv/bin/pytest *)",
+      "Bash(.venv/bin/ruff *)",
+      "Bash(.venv/bin/mypy *)"
+    ],
+    "deny": [
+      "WebFetch(domain:pypistats.org)",
+      "Bash(*pypistats.org*)"
+    ]
+  }
+}

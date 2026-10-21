@@ -1,0 +1,38 @@
+name: Source request
+description: Ask for leadline to read a platform or a kind of data it does not read yet.
+labels: ["source"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A source is one folder ([how to add one](https://github.com/solentlabs/leadline-metrics/blob/main/docs/ADDING_A_SOURCE.md)),
+        so a pull request is welcome too. Sources are named for the platform and the data they read, never for a project.
+  - type: input
+    id: platform
+    attributes:
+      label: Platform and data
+      description: What it is and what you want counted each day.
+      placeholder: "NuGet, a package's total downloads"
+    validations:
+      required: true
+  - type: input
+    id: api
+    attributes:
+      label: Link to the API documentation
+    validations:
+      required: true
+  - type: dropdown
+    id: access
+    attributes:
+      label: Does the API need a credential?
+      options:
+        - no
+        - yes, a token
+        - not sure
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: What you would do with it
+      description: Which trend or question the numbers would answer. Not counting who the visitors are; leadline keeps counts, never visitor identities.

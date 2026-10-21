@@ -1,0 +1,2 @@
+// Table rows and code can't wrap.
+{ "MD013": { "tables": false, "code_blocks": false } }

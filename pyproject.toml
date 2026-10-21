@@ -1,0 +1,136 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "leadline-metrics"
+dynamic = ["version"]
+description = "Daily adoption and health metrics for software projects."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.8"
+authors = [{ name = "Solent Labs™" }]
+classifiers = [
+    "Environment :: Console",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Monitoring",
+]
+# Stdlib-only at runtime (docs/ARCHITECTURE_DECISIONS.md); tests/test_packaging.py enforces it.
+dependencies = []
+
+[project.scripts]
+leadline = "leadline.cli:main"
+
+[project.optional-dependencies]
+# A floor, not a pin: Python 3.8 resolves pytest 8.3.5, newer Pythons the latest.
+test = ["pytest>=8.3"]
+dev = [
+    "leadline-metrics[test]",
+    "ruff>=0.16",
+    # 1.16.1 is the last mypy that can target Python 3.8 (docs/ARCHITECTURE_DECISIONS.md).
+    "mypy==1.16.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/solentlabs/leadline-metrics"
+
+[tool.hatch.version]
+path = "src/leadline/__init__.py"
+
+[tool.hatch.build.targets.sdist]
+# The package and its notices. The repo's own tooling (.claude, .github, .vscode, tests, docs, tools) and each
+# package's tests and README.md stay in the repo; tools/check_dist.py holds a release to this.
+include = ["/src", "/README.md", "/LICENSE", "/CHANGELOG.md"]
+exclude = ["/src/**/tests", "/src/**/*.md"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/leadline"]
+# Tests and Markdown stay in the repo: a package's tests/ folder and README.md never reach the wheel.
+exclude = ["**/tests", "**/*.md"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py38"
+
+[tool.ruff.lint]
+# Each family earns its place; the policy is in CONTRIBUTING.md, "Lint, spelling and Markdown".
+select = [
+    "E", "W",  # pycodestyle: PEP 8 errors and warnings
+    "F",       # pyflakes: undefined names, unused imports and variables
+    "I",       # isort: one import order
+    "UP",      # pyupgrade: newest syntax Python 3.8 allows
+    "B",       # bugbear: likely bugs (mutable defaults, loop closures, raise without from)
+    "SIM",     # simpler equivalent code
+    "RUF",     # ruff's own checks, including unused `noqa` comments
+    "PGH",     # no blanket `noqa` or `type: ignore`: every ignore names its rule
+    "C4",      # simpler comprehensions
+    "PIE",     # unnecessary code (pass, duplicate keys, needless spreads)
+    "RET",     # consistent returns
+    "PERF",    # avoidable slow patterns in loops
+    "C90",     # complexity, capped at max-complexity below
+    "N",       # PEP 8 naming
+    "A",       # no shadowed builtins
+    "ARG",     # no unused arguments
+    "BLE",     # no blind `except Exception` that hides the error
+    "S",       # bandit: security (subprocess, exec, urlopen schemes, secrets)
+    "DTZ",     # every datetime timezone-aware, so captured_at can't lose its offset
+    "PTH",     # pathlib over os.path and open(), as the code already prefers
+    "T20",     # no stray print: output goes through the logger, except the CLI's
+    "LOG",     # logging misuse
+    "G",       # lazy logging arguments, not pre-formatted strings
+    "PLE",     # pylint errors
+    "PLW",     # pylint warnings
+    "PT",      # pytest style
+]
+# Left out: D and ANN (docstrings everywhere; mypy strict already types
+# everything), COM, ISC and Q (the formatter owns them), EM, TRY and FBT
+# (message and signature style, not bugs), TC (import juggling for no runtime
+# gain), PLR and PLC (magic-value and count rules; C90 covers complexity),
+# ERA (flags prose comments that look like code), INP (tests aren't a
+# package), FA (mypy as 3.8 already rejects 3.9+ annotations).
+ignore = [
+    # Store reads a file line by line, and each line needs its own except to
+    # be kept rather than fail the write; 3.11+ makes try free anyway.
+    "PERF203",
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+# The CLI's output is its product.
+"src/leadline/cli.py" = ["T20"]
+# assert is pytest's idiom; tests run the script and interpreters with
+# arguments they build themselves; fakes keep the signature they replace;
+# seeded random makes made-up test data, never a secret.
+# A source's or API's own tests, in its tests/ folder, are held to the same.
+"tests/**" = ["S101", "S311", "S603", "S607", "ARG"]
+"src/leadline/**/tests/**" = ["S101", "S311", "S603", "S607", "ARG"]
+# Stand-ins for curl and date, and CLIs: stdout and stderr are their interface.
+"tests/oracle/{shim,script_harness,forbidden_terms}.py" = ["T20"]
+"tests/scenarios/__main__.py" = ["T20"]
+"tools/gen_source_docs.py" = ["T20"]
+"tools/refresh_places.py" = ["T20"]
+
+[tool.mypy]
+python_version = "3.8"
+files = ["src", "tests", "conftest.py", "tools/build_pyz.py", "tools/check_release.py", "tools/gen_source_docs.py", "tools/refresh_places.py"]
+strict = true
+# pytest's own source uses 3.10+ syntax, which mypy targeting 3.8 can't parse,
+# so mypy skips it and the tests see pytest, and its decorators, as untyped
+# (docs/ARCHITECTURE_DECISIONS.md).
+disallow_untyped_decorators = false
+
+[[tool.mypy.overrides]]
+module = ["pytest", "_pytest.*"]
+follow_imports = "skip"
+
+[tool.pytest.ini_options]
+# Tests live in tests/ and in the tests/ folder of a source or API package under src/leadline; those
+# folders are packages (__init__.py), so their module names stay unique.
+testpaths = ["tests", "src/leadline"]
+# conftest.py (the repo root's) imports the oracle helpers; tests import the scenarios package and tools/build_pyz.py and check_release.py.
+pythonpath = ["tests/oracle", "tests", "tools"]
+# `make check` and CI leave the oracle tests out; `make oracle` runs them (docs/TESTING.md).
+addopts = '-q --strict-markers --strict-config -m "not oracle"'
+markers = ["oracle: needs what the local settings name (the real script, the capture, the forbidden-terms list); only `make oracle` runs it"]

@@ -1,0 +1,78 @@
+{
+  "who_opened_what_and_what_was_answered": {
+    "case_sha256": "dd6a25c46ae706797d97ba8d7c5de3a7581cc71363da3089fff023cab3449d82",
+    "rows": {
+      "github-discussions-example.jsonl": "{\"date\": \"2026-09-23\", \"total\": 30, \"fetched\": 12, \"community_opened\": 9, \"maintainer_opened\": 3, \"community_authors\": 2, \"answered\": 2, \"total_comments\": 23, \"categories\": {\"Ideas\": 4, \"Show and tell\": 4, \"Q&A\": 4}, \"recent\": [{\"number\": 1, \"title\": \"Example discussion 1\", \"category\": \"Ideas\", \"author\": \"example-user\", \"comments\": 1, \"upvotes\": 1, \"is_answered\": null, \"updated_at\": \"2026-09-22\"}, {\"number\": 2, \"title\": \"Example discussion 2\", \"category\": \"Show and tell\", \"author\": \"another-user\", \"comments\": 2, \"upvotes\": 2, \"is_answered\": null, \"updated_at\": \"2026-09-21\"}, {\"number\": 3, \"title\": \"Example discussion 3\", \"category\": \"Q&A\", \"author\": \"example-user\", \"comments\": 3, \"upvotes\": 0, \"is_answered\": false, \"updated_at\": \"2026-09-20\"}, {\"number\": 4, \"title\": \"Example discussion 4\", \"category\": \"Ideas\", \"author\": \"example-maintainer\", \"comments\": 4, \"upvotes\": 1, \"is_answered\": null, \"updated_at\": \"2026-09-19\"}, {\"number\": 5, \"title\": \"Example discussion 5\", \"category\": \"Show and tell\", \"author\": \"example-user\", \"comments\": 0, \"upvotes\": 2, \"is_answered\": null, \"updated_at\": \"2026-09-18\"}, {\"number\": 6, \"title\": \"Example discussion 6\", \"category\": \"Q&A\", \"author\": \"another-user\", \"comments\": 1, \"upvotes\": 0, \"is_answered\": true, \"updated_at\": \"2026-09-17\"}, {\"number\": 7, \"title\": \"Example discussion 7\", \"category\": \"Ideas\", \"author\": \"example-user\", \"comments\": 2, \"upvotes\": 1, \"is_answered\": null, \"updated_at\": \"2026-09-16\"}, {\"number\": 8, \"title\": \"Example discussion 8\", \"category\": \"Show and tell\", \"author\": \"example-maintainer\", \"comments\": 3, \"upvotes\": 2, \"is_answered\": null, \"updated_at\": \"2026-09-15\"}, {\"number\": 9, \"title\": \"Example discussion 9\", \"category\": \"Q&A\", \"author\": \"example-user\", \"comments\": 4, \"upvotes\": 0, \"is_answered\": false, \"updated_at\": \"2026-09-14\"}, {\"number\": 10, \"title\": \"Example discussion 10\", \"category\": \"Ideas\", \"author\": \"another-user\", \"comments\": 0, \"upvotes\": 1, \"is_answered\": null, \"updated_at\": \"2026-09-13\"}], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "an_empty_maintainer_login_makes_everyone_community": {
+    "case_sha256": "54e0508eb7326c1c88a8963b323af2c3290e7ef1458bb45ade4e149943adfb6a",
+    "rows": {
+      "github-discussions-example.jsonl": "{\"date\": \"2026-09-23\", \"total\": 30, \"fetched\": 12, \"community_opened\": 12, \"maintainer_opened\": 0, \"community_authors\": 3, \"answered\": 2, \"total_comments\": 23, \"categories\": {\"Ideas\": 4, \"Show and tell\": 4, \"Q&A\": 4}, \"recent\": [{\"number\": 1, \"title\": \"Example discussion 1\", \"category\": \"Ideas\", \"author\": \"example-user\", \"comments\": 1, \"upvotes\": 1, \"is_answered\": null, \"updated_at\": \"2026-09-22\"}, {\"number\": 2, \"title\": \"Example discussion 2\", \"category\": \"Show and tell\", \"author\": \"another-user\", \"comments\": 2, \"upvotes\": 2, \"is_answered\": null, \"updated_at\": \"2026-09-21\"}, {\"number\": 3, \"title\": \"Example discussion 3\", \"category\": \"Q&A\", \"author\": \"example-user\", \"comments\": 3, \"upvotes\": 0, \"is_answered\": false, \"updated_at\": \"2026-09-20\"}, {\"number\": 4, \"title\": \"Example discussion 4\", \"category\": \"Ideas\", \"author\": \"example-maintainer\", \"comments\": 4, \"upvotes\": 1, \"is_answered\": null, \"updated_at\": \"2026-09-19\"}, {\"number\": 5, \"title\": \"Example discussion 5\", \"category\": \"Show and tell\", \"author\": \"example-user\", \"comments\": 0, \"upvotes\": 2, \"is_answered\": null, \"updated_at\": \"2026-09-18\"}, {\"number\": 6, \"title\": \"Example discussion 6\", \"category\": \"Q&A\", \"author\": \"another-user\", \"comments\": 1, \"upvotes\": 0, \"is_answered\": true, \"updated_at\": \"2026-09-17\"}, {\"number\": 7, \"title\": \"Example discussion 7\", \"category\": \"Ideas\", \"author\": \"example-user\", \"comments\": 2, \"upvotes\": 1, \"is_answered\": null, \"updated_at\": \"2026-09-16\"}, {\"number\": 8, \"title\": \"Example discussion 8\", \"category\": \"Show and tell\", \"author\": \"example-maintainer\", \"comments\": 3, \"upvotes\": 2, \"is_answered\": null, \"updated_at\": \"2026-09-15\"}, {\"number\": 9, \"title\": \"Example discussion 9\", \"category\": \"Q&A\", \"author\": \"example-user\", \"comments\": 4, \"upvotes\": 0, \"is_answered\": false, \"updated_at\": \"2026-09-14\"}, {\"number\": 10, \"title\": \"Example discussion 10\", \"category\": \"Ideas\", \"author\": \"another-user\", \"comments\": 0, \"upvotes\": 1, \"is_answered\": null, \"updated_at\": \"2026-09-13\"}], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "missing_authors_categories_and_counts": {
+    "case_sha256": "dcfa62e6e291cc38e40d95cf224368dd766df979807a19d2efb08d0db2a6f686",
+    "rows": {
+      "github-discussions-example.jsonl": "{\"date\": \"2026-09-23\", \"total\": 4, \"fetched\": 4, \"community_opened\": 4, \"maintainer_opened\": 0, \"community_authors\": 2, \"answered\": 1, \"total_comments\": 0, \"categories\": {\"Q&A\": 2, \"uncategorised\": 1, \"null\": 1}, \"recent\": [{\"number\": 1, \"title\": \"A ghost's question\", \"category\": null, \"author\": null, \"comments\": 0, \"upvotes\": 0, \"is_answered\": null, \"updated_at\": \"\"}, {\"number\": 2, \"title\": \"No login\", \"category\": \"Q&A\", \"author\": null, \"comments\": 0, \"upvotes\": 0, \"is_answered\": null, \"updated_at\": \"\"}, {\"number\": 3, \"title\": \"Example discussion 3\", \"category\": \"Q&A\", \"author\": \"example-user\", \"comments\": 0, \"upvotes\": 0, \"is_answered\": true, \"updated_at\": \"2026-09-20\"}, {\"number\": 4, \"title\": \"Example discussion 4\", \"category\": null, \"author\": \"example-user\", \"comments\": 0, \"upvotes\": 0, \"is_answered\": null, \"updated_at\": \"2026-09-20\"}], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "no_discussions": {
+    "case_sha256": "f08e4065220c6e5fe42ced9b70a7c010503a664c1655e4589dfc3773d831fba6",
+    "rows": {
+      "github-discussions-example.jsonl": "{\"date\": \"2026-09-23\", \"total\": 0, \"fetched\": 0, \"community_opened\": 0, \"maintainer_opened\": 0, \"community_authors\": 0, \"answered\": 0, \"total_comments\": 0, \"categories\": {}, \"recent\": [], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "null_nodes_and_a_missing_total_count_as_zero": {
+    "case_sha256": "285f5724a9732740053dd2df0c7f250282767268dbdd246cd28173c4b311ecfc",
+    "rows": {
+      "github-discussions-example.jsonl": "{\"date\": \"2026-09-23\", \"total\": 0, \"fetched\": 0, \"community_opened\": 0, \"maintainer_opened\": 0, \"community_authors\": 0, \"answered\": 0, \"total_comments\": 0, \"categories\": {}, \"recent\": [], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "graphql_errors_write_nothing": {
+    "case_sha256": "45f27902120e00e7d0aadade1e29d03cad0b2de8ab7d65cc1c55370530a7932d",
+    "rows": {
+      "github-discussions-example.jsonl": "{\"date\": \"2026-09-22\", \"total\": 9}\n"
+    }
+  },
+  "a_null_repository_writes_nothing": {
+    "case_sha256": "41cd32e7db53a0083b905cd8cd9538ed4d9fc59b3ed81f75e4e9da88312e3617",
+    "rows": {
+      "github-discussions-example.jsonl": "{\"date\": \"2026-09-22\", \"total\": 9}\n"
+    }
+  },
+  "unparseable_body_writes_nothing": {
+    "case_sha256": "89528d8538e4c5eb42fc5d05f883bb3f9b49c0167a4308af17962a63f9801e55",
+    "rows": {
+      "github-discussions-example.jsonl": "{\"date\": \"2026-09-22\", \"total\": 9}\n"
+    }
+  },
+  "failed_fetch_writes_nothing": {
+    "case_sha256": "de6fe3e52f6d4dd3d59c501519f4d1aede3f274d006afb67449d3a5f8c41362c",
+    "rows": {
+      "github-discussions-example.jsonl": "{\"date\": \"2026-09-22\", \"total\": 9}\n"
+    }
+  },
+  "skips_without_a_token": {
+    "case_sha256": "4bd9adf701307c5da8ac0cc2e836000ee324098e51acf118d389760e15cc700f",
+    "rows": {}
+  },
+  "a_file_starting_late_gets_rows_back_to_the_first_discussion": {
+    "case_sha256": "a7c1f2ca62681266dbda2a67399b15e9edddb578c27890bbc989c43053707c29",
+    "rows": {
+      "github-discussions-example.jsonl": "{\"date\": \"2026-09-18\", \"total\": 1, \"fetched\": null, \"community_opened\": 0, \"maintainer_opened\": 1, \"community_authors\": 0, \"answered\": null, \"total_comments\": 0, \"categories\": {\"Announcements\": 1}, \"recent\": null, \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-19\", \"total\": 2, \"fetched\": null, \"community_opened\": 1, \"maintainer_opened\": 1, \"community_authors\": 1, \"answered\": null, \"total_comments\": 1, \"categories\": {\"Q&A\": 1, \"Announcements\": 1}, \"recent\": null, \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-20\", \"total\": 2, \"fetched\": null, \"community_opened\": 1, \"maintainer_opened\": 1, \"community_authors\": 1, \"answered\": null, \"total_comments\": 2, \"categories\": {\"Q&A\": 1, \"Announcements\": 1}, \"recent\": null, \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-21\", \"total\": 3, \"fetched\": 3}\n{\"date\": \"2026-09-22\", \"total\": 3, \"fetched\": 3}\n{\"date\": \"2026-09-23\", \"total\": 4, \"fetched\": 4, \"community_opened\": 3, \"maintainer_opened\": 1, \"community_authors\": 2, \"answered\": 1, \"total_comments\": 2, \"categories\": {\"Q&A\": 2, \"Ideas\": 1, \"Announcements\": 1}, \"recent\": [{\"number\": 4, \"title\": \"Example discussion 4\", \"category\": \"Ideas\", \"author\": \"example-user\", \"comments\": 0, \"upvotes\": 0, \"is_answered\": null, \"updated_at\": \"2026-09-23\"}, {\"number\": 3, \"title\": \"Example discussion 3\", \"category\": \"Q&A\", \"author\": \"another-user\", \"comments\": 0, \"upvotes\": 0, \"is_answered\": null, \"updated_at\": \"2026-09-22\"}, {\"number\": 2, \"title\": \"Example discussion 2\", \"category\": \"Q&A\", \"author\": \"example-user\", \"comments\": 2, \"upvotes\": 0, \"is_answered\": true, \"updated_at\": \"2026-09-21\"}, {\"number\": 1, \"title\": \"Example discussion 1\", \"category\": \"Announcements\", \"author\": \"example-maintainer\", \"comments\": 0, \"upvotes\": 0, \"is_answered\": null, \"updated_at\": \"2026-09-20\"}], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "with_more_discussions_than_the_query_reads_nothing_is_rebuilt": {
+    "case_sha256": "701766a80aaebfb21694499927df3eb996c5bfc1f7bf5a5a03317e4e1472065a",
+    "rows": {
+      "github-discussions-example.jsonl": "{\"date\": \"2026-09-21\", \"total\": 3, \"fetched\": 3}\n{\"date\": \"2026-09-22\", \"total\": 3, \"fetched\": 3}\n{\"date\": \"2026-09-23\", \"total\": 150, \"fetched\": 4, \"community_opened\": 3, \"maintainer_opened\": 1, \"community_authors\": 2, \"answered\": 1, \"total_comments\": 2, \"categories\": {\"Q&A\": 2, \"Ideas\": 1, \"Announcements\": 1}, \"recent\": [{\"number\": 4, \"title\": \"Example discussion 4\", \"category\": \"Ideas\", \"author\": \"example-user\", \"comments\": 0, \"upvotes\": 0, \"is_answered\": null, \"updated_at\": \"2026-09-23\"}, {\"number\": 3, \"title\": \"Example discussion 3\", \"category\": \"Q&A\", \"author\": \"another-user\", \"comments\": 0, \"upvotes\": 0, \"is_answered\": null, \"updated_at\": \"2026-09-22\"}, {\"number\": 2, \"title\": \"Example discussion 2\", \"category\": \"Q&A\", \"author\": \"example-user\", \"comments\": 2, \"upvotes\": 0, \"is_answered\": true, \"updated_at\": \"2026-09-21\"}, {\"number\": 1, \"title\": \"Example discussion 1\", \"category\": \"Announcements\", \"author\": \"example-maintainer\", \"comments\": 0, \"upvotes\": 0, \"is_answered\": null, \"updated_at\": \"2026-09-20\"}], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "rebuilt_rows_get_the_comments_they_lacked": {
+    "case_sha256": "213911b295bd52a3f06bdad2aafc9f569e6ccb81282951952e5105303514f3cc",
+    "rows": {
+      "github-discussions-example.jsonl": "{\"date\": \"2026-09-18\", \"total\": 1, \"fetched\": null, \"community_opened\": 0, \"maintainer_opened\": 1, \"community_authors\": 0, \"answered\": null, \"total_comments\": 0, \"categories\": {\"Announcements\": 1}, \"recent\": null, \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-19\", \"total\": 2, \"fetched\": null, \"community_opened\": 1, \"maintainer_opened\": 1, \"community_authors\": 1, \"answered\": null, \"total_comments\": 1, \"categories\": {\"Q&A\": 1, \"Announcements\": 1}, \"recent\": null, \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-20\", \"total\": 2, \"fetched\": null, \"community_opened\": 1, \"maintainer_opened\": 1, \"community_authors\": 1, \"answered\": null, \"total_comments\": 2, \"categories\": {\"Q&A\": 1, \"Announcements\": 1}, \"recent\": null, \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-21\", \"total\": 3, \"fetched\": 3}\n{\"date\": \"2026-09-22\", \"total\": 3, \"fetched\": 3}\n{\"date\": \"2026-09-23\", \"total\": 4, \"fetched\": 4, \"community_opened\": 3, \"maintainer_opened\": 1, \"community_authors\": 2, \"answered\": 1, \"total_comments\": 2, \"categories\": {\"Q&A\": 2, \"Ideas\": 1, \"Announcements\": 1}, \"recent\": [{\"number\": 4, \"title\": \"Example discussion 4\", \"category\": \"Ideas\", \"author\": \"example-user\", \"comments\": 0, \"upvotes\": 0, \"is_answered\": null, \"updated_at\": \"2026-09-23\"}, {\"number\": 3, \"title\": \"Example discussion 3\", \"category\": \"Q&A\", \"author\": \"another-user\", \"comments\": 0, \"upvotes\": 0, \"is_answered\": null, \"updated_at\": \"2026-09-22\"}, {\"number\": 2, \"title\": \"Example discussion 2\", \"category\": \"Q&A\", \"author\": \"example-user\", \"comments\": 2, \"upvotes\": 0, \"is_answered\": true, \"updated_at\": \"2026-09-21\"}, {\"number\": 1, \"title\": \"Example discussion 1\", \"category\": \"Announcements\", \"author\": \"example-maintainer\", \"comments\": 0, \"upvotes\": 0, \"is_answered\": null, \"updated_at\": \"2026-09-20\"}], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  }
+}

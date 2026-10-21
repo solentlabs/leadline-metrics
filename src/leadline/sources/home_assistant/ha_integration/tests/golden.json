@@ -1,0 +1,92 @@
+{
+  "ranks_among_the_feed": {
+    "case_sha256": "b1c1b1626d0de79b4a61d652f5b5bead3c22f21e0d12928ab19e5a067d9a5e1b",
+    "rows": {
+      "hacs.jsonl": "{\"date\": \"2026-09-22\", \"total\": 90, \"versions\": {\"3.12.0\": 90}, \"rank\": 3, \"tracked_integrations\": 60}\n{\"date\": \"2026-09-23\", \"total\": 95, \"versions\": {\"3.12.0\": 55, \"3.13.1\": 40}, \"rank\": 30, \"tracked_integrations\": 51, \"percentile\": 58.8, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "sorts_versions_numerically_with_prereleases_after_the_release": {
+    "case_sha256": "98a1d595617eaabb23bfcab0d1c97902c8438b10cdccff0736a96f52d934e454",
+    "rows": {
+      "hacs.jsonl": "{\"date\": \"2026-09-23\", \"total\": 21, \"versions\": {\"3.9.2\": 2, \"3.10.0\": 1, \"3.13.0\": 4, \"3.13.0-beta.2\": 3, \"3.13.0-beta.10\": 5, \"v2\": 6}, \"rank\": 1, \"tracked_integrations\": 2, \"percentile\": 50.0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "ties_rank_by_name_descending": {
+    "case_sha256": "52f5abc193f9afa490dc922aec51fd903beb75c5ac81ba086e39198c9a8822a8",
+    "rows": {
+      "hacs.jsonl": "{\"date\": \"2026-09-23\", \"total\": 10, \"versions\": {\"1.0.0\": 10}, \"rank\": 2, \"tracked_integrations\": 3, \"percentile\": 66.7, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "integration_missing_from_the_feed": {
+    "case_sha256": "8823cf1cbd05305b9470b053244c4097d29c36422653f97fdb8ee643cd3ab1c6",
+    "rows": {
+      "hacs.jsonl": "{\"date\": \"2026-09-23\", \"total\": 0, \"versions\": {}, \"rank\": null, \"tracked_integrations\": 30, \"percentile\": null, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "entries_without_a_total_or_not_objects": {
+    "case_sha256": "4ab0fef6dcd0f1a965421f40ade7f02059dee8eb2c8b10b1d4a8a3eb83aed2d9",
+    "rows": {
+      "hacs.jsonl": "{\"date\": \"2026-09-23\", \"total\": 0, \"versions\": {\"1.0.0\": 3}, \"rank\": 3, \"tracked_integrations\": 3, \"percentile\": 100.0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "the_integration_without_versions": {
+    "case_sha256": "8e3d1c2e07d70a653d01e95c944177feab981f82e61bdcb460664adde2e23dce",
+    "rows": {
+      "hacs.jsonl": "{\"date\": \"2026-09-23\", \"total\": 12, \"versions\": {}, \"rank\": 1, \"tracked_integrations\": 2, \"percentile\": 50.0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "the_row_is_dated_and_stamped_in_local_time": {
+    "case_sha256": "a9a119935238280b5cb06c11fd344628d7ad77101796add729431165f9f6372b",
+    "rows": {
+      "hacs.jsonl": "{\"date\": \"2026-09-22\", \"total\": 90, \"versions\": {\"3.12.0\": 90}, \"rank\": 3, \"tracked_integrations\": 60}\n{\"date\": \"2026-09-24\", \"total\": 96, \"versions\": {\"3.13.1\": 96}, \"rank\": 1, \"tracked_integrations\": 1, \"percentile\": 100.0, \"captured_at\": \"2026-09-24T01:15:00+05:30\"}\n"
+    }
+  },
+  "rerun_replaces_the_days_row": {
+    "case_sha256": "8a02a022e34bdf0cb28999a42efa0da6198336e096809faf647a24e409a46a6e",
+    "rows": {
+      "hacs.jsonl": "{\"date\": \"2026-09-22\", \"total\": 90, \"versions\": {\"3.12.0\": 90}, \"rank\": 3, \"tracked_integrations\": 60}\n{\"date\": \"2026-09-23\", \"total\": 96, \"versions\": {\"3.13.1\": 96}, \"rank\": 1, \"tracked_integrations\": 1, \"percentile\": 100.0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "a_blank_line_and_a_missing_final_newline_in_the_file": {
+    "case_sha256": "548f47c2a8843af95a8a77099bdad6b96beb9bb824b2c72163234424578f4c3c",
+    "rows": {
+      "hacs.jsonl": "{\"date\": \"2026-09-22\", \"total\": 90, \"versions\": {\"3.12.0\": 90}, \"rank\": 3, \"tracked_integrations\": 60}\n{\"date\": \"2026-09-21\", \"total\": 88}\n{\"date\": \"2026-09-23\", \"total\": 96, \"versions\": {\"3.13.1\": 96}, \"rank\": 1, \"tracked_integrations\": 1, \"percentile\": 100.0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "failed_fetch_writes_nothing": {
+    "case_sha256": "15ef11c02c0484ab442999b624ea1978911183880a797b2b30d7cb5b742de0cd",
+    "rows": {
+      "hacs.jsonl": "{\"date\": \"2026-09-22\", \"total\": 90, \"versions\": {\"3.12.0\": 90}, \"rank\": 3, \"tracked_integrations\": 60}\n"
+    }
+  },
+  "unparseable_feed_writes_nothing": {
+    "case_sha256": "473075a5c915354f178a7cb9ef86e3b82d5ff6145542c2addd31f11d211d9abd",
+    "rows": {
+      "hacs.jsonl": "{\"date\": \"2026-09-22\", \"total\": 90, \"versions\": {\"3.12.0\": 90}, \"rank\": 3, \"tracked_integrations\": 60}\n"
+    }
+  },
+  "a_feed_not_an_object_writes_nothing": {
+    "case_sha256": "0823be88f5ec45ffc252c4613fd244fec6d912c217b04b0bf5bac39dfe2cf77e",
+    "rows": {
+      "hacs.jsonl": "{\"date\": \"2026-09-22\", \"total\": 90, \"versions\": {\"3.12.0\": 90}, \"rank\": 3, \"tracked_integrations\": 60}\n"
+    }
+  },
+  "the_integrations_entry_not_an_object_writes_nothing": {
+    "case_sha256": "d8eb8f9d811f4acf445ae29d4e0472641c7b775a97764428427a89667bcfa517",
+    "rows": {
+      "hacs.jsonl": "{\"date\": \"2026-09-22\", \"total\": 90, \"versions\": {\"3.12.0\": 90}, \"rank\": 3, \"tracked_integrations\": 60}\n"
+    }
+  },
+  "a_null_total_writes_nothing": {
+    "case_sha256": "11d198a446b563c095b01f6218323f4fe78a762cb46d79c2d0101753269c53f1",
+    "rows": {
+      "hacs.jsonl": "{\"date\": \"2026-09-22\", \"total\": 90, \"versions\": {\"3.12.0\": 90}, \"rank\": 3, \"tracked_integrations\": 60}\n"
+    }
+  },
+  "an_empty_feed_reads_as_no_installs": {
+    "case_sha256": "15b963a6d120a632da14e90efc4c11cb31d1d27a728508833318c12639d0cd6f",
+    "rows": {
+      "hacs.jsonl": "{\"date\": \"2026-09-22\", \"total\": 90, \"versions\": {\"3.12.0\": 90}, \"rank\": 3, \"tracked_integrations\": 60}\n{\"date\": \"2026-09-23\", \"total\": 0, \"versions\": {}, \"rank\": null, \"tracked_integrations\": 0, \"percentile\": null, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  }
+}

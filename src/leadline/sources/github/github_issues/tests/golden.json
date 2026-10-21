@@ -1,0 +1,114 @@
+{
+  "snapshot_with_modem_pipeline": {
+    "case_sha256": "e926acf297e60b7f49eb9e58aa31497cff19dc8882732690118e7958130314c4",
+    "rows": {
+      "github-issues-example.jsonl": "{\"date\": \"2026-09-23\", \"repo\": {\"stars\": 12, \"forks\": 3, \"watchers\": 4}, \"issues\": {\"open\": 7, \"open_prs\": 2, \"opened_total\": 9, \"closed_total\": 2, \"since_prev\": {\"days\": 0, \"opened\": 0, \"closed\": 0}}, \"contribution\": {\"issues\": {\"maintainer\": 1, \"community\": 6, \"bot\": 2, \"community_authors\": 3}, \"prs\": {\"maintainer\": 1, \"community\": 1, \"bot\": 1, \"community_authors\": 1}, \"prs_total\": 3}, \"age\": {\"avg_days\": 19, \"median_days\": 8, \"oldest_days\": 81, \"newest_days\": 1}, \"engagement\": {\"total_comments\": 14, \"avg_comments\": 2.0, \"high_engagement\": 2, \"top_issues\": [{\"number\": 9, \"title\": \"Values drop to zero after a reboot\", \"comments\": 7}, {\"number\": 1, \"title\": \"Support for the Example X1 modem on Comcast\", \"comments\": 6}, {\"number\": 6, \"title\": \"Example C3 cable modem\", \"comments\": 1}, {\"number\": 2, \"title\": \"Docs typo\", \"comments\": 0}, {\"number\": 5, \"title\": \"Example Z9 modem\", \"comments\": 0}]}, \"labels\": {\"bug\": {\"open\": 1, \"opened_total\": 1, \"closed_total\": 0}, \"enhancement\": {\"open\": 1, \"opened_total\": 1, \"closed_total\": 0}, \"new modem\": {\"open\": 3, \"opened_total\": 5, \"closed_total\": 2}}, \"triage\": {\"assigned\": 2, \"unassigned\": 5, \"labeled\": 4, \"unlabeled\": 3, \"milestoned\": 1}, \"modem_pipeline\": {\"total\": 3, \"avg_age_days\": 14, \"with_har_data\": 2, \"with_comments\": 2, \"regions\": {\"US\": 1, \"unknown\": 1, \"NL\": 1}, \"requested_total\": 5, \"resolved_total\": 2, \"median_days_to_resolve\": 14, \"requesters\": {\"maintainer\": 0, \"community\": 5, \"bot\": 0, \"community_authors\": 3}, \"modems\": [{\"number\": 1, \"title\": \"Support for the Example X1 modem on Comcast\", \"age_days\": 22, \"comments\": 6, \"has_har\": true, \"labels\": [\"new modem\"], \"region\": \"US\"}, {\"number\": 5, \"title\": \"Example Z9 modem\", \"age_days\": 13, \"comments\": 0, \"has_har\": false, \"labels\": [\"new modem\"], \"region\": \"unknown\"}, {\"number\": 6, \"title\": \"Example C3 cable modem\", \"age_days\": 8, \"comments\": 1, \"has_har\": true, \"labels\": [\"new modem\", \"enhancement\"], \"region\": \"NL\"}]}, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "pages_through_link_headers_without_a_pipeline": {
+    "case_sha256": "d0d26646a1c732e542bb323bf9135b986beb2c1f6fecfabb4a85041a5a1ebba6",
+    "rows": {
+      "github-issues-example.jsonl": "{\"date\": \"2026-09-23\", \"repo\": {\"stars\": 12, \"forks\": 3, \"watchers\": 4}, \"issues\": {\"open\": 75, \"open_prs\": 64, \"opened_total\": 247, \"closed_total\": 172, \"since_prev\": {\"days\": 0, \"opened\": 0, \"closed\": 0}}, \"contribution\": {\"issues\": {\"maintainer\": 51, \"community\": 142, \"bot\": 54, \"community_authors\": 3}, \"prs\": {\"maintainer\": 29, \"community\": 116, \"bot\": 38, \"community_authors\": 3}, \"prs_total\": 183}, \"age\": {\"avg_days\": 160, \"median_days\": 142, \"oldest_days\": 363, \"newest_days\": 1}, \"engagement\": {\"total_comments\": 413, \"avg_comments\": 5.5, \"high_engagement\": 38, \"top_issues\": [{\"number\": 20, \"title\": \"Example item 20\", \"comments\": 12}, {\"number\": 41, \"title\": \"Example item 41\", \"comments\": 12}, {\"number\": 63, \"title\": \"Example item 63\", \"comments\": 12}, {\"number\": 76, \"title\": \"Example item 76\", \"comments\": 12}, {\"number\": 82, \"title\": \"Example item 82\", \"comments\": 12}]}, \"labels\": {\"bug\": {\"open\": 29, \"opened_total\": 82, \"closed_total\": 53}, \"documentation\": {\"open\": 22, \"opened_total\": 80, \"closed_total\": 58}, \"enhancement\": {\"open\": 18, \"opened_total\": 91, \"closed_total\": 73}}, \"triage\": {\"assigned\": 23, \"unassigned\": 52, \"labeled\": 48, \"unlabeled\": 27, \"milestoned\": 0}, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "flow_since_the_previous_snapshot": {
+    "case_sha256": "b7231f7ab04e95a71bef251e7382b77a2410a34017a0e0c73297ca1b3663eb34",
+    "rows": {
+      "github-issues-example.jsonl": "not json\n{\"date\": \"2026-09-21\", \"issues\": {\"opened_total\": 1}}\n{\"date\": \"2026-09-23\", \"repo\": {\"stars\": 12, \"forks\": 3, \"watchers\": 4}, \"issues\": {\"open\": 1, \"open_prs\": 0, \"opened_total\": 3, \"closed_total\": 2, \"since_prev\": {\"days\": 2, \"opened\": 2, \"closed\": 2}}, \"contribution\": {\"issues\": {\"maintainer\": 1, \"community\": 2, \"bot\": 0, \"community_authors\": 2}, \"prs\": {\"maintainer\": 0, \"community\": 0, \"bot\": 0, \"community_authors\": 0}, \"prs_total\": 0}, \"age\": {\"avg_days\": 5, \"median_days\": 5, \"oldest_days\": 5, \"newest_days\": 5}, \"engagement\": {\"total_comments\": 2, \"avg_comments\": 2.0, \"high_engagement\": 0, \"top_issues\": [{\"number\": 1, \"title\": \"An example issue\", \"comments\": 2}]}, \"labels\": {}, \"triage\": {\"assigned\": 0, \"unassigned\": 1, \"labeled\": 0, \"unlabeled\": 1, \"milestoned\": 0}, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "the_previous_snapshot_is_the_last_earlier_row_in_the_file": {
+    "case_sha256": "6b27f9aa4996af11d1dfdb651c5d6fc6c204839e853d4a84942d5532dd06dab5",
+    "rows": {
+      "github-issues-example.jsonl": "{\"date\": \"2026-09-21\", \"issues\": {\"opened_total\": 2, \"closed_total\": 1}}\n{\"date\": \"2026-09-18\", \"issues\": {\"opened_total\": 0, \"closed_total\": 0}}\n{\"date\": \"2026-09-23\", \"repo\": {\"stars\": 12, \"forks\": 3, \"watchers\": 4}, \"issues\": {\"open\": 1, \"open_prs\": 0, \"opened_total\": 3, \"closed_total\": 2, \"since_prev\": {\"days\": 5, \"opened\": 3, \"closed\": 2}}, \"contribution\": {\"issues\": {\"maintainer\": 1, \"community\": 2, \"bot\": 0, \"community_authors\": 2}, \"prs\": {\"maintainer\": 0, \"community\": 0, \"bot\": 0, \"community_authors\": 0}, \"prs_total\": 0}, \"age\": {\"avg_days\": 5, \"median_days\": 5, \"oldest_days\": 5, \"newest_days\": 5}, \"engagement\": {\"total_comments\": 2, \"avg_comments\": 2.0, \"high_engagement\": 0, \"top_issues\": [{\"number\": 1, \"title\": \"An example issue\", \"comments\": 2}]}, \"labels\": {}, \"triage\": {\"assigned\": 0, \"unassigned\": 1, \"labeled\": 0, \"unlabeled\": 1, \"milestoned\": 0}, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "an_earlier_row_without_totals_gives_no_flow": {
+    "case_sha256": "00614d9febecbad10b95776b58b9564e3f67104739a62e17bf4500c4a6b8e1ee",
+    "rows": {
+      "github-issues-example.jsonl": "{\"date\": \"2026-09-21\", \"issues\": {\"opened_total\": 1, \"closed_total\": 0}}\n{\"date\": \"2026-09-22\", \"repo\": {\"stars\": 12}}\n{\"date\": \"2026-09-23\", \"repo\": {\"stars\": 12, \"forks\": 3, \"watchers\": 4}, \"issues\": {\"open\": 1, \"open_prs\": 0, \"opened_total\": 3, \"closed_total\": 2, \"since_prev\": {\"days\": 0, \"opened\": 0, \"closed\": 0}}, \"contribution\": {\"issues\": {\"maintainer\": 1, \"community\": 2, \"bot\": 0, \"community_authors\": 2}, \"prs\": {\"maintainer\": 0, \"community\": 0, \"bot\": 0, \"community_authors\": 0}, \"prs_total\": 0}, \"age\": {\"avg_days\": 5, \"median_days\": 5, \"oldest_days\": 5, \"newest_days\": 5}, \"engagement\": {\"total_comments\": 2, \"avg_comments\": 2.0, \"high_engagement\": 0, \"top_issues\": [{\"number\": 1, \"title\": \"An example issue\", \"comments\": 2}]}, \"labels\": {}, \"triage\": {\"assigned\": 0, \"unassigned\": 1, \"labeled\": 0, \"unlabeled\": 1, \"milestoned\": 0}, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "an_undated_row_is_a_snapshot_a_day_back": {
+    "case_sha256": "966c4502ea4609011857d44bb17d8674535e1721bcc88668c7d7f158bf7f3f95",
+    "rows": {
+      "github-issues-example.jsonl": "{\"date\": \"2026-09-18\", \"issues\": {\"opened_total\": 1, \"closed_total\": 0}}\n{\"issues\": {\"opened_total\": 2, \"closed_total\": 1}}\n{\"date\": \"2026-09-23\", \"repo\": {\"stars\": 12, \"forks\": 3, \"watchers\": 4}, \"issues\": {\"open\": 1, \"open_prs\": 0, \"opened_total\": 3, \"closed_total\": 2, \"since_prev\": {\"days\": 1, \"opened\": 1, \"closed\": 1}}, \"contribution\": {\"issues\": {\"maintainer\": 1, \"community\": 2, \"bot\": 0, \"community_authors\": 2}, \"prs\": {\"maintainer\": 0, \"community\": 0, \"bot\": 0, \"community_authors\": 0}, \"prs_total\": 0}, \"age\": {\"avg_days\": 5, \"median_days\": 5, \"oldest_days\": 5, \"newest_days\": 5}, \"engagement\": {\"total_comments\": 2, \"avg_comments\": 2.0, \"high_engagement\": 0, \"top_issues\": [{\"number\": 1, \"title\": \"An example issue\", \"comments\": 2}]}, \"labels\": {}, \"triage\": {\"assigned\": 0, \"unassigned\": 1, \"labeled\": 0, \"unlabeled\": 1, \"milestoned\": 0}, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "empty_repository": {
+    "case_sha256": "f5d53ed5269b28cb743d44c3930e6b244d398e7354cc5705a83477d787e0eca5",
+    "rows": {
+      "github-issues-example.jsonl": "{\"date\": \"2026-09-23\", \"repo\": {\"stars\": 0, \"forks\": 0, \"watchers\": 0}, \"issues\": {\"open\": 0, \"open_prs\": 0, \"opened_total\": 0, \"closed_total\": 0, \"since_prev\": {\"days\": 0, \"opened\": 0, \"closed\": 0}}, \"contribution\": {\"issues\": {\"maintainer\": 0, \"community\": 0, \"bot\": 0, \"community_authors\": 0}, \"prs\": {\"maintainer\": 0, \"community\": 0, \"bot\": 0, \"community_authors\": 0}, \"prs_total\": 0}, \"age\": {\"avg_days\": 0, \"median_days\": 0, \"oldest_days\": 0, \"newest_days\": 0}, \"engagement\": {\"total_comments\": 0, \"avg_comments\": 0, \"high_engagement\": 0, \"top_issues\": []}, \"labels\": {}, \"triage\": {\"assigned\": 0, \"unassigned\": 0, \"labeled\": 0, \"unlabeled\": 0, \"milestoned\": 0}, \"modem_pipeline\": {\"total\": 0, \"avg_age_days\": 0, \"with_har_data\": 0, \"with_comments\": 0, \"regions\": {}, \"requested_total\": 0, \"resolved_total\": 0, \"median_days_to_resolve\": 0, \"requesters\": {\"maintainer\": 0, \"community\": 0, \"bot\": 0, \"community_authors\": 0}, \"modems\": []}, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "null_user_and_body": {
+    "case_sha256": "42b395ad1f41858482d5e3298af518953c01ded53185de4061ee3165a4837467",
+    "rows": {
+      "github-issues-example.jsonl": "{\"date\": \"2026-09-23\", \"repo\": {\"stars\": 12, \"forks\": 3, \"watchers\": 4}, \"issues\": {\"open\": 1, \"open_prs\": 0, \"opened_total\": 1, \"closed_total\": 0, \"since_prev\": {\"days\": 0, \"opened\": 0, \"closed\": 0}}, \"contribution\": {\"issues\": {\"maintainer\": 0, \"community\": 1, \"bot\": 0, \"community_authors\": 1}, \"prs\": {\"maintainer\": 0, \"community\": 1, \"bot\": 0, \"community_authors\": 1}, \"prs_total\": 1}, \"age\": {\"avg_days\": 22, \"median_days\": 22, \"oldest_days\": 22, \"newest_days\": 22}, \"engagement\": {\"total_comments\": 0, \"avg_comments\": 0.0, \"high_engagement\": 0, \"top_issues\": [{\"number\": 1, \"title\": \"Example modem on Rogers\", \"comments\": 0}]}, \"labels\": {\"new modem\": {\"open\": 1, \"opened_total\": 1, \"closed_total\": 0}}, \"triage\": {\"assigned\": 0, \"unassigned\": 1, \"labeled\": 1, \"unlabeled\": 0, \"milestoned\": 0}, \"modem_pipeline\": {\"total\": 1, \"avg_age_days\": 22, \"with_har_data\": 0, \"with_comments\": 0, \"regions\": {\"CA\": 1}, \"requested_total\": 1, \"resolved_total\": 0, \"median_days_to_resolve\": 0, \"requesters\": {\"maintainer\": 0, \"community\": 1, \"bot\": 0, \"community_authors\": 1}, \"modems\": [{\"number\": 1, \"title\": \"Example modem on Rogers\", \"age_days\": 22, \"comments\": 0, \"has_har\": false, \"labels\": [\"new modem\"], \"region\": \"CA\"}]}, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "without_a_maintainer_everyone_is_community": {
+    "case_sha256": "79a9598e19b53c43787fa08362ab7f1e7b6aac39d40a70e37afe104536876eb1",
+    "rows": {
+      "github-issues-example.jsonl": "{\"date\": \"2026-09-23\", \"repo\": {\"stars\": 12, \"forks\": 3, \"watchers\": 4}, \"issues\": {\"open\": 1, \"open_prs\": 0, \"opened_total\": 3, \"closed_total\": 2, \"since_prev\": {\"days\": 0, \"opened\": 0, \"closed\": 0}}, \"contribution\": {\"issues\": {\"maintainer\": 0, \"community\": 3, \"bot\": 0, \"community_authors\": 3}, \"prs\": {\"maintainer\": 0, \"community\": 0, \"bot\": 0, \"community_authors\": 0}, \"prs_total\": 0}, \"age\": {\"avg_days\": 5, \"median_days\": 5, \"oldest_days\": 5, \"newest_days\": 5}, \"engagement\": {\"total_comments\": 2, \"avg_comments\": 2.0, \"high_engagement\": 0, \"top_issues\": [{\"number\": 1, \"title\": \"An example issue\", \"comments\": 2}]}, \"labels\": {}, \"triage\": {\"assigned\": 0, \"unassigned\": 1, \"labeled\": 0, \"unlabeled\": 1, \"milestoned\": 0}, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "skips_without_a_token": {
+    "case_sha256": "24007f384b6676871159f832c030974c58abb11ebbedb91c5aa7fc2eb9d0992f",
+    "rows": {}
+  },
+  "repo_not_found_writes_nothing": {
+    "case_sha256": "89bb41c612b67db7d82fbaf084fa56d918b8062b901c590451c8153e96e0e0e3",
+    "rows": {
+      "github-issues-example.jsonl": "{\"date\": \"2026-09-22\", \"issues\": {\"opened_total\": 1, \"closed_total\": 0}}\n"
+    }
+  },
+  "failed_open_page_writes_nothing": {
+    "case_sha256": "6806dfa57d3915fc08d3b86bd4e8d50325a57c2a8f5acc24c5d1b7ac18a38df5",
+    "rows": {
+      "github-issues-example.jsonl": "{\"date\": \"2026-09-22\", \"issues\": {\"opened_total\": 1, \"closed_total\": 0}}\n"
+    }
+  },
+  "failed_later_page_writes_nothing": {
+    "case_sha256": "db2695cb5311c6f40e7803c1902d3f3e4edc3766955b68ebbd427512bfec207d",
+    "rows": {
+      "github-issues-example.jsonl": "{\"date\": \"2026-09-22\", \"issues\": {\"opened_total\": 1, \"closed_total\": 0}}\n"
+    }
+  },
+  "unparseable_repository_writes_nothing": {
+    "case_sha256": "f200af04f78d814193955fa4e962ca6bdf199814079c5ccb0f33000c9fb97064",
+    "rows": {
+      "github-issues-example.jsonl": "{\"date\": \"2026-09-22\", \"issues\": {\"opened_total\": 1, \"closed_total\": 0}}\n"
+    }
+  },
+  "a_page_not_a_list_writes_nothing": {
+    "case_sha256": "accb889e638a1e493215dd1c720b2bf6213fc3fc2374d7b28452d372619e4bf2",
+    "rows": {
+      "github-issues-example.jsonl": "{\"date\": \"2026-09-22\", \"issues\": {\"opened_total\": 1, \"closed_total\": 0}}\n"
+    }
+  },
+  "past_rows_without_totals_are_filled_from_each_issues_dates": {
+    "case_sha256": "4ddd0cbc3c384ede42ee145ba102c5a3dac3f5fc4873231997e4d3735608d28b",
+    "rows": {
+      "github-issues-example.jsonl": "{\"date\": \"2026-09-17\", \"repo\": {\"stars\": 10}, \"issues\": {\"open\": 0, \"open_prs\": 0, \"velocity_24h\": 0, \"opened_total\": 0, \"closed_total\": 0}}\n{\"date\": \"2026-09-18\", \"issues\": {\"opened_total\": 7, \"closed_total\": null}}\n{\"date\": \"2026-09-19\", \"status\": \"fetch_failed\", \"http_code\": \"502\", \"reason\": \"all issues request failed\"}\n{\"date\": \"2026-09-20\", \"issues\": {\"open\": 3, \"opened_total\": 3, \"closed_total\": 0}}\n{\"date\": \"2026-09-22\", \"repo\": {\"stars\": 12}, \"issues\": {\"opened_total\": 3, \"closed_total\": 2}}\n{\"date\": \"2026-09-23\", \"repo\": {\"stars\": 12, \"forks\": 3, \"watchers\": 4}, \"issues\": {\"open\": 1, \"open_prs\": 0, \"opened_total\": 3, \"closed_total\": 2, \"since_prev\": {\"days\": 1, \"opened\": 0, \"closed\": 0}}, \"contribution\": {\"issues\": {\"maintainer\": 1, \"community\": 2, \"bot\": 0, \"community_authors\": 2}, \"prs\": {\"maintainer\": 0, \"community\": 0, \"bot\": 0, \"community_authors\": 0}, \"prs_total\": 0}, \"age\": {\"avg_days\": 5, \"median_days\": 5, \"oldest_days\": 5, \"newest_days\": 5}, \"engagement\": {\"total_comments\": 2, \"avg_comments\": 2.0, \"high_engagement\": 0, \"top_issues\": [{\"number\": 1, \"title\": \"An example issue\", \"comments\": 2}]}, \"labels\": {}, \"triage\": {\"assigned\": 0, \"unassigned\": 1, \"labeled\": 0, \"unlabeled\": 1, \"milestoned\": 0}, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "queue_regions_from_issue_forms": {
+    "case_sha256": "036a9515fb93b0dbd8f59481b2e2460b299440fe3df9fb901a3a70996ac3d723",
+    "rows": {
+      "github-issues-example.jsonl": "{\"date\": \"2026-09-23\", \"repo\": {\"stars\": 12, \"forks\": 3, \"watchers\": 4}, \"issues\": {\"open\": 3, \"open_prs\": 0, \"opened_total\": 3, \"closed_total\": 0, \"since_prev\": {\"days\": 0, \"opened\": 0, \"closed\": 0}}, \"contribution\": {\"issues\": {\"maintainer\": 0, \"community\": 3, \"bot\": 0, \"community_authors\": 3}, \"prs\": {\"maintainer\": 0, \"community\": 0, \"bot\": 0, \"community_authors\": 0}, \"prs_total\": 0}, \"age\": {\"avg_days\": 4, \"median_days\": 4, \"oldest_days\": 5, \"newest_days\": 3}, \"engagement\": {\"total_comments\": 0, \"avg_comments\": 0.0, \"high_engagement\": 0, \"top_issues\": [{\"number\": 1, \"title\": \"Example X1 modem on Comcast\", \"comments\": 0}, {\"number\": 2, \"title\": \"Example X2 modem\", \"comments\": 0}, {\"number\": 3, \"title\": \"Example X3 modem\", \"comments\": 0}]}, \"labels\": {\"new modem\": {\"open\": 3, \"opened_total\": 3, \"closed_total\": 0}}, \"triage\": {\"assigned\": 0, \"unassigned\": 3, \"labeled\": 3, \"unlabeled\": 0, \"milestoned\": 0}, \"modem_pipeline\": {\"total\": 3, \"avg_age_days\": 4, \"with_har_data\": 0, \"with_comments\": 0, \"regions\": {\"UK\": 1, \"DE\": 1, \"NL\": 1}, \"requested_total\": 3, \"resolved_total\": 0, \"median_days_to_resolve\": 0, \"requesters\": {\"maintainer\": 0, \"community\": 3, \"bot\": 0, \"community_authors\": 3}, \"modems\": [{\"number\": 1, \"title\": \"Example X1 modem on Comcast\", \"age_days\": 5, \"comments\": 0, \"has_har\": false, \"labels\": [\"new modem\"], \"region\": \"UK\"}, {\"number\": 2, \"title\": \"Example X2 modem\", \"age_days\": 4, \"comments\": 0, \"has_har\": false, \"labels\": [\"new modem\"], \"region\": \"DE\"}, {\"number\": 3, \"title\": \"Example X3 modem\", \"age_days\": 3, \"comments\": 0, \"has_har\": false, \"labels\": [\"new modem\"], \"region\": \"NL\"}]}, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "opened_by_kind_is_filled_for_every_past_day": {
+    "case_sha256": "8541dc0333ef208b54c3d049a0dbffb07efc93dac1294cd5be55429307be5f5b",
+    "rows": {
+      "github-issues-example.jsonl": "{\"date\": \"2026-09-18\", \"issues\": {\"open\": 1, \"open_prs\": 0, \"opened_total\": 1, \"closed_total\": 0, \"opened_by_kind\": {\"new_modem\": 0, \"defect\": 1, \"other\": 0}, \"open_by_kind\": {\"new_modem\": 0, \"defect\": 1, \"other\": 0}}, \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-19\", \"issues\": {\"open\": 2, \"open_prs\": 1, \"opened_total\": 2, \"closed_total\": 0, \"opened_by_kind\": {\"new_modem\": 1, \"defect\": 1, \"other\": 0}, \"open_by_kind\": {\"new_modem\": 1, \"defect\": 1, \"other\": 0}}, \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-20\", \"issues\": {\"opened_total\": 3, \"closed_total\": 0, \"opened_by_kind\": {\"new_modem\": 1, \"defect\": 1, \"other\": 1}}}\n{\"date\": \"2026-09-21\", \"issues\": {\"opened_total\": 3, \"closed_total\": 1, \"opened_by_kind\": null}}\n{\"date\": \"2026-09-22\", \"status\": \"fetch_failed\", \"http_code\": \"502\", \"reason\": \"all issues request failed\"}\n{\"date\": \"2026-09-23\", \"repo\": {\"stars\": 12, \"forks\": 3, \"watchers\": 4}, \"issues\": {\"open\": 1, \"open_prs\": 1, \"opened_total\": 3, \"closed_total\": 2, \"since_prev\": {\"days\": 2, \"opened\": 0, \"closed\": 1}, \"opened_by_kind\": {\"new_modem\": 1, \"defect\": 1, \"other\": 1}, \"open_by_kind\": {\"new_modem\": 0, \"defect\": 1, \"other\": 0}}, \"contribution\": {\"issues\": {\"maintainer\": 1, \"community\": 2, \"bot\": 0, \"community_authors\": 2}, \"prs\": {\"maintainer\": 0, \"community\": 1, \"bot\": 0, \"community_authors\": 1}, \"prs_total\": 1}, \"age\": {\"avg_days\": 5, \"median_days\": 5, \"oldest_days\": 5, \"newest_days\": 5}, \"engagement\": {\"total_comments\": 0, \"avg_comments\": 0.0, \"high_engagement\": 0, \"top_issues\": [{\"number\": 1, \"title\": \"An example issue\", \"comments\": 0}]}, \"labels\": {\"bug\": {\"open\": 1, \"opened_total\": 2, \"closed_total\": 1}, \"docs\": {\"open\": 1, \"opened_total\": 2, \"closed_total\": 1}, \"new modem\": {\"open\": 0, \"opened_total\": 1, \"closed_total\": 1}}, \"triage\": {\"assigned\": 0, \"unassigned\": 1, \"labeled\": 1, \"unlabeled\": 0, \"milestoned\": 0}, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "a_file_starting_late_gets_rows_back_to_the_first_issue": {
+    "case_sha256": "1304771fda1b0f36c376c576ff17f20a2a6ae3c4dad6e66ee3b2b888cf442553",
+    "rows": {
+      "github-issues-example.jsonl": "{\"date\": \"2026-09-18\", \"issues\": {\"open\": 1, \"open_prs\": 0, \"opened_total\": 1, \"closed_total\": 0}, \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-19\", \"issues\": {\"open\": 2, \"open_prs\": 1, \"opened_total\": 2, \"closed_total\": 0}, \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-20\", \"issues\": {\"open\": 3, \"open_prs\": 1, \"opened_total\": 3, \"closed_total\": 0}, \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-21\", \"issues\": {\"opened_total\": 3, \"closed_total\": 1}}\n{\"date\": \"2026-09-22\", \"issues\": {\"opened_total\": 3, \"closed_total\": 2}}\n{\"date\": \"2026-09-23\", \"repo\": {\"stars\": 12, \"forks\": 3, \"watchers\": 4}, \"issues\": {\"open\": 1, \"open_prs\": 1, \"opened_total\": 3, \"closed_total\": 2, \"since_prev\": {\"days\": 1, \"opened\": 0, \"closed\": 0}}, \"contribution\": {\"issues\": {\"maintainer\": 1, \"community\": 2, \"bot\": 0, \"community_authors\": 2}, \"prs\": {\"maintainer\": 0, \"community\": 1, \"bot\": 0, \"community_authors\": 1}, \"prs_total\": 1}, \"age\": {\"avg_days\": 5, \"median_days\": 5, \"oldest_days\": 5, \"newest_days\": 5}, \"engagement\": {\"total_comments\": 2, \"avg_comments\": 2.0, \"high_engagement\": 0, \"top_issues\": [{\"number\": 1, \"title\": \"An example issue\", \"comments\": 2}]}, \"labels\": {}, \"triage\": {\"assigned\": 0, \"unassigned\": 1, \"labeled\": 0, \"unlabeled\": 1, \"milestoned\": 0}, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  }
+}

@@ -1,0 +1,45 @@
+import sys, json, os
+from datetime import datetime
+
+path, entry_date, entry_topic = sys.argv[1], sys.argv[2], int(sys.argv[3])
+record = sys.argv[4].strip()
+
+try:
+    parsed = json.loads(record)
+except ValueError:
+    sys.exit('refusing to write non-JSON record')
+
+# Stamp the wall-clock moment of the write. A row's 'date' is the date the
+# run was for, not the moment the upstream value was read, and the two come
+# apart as soon as the script runs more than once in a day: a row written at
+# 12:00 and the same row rewritten at 23:59 carry an identical 'date' but are
+# drawn from different points in the upstream series. pypistats refreshes
+# once daily, so a midday capture can sit a whole day off its neighbours with
+# nothing in the record to show it. Recording the write time makes that
+# visible as data rather than invisible. Local time with a UTC offset, so the
+# EDT/EST changeover cannot silently move a timestamp by an hour.
+if isinstance(parsed, dict):
+    parsed['captured_at'] = datetime.now().astimezone().isoformat(timespec='seconds')
+    record = json.dumps(parsed)
+
+kept, replaced = [], False
+if os.path.exists(path):
+    with open(path, encoding='utf-8', errors='ignore') as f:
+        for line in f:
+            if not line.strip():
+                continue
+            try:
+                r = json.loads(line)
+                if r.get('date') == entry_date and r.get('topic_id') == entry_topic:
+                    replaced = True
+                    continue
+            except ValueError:
+                pass  # keep unparseable lines rather than silently drop data
+            kept.append(line if line.endswith('\n') else line + '\n')
+
+kept.append(record + '\n')
+tmp = path + '.tmp'
+with open(tmp, 'w', encoding='utf-8') as f:
+    f.writelines(kept)
+os.replace(tmp, path)
+print('Replaced' if replaced else 'Added')

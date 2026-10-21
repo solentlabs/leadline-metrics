@@ -1,0 +1,6 @@
+{
+  "script": "/path/to/collect-metrics-script.sh",
+  "capture": "/path/to/capture/YYYY-MM-DD",
+  "forbidden_terms": "/path/to/forbidden-terms.txt",
+  "leadline_config": "/path/to/leadline.json"
+}

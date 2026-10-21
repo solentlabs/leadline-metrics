@@ -1,0 +1,57 @@
+name: Release
+
+# Pushing a tag vX.Y.Z publishes that version to PyPI (docs/RELEASING.md, "Release"):
+# CI's gate on the tag, then the tag checked against the package version and CHANGELOG.md,
+# then one build, published by trusted publishing (OIDC), with no stored token.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the whole history, to tell whether the tagged commit is on main
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - run: python tools/check_release.py "$GITHUB_REF_NAME" --on origin/main
+      # hatchling is the build backend pyproject.toml already names, at the version the build was tried with.
+      - run: python -m pip install "hatchling==1.32.0"
+      - run: python -m hatchling build
+      - run: python tools/check_dist.py dist
+      - name: The wheel installs and runs, as the tagged version
+        run: |
+          python -m venv "$RUNNER_TEMP/wheel"
+          "$RUNNER_TEMP/wheel/bin/pip" install dist/*.whl
+          test "$("$RUNNER_TEMP/wheel/bin/leadline" --version)" = "leadline ${GITHUB_REF_NAME#v}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    # The GitHub environment PyPI's trusted publisher names; only this job can mint the token.
+    environment:
+      name: pypi
+      url: https://pypi.org/p/leadline-metrics
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

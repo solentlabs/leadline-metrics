@@ -1,0 +1,148 @@
+{
+  "week_of_events": {
+    "case_sha256": "410fca7eddb94733913fa99f2bd9c57d28fc846df0015e5253cf4a519ed66d64",
+    "rows": {
+      "usage-example.jsonl": "{\"date\": \"2026-09-01\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0}\n{\"date\": \"2026-09-16\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-17\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-18\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {\"active.day\": 1, \"signin.ok\": 1}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-19\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-20\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-21\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {\"active.day\": 3, \"refresh.ok\": 20}, \"active_day_shared\": 1, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-22\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {\"active.day\": 2, \"signout.ok\": 1}, \"active_day_shared\": 2, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "the_window_ends_at_the_local_run_date": {
+    "case_sha256": "4746bb81815d228df4784f0df27b79638edd15f628e10018ee9a64e51f3e6b37",
+    "rows": {
+      "usage-example.jsonl": "{\"date\": \"2026-09-16\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T21:30:00-07:00\"}\n{\"date\": \"2026-09-17\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T21:30:00-07:00\"}\n{\"date\": \"2026-09-18\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {\"active.day\": 1, \"signin.ok\": 1}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T21:30:00-07:00\"}\n{\"date\": \"2026-09-19\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T21:30:00-07:00\"}\n{\"date\": \"2026-09-20\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T21:30:00-07:00\"}\n{\"date\": \"2026-09-21\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {\"active.day\": 3, \"refresh.ok\": 20}, \"active_day_shared\": 1, \"captured_at\": \"2026-09-23T21:30:00-07:00\"}\n{\"date\": \"2026-09-22\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {\"active.day\": 2, \"signout.ok\": 1}, \"active_day_shared\": 2, \"captured_at\": \"2026-09-23T21:30:00-07:00\"}\n"
+    }
+  },
+  "retries_after_a_server_error": {
+    "case_sha256": "e369a8a9cf119a3df7774146f67ed0c2dfe00a3fce34920b2089af837ffa9da7",
+    "rows": {
+      "usage-example.jsonl": "{\"date\": \"2026-09-16\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-17\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-18\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {\"active.day\": 1, \"signin.ok\": 1}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-19\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-20\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-21\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {\"active.day\": 3, \"refresh.ok\": 20}, \"active_day_shared\": 1, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-22\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {\"active.day\": 2, \"signout.ok\": 1}, \"active_day_shared\": 2, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "three_failures_mark_the_newest_day": {
+    "case_sha256": "fe29a79f37d20b54a710eac7b7716d7c43a1cb9f4928a06790cb34f74030ede2",
+    "rows": {
+      "usage-example.jsonl": "{\"date\": \"2026-09-01\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0}\n{\"date\": \"2026-09-22\", \"dataset\": \"example_usage\", \"status\": \"fetch_failed\", \"http_code\": \"502\", \"reason\": \"bad gateway\", \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "three_connection_failures_record_http_code_0": {
+    "case_sha256": "8042e1c14ef3922f63e4bdf47ba80d3cecd688a2f4231d656d71d80699b8bb22",
+    "rows": {
+      "usage-example.jsonl": "{\"date\": \"2026-09-01\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0}\n{\"date\": \"2026-09-22\", \"dataset\": \"example_usage\", \"status\": \"fetch_failed\", \"http_code\": \"0\", \"reason\": \"<urlopen error connection refused>\", \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "an_error_body_is_cut_to_200_characters": {
+    "case_sha256": "85de3d117e395fe5b081e55f96575136030e610434420c82a19c5678b19c02ae",
+    "rows": {
+      "usage-example.jsonl": "{\"date\": \"2026-09-01\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0}\n{\"date\": \"2026-09-22\", \"dataset\": \"example_usage\", \"status\": \"fetch_failed\", \"http_code\": \"500\", \"reason\": \"{\\\"errors\\\":[{\\\"message\\\":\\\"the query ran out of time; try again later. the query ran out of time; try again later. the query ran out of time; try again later. the query ran out of time; try again later. t\", \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "a_failure_keeps_a_good_row": {
+    "case_sha256": "b2331cda3b93552eb9fbeaedd5e76917c86e4e6f8d7002044f87d873efde34ae",
+    "rows": {
+      "usage-example.jsonl": "{\"date\": \"2026-09-01\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0}\n{\"date\": \"2026-09-22\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {\"active.day\": 5}, \"active_day_shared\": 1, \"captured_at\": \"2026-09-23T08:00:00+00:00\"}\n"
+    }
+  },
+  "a_failed_second_query_writes_no_days": {
+    "case_sha256": "488c7b40f4d5f461ae8667d92a8da6a72384cca1a6d9535f25e2faacad7cf887",
+    "rows": {
+      "usage-example.jsonl": "{\"date\": \"2026-09-01\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0}\n{\"date\": \"2026-09-22\", \"dataset\": \"example_usage\", \"status\": \"fetch_failed\", \"http_code\": \"503\", \"reason\": \"\", \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "a_body_that_is_not_json": {
+    "case_sha256": "c8536f792aaabefc0c4ff5615fc07e59c92e9c4a305f6338ff81ac28dfa1517d",
+    "rows": {
+      "usage-example.jsonl": "{\"date\": \"2026-09-22\", \"dataset\": \"example_usage\", \"status\": \"parse_failed\", \"http_code\": \"200\", \"reason\": \"response was not JSON\", \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "a_result_without_data": {
+    "case_sha256": "55c7274685abbbd2cdd791e02f207dd220a06c274408c464ac34d2d9e1da4a9d",
+    "rows": {
+      "usage-example.jsonl": "{\"date\": \"2026-09-22\", \"dataset\": \"example_usage\", \"status\": \"parse_failed\", \"http_code\": \"200\", \"reason\": \"response had no data array\", \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "a_result_that_is_not_an_object_writes_nothing": {
+    "case_sha256": "cfa18933ce170f0c4f29a19d69e56fc8a694f367321783f6f33d1df71dc4e471",
+    "rows": {
+      "usage-example.jsonl": "{\"date\": \"2026-09-01\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0}\n"
+    }
+  },
+  "a_row_without_a_day_writes_nothing": {
+    "case_sha256": "9f1f0dcf6e95382e752a1b5c4f0444cccc5a94e028a31fd6d8115a37b99e9ad5",
+    "rows": {
+      "usage-example.jsonl": "{\"date\": \"2026-09-01\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0}\n"
+    }
+  },
+  "a_row_without_an_event_writes_nothing": {
+    "case_sha256": "b9ad69220122b24f52be56cbf080ff16ede43ff7bdf58344114b4db16f1b8b10",
+    "rows": {
+      "usage-example.jsonl": "{\"date\": \"2026-09-01\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0}\n"
+    }
+  },
+  "a_row_without_a_count_writes_nothing": {
+    "case_sha256": "b227ad4adcf3c2d99a4398cb5cd6a86a22868ef4d078f40210e5a4f50c177874",
+    "rows": {
+      "usage-example.jsonl": "{\"date\": \"2026-09-01\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0}\n"
+    }
+  },
+  "a_null_count_writes_nothing": {
+    "case_sha256": "a4a71214e8f395d4ca4d47c0cb56125568a1d96bb8216f2ebc7c4b68219da76c",
+    "rows": {
+      "usage-example.jsonl": "{\"date\": \"2026-09-01\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0}\n"
+    }
+  },
+  "a_count_is_cut_to_a_whole_number_and_a_repeated_event_keeps_the_last": {
+    "case_sha256": "b33cf6f8d68944a0144e9d6763501535f5d68b6bcd54ae1036fc8226fa39d4aa",
+    "rows": {
+      "usage-example.jsonl": "{\"date\": \"2026-09-16\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-17\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-18\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-19\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-20\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-21\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-22\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {\"active.day\": 2, \"signin.ok\": 5}, \"active_day_shared\": 2, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "rewrites_the_window_and_keeps_every_other_line": {
+    "case_sha256": "4f827c9aa3e1b1f369353360a55f9500ff674a4d3b7bba4ec5cfe7c00ab80ddd",
+    "rows": {
+      "usage-example.jsonl": "not json\n{\"no_date\": true}\n{\"date\": \"2026-09-01\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0}\n{\"date\": \"2026-09-19\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}}\n{\"date\": \"2026-09-20\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-21\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {\"active.day\": 4}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-22\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "a_repeated_day_keeps_its_last_line_and_blank_lines_go": {
+    "case_sha256": "ccf3449201eaa0914c6c9a1651460b1db176914048fa587e20d7cb44f77b5621",
+    "rows": {
+      "usage-example.jsonl": "[1]\nnull\n{\"date\": \"2026-09-01\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 3}\n{\"date\": \"2026-09-16\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-17\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-18\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {\"active.day\": 1, \"signin.ok\": 1}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-19\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-20\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-21\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {\"active.day\": 3, \"refresh.ok\": 20}, \"active_day_shared\": 1, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-22\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {\"active.day\": 2, \"signout.ok\": 1}, \"active_day_shared\": 2, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "no_refetch_days_rewrites_the_file_and_writes_no_day": {
+    "case_sha256": "1620016c56526d2d994c1ff928fd4c806a17549f883cff2c07bf88cfed438317",
+    "rows": {
+      "usage-example.jsonl": "{\"date\": \"2026-09-01\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0}\n{\"date\": \"2026-09-22\", \"dataset\": \"example_usage\", \"status\": \"fetch_failed\", \"http_code\": \"500\"}\n"
+    }
+  },
+  "a_date_that_is_not_a_string_stops_the_write": {
+    "case_sha256": "f11107a5fdc1817cfd0add1f0be7fb81ea055dc51d70e8095595434ecdafd9a7",
+    "rows": {
+      "usage-example.jsonl": "{\"date\": \"2026-09-01\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0}\n{\"date\": null}\n"
+    }
+  },
+  "refuses_a_dataset_that_is_not_an_identifier": {
+    "case_sha256": "cc02c6c148757cbbad4f1198873555feebbf8aa6935b87e2462db0ad6e58dd73",
+    "rows": {}
+  },
+  "skips_without_credentials": {
+    "case_sha256": "acb0a51ff3857ae60c0a5d3c7139ed5c547640babae2eb5fc9840088f4678d4e",
+    "rows": {}
+  },
+  "reads_each_layout_on_its_side_of_the_switch": {
+    "case_sha256": "a63f695a149a34c72fa11a979f8096a4dc0ab01c7b0ff2c46ebfee9e1cefcae3",
+    "rows": {
+      "usage-example.jsonl": "{\"date\": \"2026-09-01\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {}, \"active_day_shared\": 0}\n{\"date\": \"2026-09-24\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {\"active.day\": 4, \"signin.ok\": 2}, \"active_day_shared\": 1, \"captured_at\": \"2026-09-27T23:31:05+00:00\"}\n{\"date\": \"2026-09-25\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {\"active.day\": 5, \"signin.ok\": 1}, \"active_day_shared\": 3, \"country\": {\"GB\": 1, \"US\": 2}, \"region\": {\"CA\": 2}, \"browser\": {\"firefox\": 3}, \"app_version\": {\"\": 1, \"1.4.0\": 2}, \"captured_at\": \"2026-09-27T23:31:05+00:00\"}\n{\"date\": \"2026-09-26\", \"dataset\": \"example_usage\", \"status\": \"ok\", \"events\": {\"active.day\": 5}, \"active_day_shared\": 3, \"country\": {\"US\": 4, \"XX\": 1}, \"region\": {\"\": 1, \"NY\": 3}, \"browser\": {\"chrome\": 5}, \"app_version\": {\"1.4.1\": 5}, \"captured_at\": \"2026-09-27T23:31:05+00:00\"}\n"
+    }
+  },
+  "totals_a_measure_by_a_dimension": {
+    "case_sha256": "5e6a91239ae4a6dc5c21583adbb4501663d408d1b5b98be737c393e9cec45ed1",
+    "rows": {
+      "cloudflare-analytics-engine-example_screens.jsonl": "{\"date\": \"2026-09-25\", \"dataset\": \"example_screens\", \"status\": \"ok\", \"views\": {\"home\": 3, \"list\": 1}, \"seconds\": {\"home\": 42, \"list\": 7}, \"app_version\": {\"1.4.0\": 4}, \"captured_at\": \"2026-09-27T23:31:05+00:00\"}\n{\"date\": \"2026-09-26\", \"dataset\": \"example_screens\", \"status\": \"ok\", \"views\": {\"home\": 2}, \"seconds\": {\"home\": 30}, \"app_version\": {\"1.4.1\": 2}, \"captured_at\": \"2026-09-27T23:31:05+00:00\"}\n"
+    }
+  },
+  "totals_each_dimension_on_its_own": {
+    "case_sha256": "87c6aa50732d8cc155fbe307f5d3016acf05e692b6f93dc6073152c02ac39127",
+    "rows": {
+      "cloudflare-analytics-engine-example_diagnostics.jsonl": "{\"date\": \"2026-09-25\", \"dataset\": \"example_diagnostics\", \"status\": \"ok\", \"code\": {}, \"browser\": {}, \"app_version\": {}, \"captured_at\": \"2026-09-27T23:31:05+00:00\"}\n{\"date\": \"2026-09-26\", \"dataset\": \"example_diagnostics\", \"status\": \"ok\", \"code\": {\"E_TIMEOUT\": 2}, \"browser\": {\"safari\": 2}, \"app_version\": {\"1.4.1\": 2}, \"captured_at\": \"2026-09-27T23:31:05+00:00\"}\n"
+    }
+  }
+}

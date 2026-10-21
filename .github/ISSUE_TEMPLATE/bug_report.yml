@@ -1,0 +1,52 @@
+name: Bug report
+description: A run crashed, wrote a wrong row, or a page shows something wrong.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Do not paste a token, a password, or a private repository's or site's name.** Replace
+        them with placeholders (`example-org/example-app`) before you post.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: leadline version
+      description: The output of `leadline --version`.
+    validations:
+      required: true
+  - type: dropdown
+    id: how
+    attributes:
+      label: How you run it
+      options:
+        - cron or launchd
+        - Windows Task Scheduler
+        - GitHub Actions
+        - leadline.pyz on a NAS
+        - by hand
+        - other
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python version and operating system
+      placeholder: "3.8.15, Synology DSM 7"
+  - type: textarea
+    id: config
+    attributes:
+      label: The config entry involved
+      description: Only the entry for the source with the problem, with placeholders for anything private.
+      render: json
+  - type: textarea
+    id: log
+    attributes:
+      label: The log lines around it
+      description: From `leadline.log` in your output folder, with anything private removed.
+      render: text

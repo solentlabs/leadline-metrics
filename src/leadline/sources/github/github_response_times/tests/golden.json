@@ -1,0 +1,72 @@
+{
+  "hours_to_the_maintainers_first_reply": {
+    "case_sha256": "31d0596e35f7a15a74a4c77373a69d71c75c7790c205d9f44664585007b62892",
+    "rows": {
+      "github-response-times-example.jsonl": "{\"date\": \"2026-09-23\", \"issues_scanned\": 9, \"community_issues\": 7, \"answered\": 4, \"never_answered\": 3, \"median_hours\": 17.5, \"mean_hours\": 33.9, \"p90_hours\": 100.0, \"fastest_hours\": 0.5, \"within_1h_pct\": 25.0, \"within_24h_pct\": 50.0, \"within_72h_pct\": 75.0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "pages_through_cursors": {
+    "case_sha256": "02fa2d694414032fe50c0db2df11d0eefcc03c1b758c67c26422660e467e9f94",
+    "rows": {
+      "github-response-times-example.jsonl": "{\"date\": \"2026-09-23\", \"issues_scanned\": 9, \"community_issues\": 7, \"answered\": 4, \"never_answered\": 3, \"median_hours\": 17.5, \"mean_hours\": 33.9, \"p90_hours\": 100.0, \"fastest_hours\": 0.5, \"within_1h_pct\": 25.0, \"within_24h_pct\": 50.0, \"within_72h_pct\": 75.0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "eleven_pages_read_in_text_order_give_the_same_row": {
+    "case_sha256": "034631b7533a092185ddb9d300de89ca216b3677c556605a962decc22780f170",
+    "rows": {
+      "github-response-times-example.jsonl": "{\"date\": \"2026-09-23\", \"issues_scanned\": 11, \"community_issues\": 11, \"answered\": 10, \"never_answered\": 1, \"median_hours\": 137.5, \"mean_hours\": 137.5, \"p90_hours\": 250.0, \"fastest_hours\": 25.0, \"within_1h_pct\": 0.0, \"within_24h_pct\": 0.0, \"within_72h_pct\": 20.0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "replies_on_the_bounds_count_as_within": {
+    "case_sha256": "80e40701f000f66428c85a12afb654bf41aafc09de82c940b27164ec50cca910",
+    "rows": {
+      "github-response-times-example.jsonl": "{\"date\": \"2026-09-23\", \"issues_scanned\": 3, \"community_issues\": 3, \"answered\": 3, \"never_answered\": 0, \"median_hours\": 24.0, \"mean_hours\": 32.3, \"p90_hours\": 72.0, \"fastest_hours\": 1.0, \"within_1h_pct\": 33.3, \"within_24h_pct\": 66.7, \"within_72h_pct\": 100.0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "no_community_issues_give_no_times": {
+    "case_sha256": "b7fbbf7cf3ae7f057d3aa7d1e8cfc76903a70ef3256b1f9d3743b9fd3fecc71e",
+    "rows": {
+      "github-response-times-example.jsonl": "{\"date\": \"2026-09-23\", \"issues_scanned\": 2, \"community_issues\": 0, \"answered\": 0, \"never_answered\": 0, \"median_hours\": null, \"mean_hours\": null, \"p90_hours\": null, \"fastest_hours\": null, \"within_1h_pct\": null, \"within_24h_pct\": null, \"within_72h_pct\": null, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "community_issues_none_answered_give_no_times": {
+    "case_sha256": "feda17ecf447b0f34d5fe2cfba0f105f5cfa554ef665059fa60d4fbc30235a51",
+    "rows": {
+      "github-response-times-example.jsonl": "{\"date\": \"2026-09-23\", \"issues_scanned\": 2, \"community_issues\": 2, \"answered\": 0, \"never_answered\": 2, \"median_hours\": null, \"mean_hours\": null, \"p90_hours\": null, \"fastest_hours\": null, \"within_1h_pct\": null, \"within_24h_pct\": null, \"within_72h_pct\": null, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "an_empty_repository_gives_no_times": {
+    "case_sha256": "7078670d3c1bc93a0d6a7ae8dfeb59c32bb947e4a79278a2a54c1056287ce023",
+    "rows": {
+      "github-response-times-example.jsonl": "{\"date\": \"2026-09-23\", \"issues_scanned\": 0, \"community_issues\": 0, \"answered\": 0, \"never_answered\": 0, \"median_hours\": null, \"mean_hours\": null, \"p90_hours\": null, \"fastest_hours\": null, \"within_1h_pct\": null, \"within_24h_pct\": null, \"within_72h_pct\": null, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "a_closed_issue_is_answered_at_its_closing": {
+    "case_sha256": "1cc62a739976103edd16943c8ce56f0aa52d5606dff6fec750bc34b0ce98bc45",
+    "rows": {
+      "github-response-times-example.jsonl": "{\"date\": \"2026-09-23\", \"issues_scanned\": 6, \"community_issues\": 5, \"answered\": 2, \"never_answered\": 3, \"median_hours\": 17.5, \"mean_hours\": 17.5, \"p90_hours\": 30.0, \"fastest_hours\": 5.0, \"within_1h_pct\": 0.0, \"within_24h_pct\": 50.0, \"within_72h_pct\": 100.0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "graphql_errors_write_nothing": {
+    "case_sha256": "4217564ba1de84af83cdaa02a3840a59e7d3ec290b0ac9fead5bb01064fded6d",
+    "rows": {
+      "github-response-times-example.jsonl": "{\"date\": \"2026-09-22\", \"issues_scanned\": 7}\n"
+    }
+  },
+  "a_failed_later_page_writes_nothing": {
+    "case_sha256": "b5ecef5886ab223ffe885986c29af05feba2af3078e190c743bda854906aad60",
+    "rows": {
+      "github-response-times-example.jsonl": "{\"date\": \"2026-09-22\", \"issues_scanned\": 7}\n"
+    }
+  },
+  "skips_without_a_token": {
+    "case_sha256": "091908930945a74b44abfde364425cacef9df7a8cf152b03a9394c263a4ff97a",
+    "rows": {}
+  },
+  "past_days_are_recomputed_back_to_the_first_community_issue": {
+    "case_sha256": "27d321a89a6c65cf9fc77b782683604299c343524c3bc1dcf7cb0d5014f33077",
+    "rows": {
+      "github-response-times-example.jsonl": "{\"date\": \"2026-09-18\", \"issues_scanned\": 2, \"community_issues\": 1, \"answered\": 0, \"never_answered\": 1, \"median_hours\": null, \"mean_hours\": null, \"p90_hours\": null, \"fastest_hours\": null, \"within_1h_pct\": null, \"within_24h_pct\": null, \"within_72h_pct\": null, \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-19\", \"issues_scanned\": 3, \"community_issues\": 2, \"answered\": 1, \"never_answered\": 1, \"median_hours\": 24.0, \"mean_hours\": 24.0, \"p90_hours\": 24.0, \"fastest_hours\": 24.0, \"within_1h_pct\": 0.0, \"within_24h_pct\": 100.0, \"within_72h_pct\": 100.0, \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-20\", \"issues_scanned\": 3, \"community_issues\": 2, \"answered\": 2, \"never_answered\": 0, \"median_hours\": 18.0, \"mean_hours\": 18.0, \"p90_hours\": 24.0, \"fastest_hours\": 12.0, \"within_1h_pct\": 0.0, \"within_24h_pct\": 100.0, \"within_72h_pct\": 100.0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-21\", \"issues_scanned\": 3, \"community_issues\": 2, \"answered\": 2, \"never_answered\": 0, \"median_hours\": 18.0, \"mean_hours\": 18.0, \"p90_hours\": 24.0, \"fastest_hours\": 12.0, \"within_1h_pct\": 0.0, \"within_24h_pct\": 100.0, \"within_72h_pct\": 100.0, \"captured_at\": \"2026-09-21T23:30:00+00:00\"}\n{\"date\": \"2026-09-22\", \"issues_scanned\": 3, \"community_issues\": 2, \"answered\": 2, \"never_answered\": 0, \"median_hours\": 18.0, \"mean_hours\": 18.0, \"p90_hours\": 24.0, \"fastest_hours\": 12.0, \"within_1h_pct\": 0.0, \"within_24h_pct\": 100.0, \"within_72h_pct\": 100.0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-23\", \"issues_scanned\": 3, \"community_issues\": 2, \"answered\": 2, \"never_answered\": 0, \"median_hours\": 18.0, \"mean_hours\": 18.0, \"p90_hours\": 24.0, \"fastest_hours\": 12.0, \"within_1h_pct\": 0.0, \"within_24h_pct\": 100.0, \"within_72h_pct\": 100.0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  }
+}

@@ -1,0 +1,132 @@
+import json, os, re, sys, time, urllib.error, urllib.request
+from datetime import date, datetime, timedelta
+
+path, dataset, run_date, refetch_days, user_agent = sys.argv[1:6]
+run = date.fromisoformat(run_date)
+first = run - timedelta(days=int(refetch_days))
+last = run - timedelta(days=1)
+now = datetime.now().astimezone().isoformat(timespec='seconds')
+
+# The dataset name is interpolated into SQL, so it must be a plain identifier.
+if not re.fullmatch(r'[a-z0-9_]+', dataset):
+    sys.exit(f'refusing dataset name {dataset!r}')
+
+token = os.environ['CLOUDFLARE_API_TOKEN']
+account = os.environ['CLOUDFLARE_ACCOUNT_ID']
+
+def sql(query):
+    """(rows, None) on success, (None, (status, http_code, reason)) on failure."""
+    req = urllib.request.Request(
+        f'https://api.cloudflare.com/client/v4/accounts/{account}/analytics_engine/sql',
+        data=query.encode(), method='POST',
+        headers={'Authorization': f'Bearer {token}', 'User-Agent': user_agent})
+    failure = None
+    for attempt in range(3):
+        if attempt:
+            time.sleep(attempt * 10)
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                body = resp.read().decode('utf-8', 'replace')
+        except urllib.error.HTTPError as e:
+            failure = ('fetch_failed', str(e.code),
+                       e.read().decode('utf-8', 'replace')[:200])
+            continue
+        except (urllib.error.URLError, OSError) as e:
+            failure = ('fetch_failed', '0', str(e)[:200])
+            continue
+        try:
+            parsed = json.loads(body)
+        except ValueError:
+            return None, ('parse_failed', '200', 'response was not JSON')
+        if not isinstance(parsed.get('data'), list):
+            return None, ('parse_failed', '200', 'response had no data array')
+        return parsed['data'], None
+    return None, failure
+
+window = (f"timestamp >= toDateTime('{first} 00:00:00') "
+          f"AND timestamp < toDateTime('{run} 00:00:00')")
+
+def day_of(row):
+    # toStartOfDay comes back as 'YYYY-MM-DD 00:00:00' (UTC).
+    return str(row['day'])[:10]
+
+def count(row):
+    # UInt64 sums arrive quoted in ClickHouse-style JSON.
+    return int(float(row['n']))
+
+totals, failure = sql(
+    f"SELECT toStartOfDay(timestamp) AS day, blob1 AS event, "
+    f"SUM(_sample_interval) AS n FROM {dataset} WHERE {window} "
+    f"GROUP BY day, event FORMAT JSON")
+shared = None
+if failure is None:
+    # Sums over blob2 without selecting it: the id stays in Cloudflare.
+    shared, failure = sql(
+        f"SELECT toStartOfDay(timestamp) AS day, SUM(_sample_interval) AS n "
+        f"FROM {dataset} WHERE {window} "
+        f"AND blob1 = 'active.day' AND blob2 != '' "
+        f"GROUP BY day FORMAT JSON")
+
+fresh = {}
+if failure is None:
+    # Every day in the window gets a row, zeroes included: a quiet day is an
+    # ok row, never a missing one, and a failed fetch is never a zero.
+    d = first
+    while d <= last:
+        fresh[d.isoformat()] = {'events': {}, 'shared': 0}
+        d += timedelta(days=1)
+    for row in totals:
+        if day_of(row) in fresh:
+            fresh[day_of(row)]['events'][str(row['event'])] = count(row)
+    for row in shared:
+        if day_of(row) in fresh:
+            fresh[day_of(row)]['shared'] = count(row)
+
+# Replace the window's days, keep everything else, rewrite atomically. Lines
+# that do not parse are kept, as upsert_jsonl keeps them.
+kept, unparsed = {}, []
+if os.path.exists(path):
+    with open(path, encoding='utf-8', errors='ignore') as f:
+        for line in f:
+            if not line.strip():
+                continue
+            try:
+                kept[json.loads(line)['date']] = json.loads(line)
+            except (ValueError, KeyError, TypeError):
+                unparsed.append(line.rstrip('\n'))
+
+for key, day in fresh.items():
+    kept[key] = {
+        'date': key,
+        'dataset': dataset,
+        'status': 'ok',
+        'events': dict(sorted(day['events'].items())),
+        'active_day_shared': day['shared'],
+        'captured_at': now,
+    }
+
+# A failure is recorded on the newest day, and only where that day has no good
+# row yet: a failed re-run must not overwrite a good reading.
+if failure is not None and kept.get(last.isoformat(), {}).get('status') != 'ok':
+    status, http_code, reason = failure
+    kept[last.isoformat()] = {
+        'date': last.isoformat(), 'dataset': dataset, 'status': status,
+        'http_code': http_code, 'reason': reason, 'captured_at': now,
+    }
+
+tmp = path + '.tmp'
+with open(tmp, 'w', encoding='utf-8') as f:
+    for line in unparsed:
+        f.write(line + '\n')
+    for key in sorted(kept):
+        f.write(json.dumps(kept[key]) + '\n')
+os.replace(tmp, path)
+
+if failure is not None:
+    print(f'{failure[0]} (HTTP {failure[1]}): {failure[2]}')
+    sys.exit(3)
+newest = fresh[last.isoformat()]
+print(f"{len(fresh)} day(s) {first}..{last}; {last}: "
+      f"{sum(newest['events'].values())} events, "
+      f"{newest['events'].get('active.day', 0)} active.day "
+      f"({newest['shared']} shared)")

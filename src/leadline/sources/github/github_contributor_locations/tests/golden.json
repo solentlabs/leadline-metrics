@@ -1,0 +1,60 @@
+{
+  "regions_from_profile_locations": {
+    "case_sha256": "e6009ec5d9111f9d8ca3fe4cc178813e6fae195e1eb630dec25b4c3512c476b1",
+    "rows": {
+      "github-contributor-locations-example.jsonl": "{\"date\": \"2026-09-23\", \"repo\": \"solentlabs/example\", \"total_unique_creators\": 8, \"with_github_location\": 8, \"with_inferred_region\": 7, \"region_summary\": {\"DE\": 2, \"UK\": 1, \"US\": 1, \"unknown\": 1, \"FI\": 1, \"AU\": 1, \"NL\": 1}, \"contributors\": [{\"login\": \"alpha-user\", \"location\": \"Yondershire, England\", \"region\": \"UK\", \"source\": \"github_profile\"}, {\"login\": \"bravo-user\", \"location\": \"Zedland, Germany\", \"region\": \"DE\", \"source\": \"github_profile\"}, {\"login\": \"charlie-user\", \"location\": \"Springfield, IL\", \"region\": \"US\", \"source\": \"github_profile\"}, {\"login\": \"delta-user\", \"location\": \"Somewhere at sea\", \"region\": \"unknown\", \"source\": \"profile_unparsed\"}, {\"login\": \"example-maintainer\", \"location\": \"Zednet, Finland\", \"region\": \"FI\", \"source\": \"github_profile\"}, {\"login\": \"india-user\", \"location\": \"A Telstra customer\", \"region\": \"AU\", \"source\": \"github_profile\"}, {\"login\": \"juliet-user\", \"location\": \"Zedland, Germany, on Ziggo\", \"region\": \"NL\", \"source\": \"github_profile\"}, {\"login\": \"kilo-user\", \"location\": \"Zedland, Germany and Yondershire, England\", \"region\": \"DE\", \"source\": \"github_profile\"}], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "regions_from_issues_without_a_location": {
+    "case_sha256": "db2e5988047be5ba1f8484587272e65303528cb5c0582f39e06577c88274fb6b",
+    "rows": {
+      "github-contributor-locations-example.jsonl": "{\"date\": \"2026-09-23\", \"repo\": \"solentlabs/example\", \"total_unique_creators\": 7, \"with_github_location\": 0, \"with_inferred_region\": 4, \"region_summary\": {\"unknown\": 3, \"NL\": 1, \"UK\": 1, \"AU\": 1, \"US\": 1}, \"contributors\": [{\"login\": \"echo-user\", \"location\": null, \"region\": \"NL\", \"source\": \"issue_inference\"}, {\"login\": \"foxtrot-user\", \"location\": null, \"region\": \"unknown\", \"source\": \"unknown\"}, {\"login\": \"golf-user\", \"location\": null, \"region\": \"UK\", \"source\": \"issue_inference\"}, {\"login\": \"hotel-user\", \"location\": null, \"region\": \"unknown\", \"source\": \"unknown\"}, {\"login\": \"lima-user\", \"location\": null, \"region\": \"unknown\", \"source\": \"unknown\"}, {\"login\": \"mike-user\", \"location\": null, \"region\": \"AU\", \"source\": \"issue_inference\"}, {\"login\": \"november-user\", \"location\": null, \"region\": \"US\", \"source\": \"issue_inference\"}], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "pages_through_link_headers": {
+    "case_sha256": "29b783b237b57b36245a88330d525f136587c92d233fd370b7c14126c4d8afdd",
+    "rows": {
+      "github-contributor-locations-example.jsonl": "{\"date\": \"2026-09-23\", \"repo\": \"solentlabs/example\", \"total_unique_creators\": 4, \"with_github_location\": 0, \"with_inferred_region\": 0, \"region_summary\": {\"unknown\": 4}, \"contributors\": [{\"login\": \"another-user\", \"location\": null, \"region\": \"unknown\", \"source\": \"unknown\"}, {\"login\": \"example-maintainer\", \"location\": null, \"region\": \"unknown\", \"source\": \"unknown\"}, {\"login\": \"example-user\", \"location\": null, \"region\": \"unknown\", \"source\": \"unknown\"}, {\"login\": \"page-two-user\", \"location\": null, \"region\": \"unknown\", \"source\": \"unknown\"}], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "a_repository_without_issues": {
+    "case_sha256": "2a6685c21a33d4317169060ea1002855a46c54f9bb83f0fd5d5040f068d20d08",
+    "rows": {
+      "github-contributor-locations-example.jsonl": "{\"date\": \"2026-09-23\", \"repo\": \"solentlabs/example\", \"total_unique_creators\": 0, \"with_github_location\": 0, \"with_inferred_region\": 0, \"region_summary\": {}, \"contributors\": [], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "a_failed_issues_page_writes_nothing": {
+    "case_sha256": "21c9babfaaf983ddf9c596bd6c0f47592c530dd559c7d2dfedb326b63af27543",
+    "rows": {
+      "github-contributor-locations-example.jsonl": "{\"date\": \"2026-09-01\", \"repo\": \"solentlabs/example\", \"total_unique_creators\": 3}\n"
+    }
+  },
+  "a_failed_profile_falls_back_to_issue_text": {
+    "case_sha256": "ba3a408317f6e5699f5a77006b8f6a876db0b25f54b3e2d1d35c1400b5498c96",
+    "rows": {
+      "github-contributor-locations-example.jsonl": "{\"date\": \"2026-09-01\", \"repo\": \"solentlabs/example\", \"total_unique_creators\": 3}\n{\"date\": \"2026-09-23\", \"repo\": \"solentlabs/example\", \"total_unique_creators\": 2, \"with_github_location\": 1, \"with_inferred_region\": 2, \"region_summary\": {\"DE\": 1, \"US\": 1}, \"contributors\": [{\"login\": \"oscar-user\", \"location\": \"Zedland, Germany\", \"region\": \"DE\", \"source\": \"github_profile\"}, {\"login\": \"papa-user\", \"location\": null, \"region\": \"US\", \"source\": \"issue_inference\"}], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "skips_without_a_token": {
+    "case_sha256": "cf53806c53513fb13de6769d41e4ba0e5515a4d6644fde683ea7855cf07b754c",
+    "rows": {}
+  },
+  "regions_from_issue_form_answers": {
+    "case_sha256": "af4a7bda3e93c96ebc622eed39ddbccab65ead02d2f3ffdfe5d57f4002c57e16",
+    "rows": {
+      "github-contributor-locations-example.jsonl": "{\"date\": \"2026-09-23\", \"repo\": \"solentlabs/example\", \"total_unique_creators\": 6, \"with_github_location\": 1, \"with_inferred_region\": 5, \"region_summary\": {\"CA\": 1, \"FI\": 1, \"NL\": 1, \"DE\": 1, \"unknown\": 1, \"UK\": 1}, \"contributors\": [{\"login\": \"quebec-user\", \"location\": null, \"region\": \"CA\", \"source\": \"issue_inference\"}, {\"login\": \"romeo-user\", \"location\": null, \"region\": \"FI\", \"source\": \"issue_inference\"}, {\"login\": \"sierra-user\", \"location\": null, \"region\": \"NL\", \"source\": \"issue_inference\"}, {\"login\": \"tango-user\", \"location\": \"Zedland, Germany\", \"region\": \"DE\", \"source\": \"github_profile\"}, {\"login\": \"uniform-user\", \"location\": null, \"region\": \"unknown\", \"source\": \"unknown\"}, {\"login\": \"victor-user\", \"location\": null, \"region\": \"UK\", \"source\": \"issue_inference\"}], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "regions_from_exact_answers_and_modems": {
+    "case_sha256": "6b8ffb40bf12e2fa2e87dc43eba9f5558c36d9ccfe2ccf5caea79ceb1ca247d6",
+    "rows": {
+      "github-contributor-locations-example.jsonl": "{\"date\": \"2026-09-23\", \"repo\": \"solentlabs/example\", \"total_unique_creators\": 5, \"with_github_location\": 1, \"with_inferred_region\": 5, \"region_summary\": {\"DE\": 2, \"UK\": 2, \"NL\": 1}, \"contributors\": [{\"login\": \"tango-user\", \"location\": \"Zedland, Germany\", \"region\": \"DE\", \"source\": \"github_profile\"}, {\"login\": \"whiskey-user\", \"location\": null, \"region\": \"UK\", \"source\": \"issue_inference\"}, {\"login\": \"xray-user\", \"location\": null, \"region\": \"DE\", \"source\": \"issue_inference\"}, {\"login\": \"yankee-user\", \"location\": null, \"region\": \"NL\", \"source\": \"issue_inference\"}, {\"login\": \"zulu-user\", \"location\": null, \"region\": \"UK\", \"source\": \"issue_inference\"}], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "past_days_are_recomputed_back_to_the_first_persons_first_issue": {
+    "case_sha256": "2708d8d7cd0cadd7264127044d27865ad065bc1d9948e200c6b3f33afda952b4",
+    "rows": {
+      "github-contributor-locations-example.jsonl": "{\"date\": \"2026-09-18\", \"repo\": \"solentlabs/example\", \"total_unique_creators\": 1, \"with_github_location\": 1, \"with_inferred_region\": 1, \"region_summary\": {\"UK\": 1}, \"contributors\": [{\"login\": \"alpha-user\", \"location\": \"Yondershire, England\", \"region\": \"UK\", \"source\": \"github_profile\"}], \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-19\", \"repo\": \"solentlabs/example\", \"total_unique_creators\": 2, \"with_github_location\": 2, \"with_inferred_region\": 2, \"region_summary\": {\"UK\": 1, \"DE\": 1}, \"contributors\": [{\"login\": \"alpha-user\", \"location\": \"Yondershire, England\", \"region\": \"UK\", \"source\": \"github_profile\"}, {\"login\": \"bravo-user\", \"location\": \"Zedland, Germany\", \"region\": \"DE\", \"source\": \"github_profile\"}], \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-20\", \"repo\": \"solentlabs/example\", \"total_unique_creators\": 3, \"with_github_location\": 2, \"with_inferred_region\": 3, \"region_summary\": {\"UK\": 1, \"DE\": 1, \"NL\": 1}, \"contributors\": [{\"login\": \"alpha-user\", \"location\": \"Yondershire, England\", \"region\": \"UK\", \"source\": \"github_profile\"}, {\"login\": \"bravo-user\", \"location\": \"Zedland, Germany\", \"region\": \"DE\", \"source\": \"github_profile\"}, {\"login\": \"echo-user\", \"location\": null, \"region\": \"NL\", \"source\": \"issue_inference\"}], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-21\", \"repo\": \"solentlabs/example\", \"total_unique_creators\": 3, \"with_github_location\": 2, \"with_inferred_region\": 3, \"region_summary\": {\"UK\": 1, \"DE\": 1, \"NL\": 1}, \"contributors\": [{\"login\": \"alpha-user\", \"location\": \"Yondershire, England\", \"region\": \"UK\", \"source\": \"github_profile\"}, {\"login\": \"bravo-user\", \"location\": \"Zedland, Germany\", \"region\": \"DE\", \"source\": \"github_profile\"}, {\"login\": \"echo-user\", \"location\": null, \"region\": \"NL\", \"source\": \"issue_inference\"}], \"captured_at\": \"2026-09-21T23:30:00+00:00\"}\n{\"date\": \"2026-09-22\", \"repo\": \"solentlabs/example\", \"total_unique_creators\": 3, \"with_github_location\": 2, \"with_inferred_region\": 3, \"region_summary\": {\"UK\": 1, \"DE\": 1, \"NL\": 1}, \"contributors\": [{\"login\": \"alpha-user\", \"location\": \"Yondershire, England\", \"region\": \"UK\", \"source\": \"github_profile\"}, {\"login\": \"bravo-user\", \"location\": \"Zedland, Germany\", \"region\": \"DE\", \"source\": \"github_profile\"}, {\"login\": \"echo-user\", \"location\": null, \"region\": \"NL\", \"source\": \"issue_inference\"}], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-23\", \"repo\": \"solentlabs/example\", \"total_unique_creators\": 3, \"with_github_location\": 2, \"with_inferred_region\": 3, \"region_summary\": {\"UK\": 1, \"DE\": 1, \"NL\": 1}, \"contributors\": [{\"login\": \"alpha-user\", \"location\": \"Yondershire, England\", \"region\": \"UK\", \"source\": \"github_profile\"}, {\"login\": \"bravo-user\", \"location\": \"Zedland, Germany\", \"region\": \"DE\", \"source\": \"github_profile\"}, {\"login\": \"echo-user\", \"location\": null, \"region\": \"NL\", \"source\": \"issue_inference\"}], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  }
+}

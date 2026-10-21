@@ -1,0 +1,50 @@
+{
+  "totals_and_the_top_fifteen_countries": {
+    "case_sha256": "903731c123e3fd7554beba58bc8a69708a90d979dd110fd2106500d300eedeb8",
+    "rows": {
+      "ha-platform.jsonl": "{\"date\": \"2026-09-22\", \"active_installations\": 1000, \"reports_integrations\": 400}\n{\"date\": \"2026-09-23\", \"active_installations\": 250000, \"reports_integrations\": 99000, \"reports_addons\": 49500, \"reports_statistics\": 33000, \"integrations_report_pct\": 39.6, \"installation_types\": {\"os\": 15469, \"container\": 19876, \"core\": 6761, \"supervised\": 25956, \"unsupported_container\": 31383, \"unknown\": 10156}, \"avg_integrations\": 25, \"top_countries\": {\"II\": 88, \"QQ\": 86, \"HH\": 77, \"PP\": 75, \"GG\": 66, \"OO\": 64, \"FF\": 55, \"NN\": 53, \"EE\": 44, \"MM\": 42, \"DD\": 33, \"LL\": 31, \"CC\": 22, \"KK\": 20, \"BB\": 11}, \"countries_tracked\": 17, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "missing_totals_and_no_installations": {
+    "case_sha256": "4028803dc0a140a601aa4cdfc607b405992d32874bec896ba0e71b29d8b846cf",
+    "rows": {
+      "ha-platform.jsonl": "{\"date\": \"2026-09-23\", \"active_installations\": 0, \"reports_integrations\": 5, \"reports_addons\": null, \"reports_statistics\": null, \"integrations_report_pct\": null, \"installation_types\": {}, \"avg_integrations\": null, \"top_countries\": {}, \"countries_tracked\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "failed_fetch_writes_nothing": {
+    "case_sha256": "1b4f3629b6612adeb7bc951adc5ba3a479b42e3d676e9e9109b0791e3a73676e",
+    "rows": {
+      "ha-platform.jsonl": "{\"date\": \"2026-09-22\", \"active_installations\": 1000, \"reports_integrations\": 400}\n"
+    }
+  },
+  "unparseable_body_writes_nothing": {
+    "case_sha256": "7b9b2f270742938ccf85e7f67799f3c7e7e5b8ce622bbdb1934510b177791908",
+    "rows": {
+      "ha-platform.jsonl": "{\"date\": \"2026-09-22\", \"active_installations\": 1000, \"reports_integrations\": 400}\n"
+    }
+  },
+  "tied_countries_keep_the_feeds_order": {
+    "case_sha256": "02c95c099e24901ed846450b1787fa959195310f0e50464f2cfd2677d9ad6896",
+    "rows": {
+      "ha-platform.jsonl": "{\"date\": \"2026-09-23\", \"active_installations\": 500, \"reports_integrations\": 400, \"reports_addons\": 200, \"reports_statistics\": 133, \"integrations_report_pct\": 80.0, \"installation_types\": {\"os\": 30, \"container\": 38, \"core\": 13, \"supervised\": 50, \"unsupported_container\": 61, \"unknown\": 19}, \"avg_integrations\": 25, \"top_countries\": {\"CC\": 30, \"HH\": 22, \"JJ\": 21, \"BB\": 20, \"OO\": 20, \"GG\": 19, \"KK\": 18, \"FF\": 17, \"LL\": 16, \"EE\": 15, \"MM\": 14, \"DD\": 13, \"NN\": 12, \"PP\": 9, \"QQ\": 1}, \"countries_tracked\": 16, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "null_reports_integrations_count_as_zero": {
+    "case_sha256": "f5787dccaaf58cc9c0527f9841e549d5250c17cb766ad2298ca695f12ec10920",
+    "rows": {
+      "ha-platform.jsonl": "{\"date\": \"2026-09-23\", \"active_installations\": 100, \"reports_integrations\": 0, \"reports_addons\": null, \"reports_statistics\": null, \"integrations_report_pct\": 0.0, \"installation_types\": {}, \"avg_integrations\": null, \"top_countries\": {}, \"countries_tracked\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "a_null_country_count_writes_nothing": {
+    "case_sha256": "f9ebd0f5a3302479a1b590d09c0835ec3f7a738d4ecb3dca028c03237d058eeb",
+    "rows": {
+      "ha-platform.jsonl": "{\"date\": \"2026-09-22\", \"active_installations\": 1000, \"reports_integrations\": 400}\n"
+    }
+  },
+  "a_body_without_current_writes_zeros": {
+    "case_sha256": "d360271f410c62c08e22d6e99e40cc513801d9fb48d471ab68f38b33c1816544",
+    "rows": {
+      "ha-platform.jsonl": "{\"date\": \"2026-09-22\", \"active_installations\": 1000, \"reports_integrations\": 400}\n{\"date\": \"2026-09-23\", \"active_installations\": 0, \"reports_integrations\": 0, \"reports_addons\": null, \"reports_statistics\": null, \"integrations_report_pct\": null, \"installation_types\": {}, \"avg_integrations\": null, \"top_countries\": {}, \"countries_tracked\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  }
+}

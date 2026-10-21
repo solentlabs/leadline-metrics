@@ -1,0 +1,48 @@
+{
+  "repository_and_its_traffic": {
+    "case_sha256": "898db404faa1dac2f11fda90a5b9538820edc1407e1957be334ef016fac97ea2",
+    "rows": {
+      "github-har-capture.jsonl": "{\"date\": \"2026-09-23\", \"repo\": \"solentlabs/example-tool\", \"stars\": 41, \"forks\": 6, \"watchers\": 5, \"open_issues\": 3, \"views_14d\": 217, \"views_unique_14d\": 42, \"clones_14d\": 28, \"clones_unique_14d\": 14, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "failed_traffic_counts_as_zero": {
+    "case_sha256": "e9afe5af4c4ed093b258c530019bdea12290bf79502f3607eb00ca99a6b0014a",
+    "rows": {
+      "github-har-capture.jsonl": "{\"date\": \"2026-09-23\", \"repo\": \"solentlabs/example-tool\", \"stars\": 41, \"forks\": 6, \"watchers\": 5, \"open_issues\": 3, \"views_14d\": 0, \"views_unique_14d\": 0, \"clones_14d\": 0, \"clones_unique_14d\": 0, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "failed_repository_writes_nothing": {
+    "case_sha256": "5b5fc3493bea3c30a9664b9f9123cafdebcf1b4f22b8faaf8c782a2adf523785",
+    "rows": {
+      "github-har-capture.jsonl": "{\"date\": \"2026-09-22\", \"repo\": \"solentlabs/example-tool\", \"stars\": 40}\n"
+    }
+  },
+  "unparseable_repository_writes_nothing": {
+    "case_sha256": "fd0b5485ef5a24f7cf1c41c6cd33e0d3f5d8a147e3a36da9fc86cfc9224b3138",
+    "rows": {
+      "github-har-capture.jsonl": "{\"date\": \"2026-09-22\", \"repo\": \"solentlabs/example-tool\", \"stars\": 40}\n"
+    }
+  },
+  "unparseable_traffic_writes_nothing": {
+    "case_sha256": "6ee5d2cf1873ba8c54a0a59196f17bee5a5adc6549695d54f5290f21edc67b84",
+    "rows": {
+      "github-har-capture.jsonl": "{\"date\": \"2026-09-22\", \"repo\": \"solentlabs/example-tool\", \"stars\": 40}\n"
+    }
+  },
+  "an_escaped_quote_in_the_repository_writes_nothing": {
+    "case_sha256": "d87656ebae76a04e394e5e64af8aea8a85c17099fa2123f9d217a6d964a0793e",
+    "rows": {
+      "github-har-capture.jsonl": "{\"date\": \"2026-09-22\", \"repo\": \"solentlabs/example-tool\", \"stars\": 40}\n"
+    }
+  },
+  "triple_quotes_in_the_repository_write_nothing": {
+    "case_sha256": "6778fb46bdca979fb1fcd215ed9afea5f27d5bc6310163f297d84383e078b52f",
+    "rows": {
+      "github-har-capture.jsonl": "{\"date\": \"2026-09-22\", \"repo\": \"solentlabs/example-tool\", \"stars\": 40}\n"
+    }
+  },
+  "skips_without_a_token": {
+    "case_sha256": "49536c6e0d22dc88ec4b36b78c45f5b91b1ba24606fb51aa5220e8e827c5902a",
+    "rows": {}
+  }
+}

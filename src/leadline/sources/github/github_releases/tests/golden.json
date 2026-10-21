@@ -1,0 +1,42 @@
+{
+  "every_release_with_its_asset_downloads": {
+    "case_sha256": "a1d482a76620c9554963d75f8addbb4940cda4e54d57331db91d24fa039ba14d",
+    "rows": {
+      "github-releases-example.jsonl": "{\"date\": \"2026-09-23\", \"repo\": \"solentlabs/example\", \"releases\": [{\"tag\": \"v2.0.0-beta.1\", \"prerelease\": false, \"draft\": true, \"published_at\": null, \"assets\": []}, {\"tag\": \"v1.1.0-beta.2\", \"prerelease\": true, \"draft\": false, \"published_at\": \"2026-09-10T08:00:00Z\", \"assets\": [{\"name\": \"example.zip\", \"downloads\": 12, \"size\": 2048}]}, {\"tag\": \"v1.0.0\", \"prerelease\": false, \"draft\": false, \"published_at\": \"2026-08-01T08:00:00Z\", \"assets\": [{\"name\": \"example.zip\", \"downloads\": 140, \"size\": 4096}, {\"name\": \"example-docs.zip\", \"downloads\": 9, \"size\": 1024}]}, {\"tag\": \"v0.9.0\", \"prerelease\": false, \"draft\": false, \"published_at\": \"2026-06-01T08:00:00Z\", \"assets\": []}], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "a_repository_without_releases": {
+    "case_sha256": "450d805e685baccc5fc90e817cf9d2a0bf7d68432f1e0f93c3e759d60ded76ef",
+    "rows": {
+      "github-releases-example.jsonl": "{\"date\": \"2026-09-23\", \"repo\": \"solentlabs/example\", \"releases\": [], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "missing_fields_take_the_defaults": {
+    "case_sha256": "ab83b299e150ad6019b60cd879b5ce5e1607bb2f3264e99443d86b9eda8c53bf",
+    "rows": {
+      "github-releases-example.jsonl": "{\"date\": \"2026-09-23\", \"repo\": \"solentlabs/example\", \"releases\": [{\"tag\": \"v0.1.0\", \"prerelease\": false, \"draft\": false, \"published_at\": null, \"assets\": [{\"name\": \"example.zip\", \"downloads\": 0, \"size\": 0}]}, {\"tag\": null, \"prerelease\": false, \"draft\": false, \"published_at\": null, \"assets\": []}], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "failed_fetch_writes_nothing": {
+    "case_sha256": "9c56712a8b854747db995a965ea987adfd566e3a437dd438480553392cb45dd7",
+    "rows": {
+      "github-releases-example.jsonl": "{\"date\": \"2026-09-22\", \"repo\": \"solentlabs/example\", \"releases\": []}\n"
+    }
+  },
+  "unparseable_body_writes_nothing": {
+    "case_sha256": "616a4a2b0cf5a6b7fd9320c4aee30a73cb145fa7f3125f4efd182f41f192dda9",
+    "rows": {
+      "github-releases-example.jsonl": "{\"date\": \"2026-09-22\", \"repo\": \"solentlabs/example\", \"releases\": []}\n"
+    }
+  },
+  "a_body_not_a_list_writes_nothing": {
+    "case_sha256": "6dcd9e86152b6af8e69261f9fc13eda239478df3e56d826aa16904f06316a85a",
+    "rows": {
+      "github-releases-example.jsonl": "{\"date\": \"2026-09-22\", \"repo\": \"solentlabs/example\", \"releases\": []}\n"
+    }
+  },
+  "skips_without_a_token": {
+    "case_sha256": "46abca5e266e637c1a82cdf50b4d1a4510072c450aeff31a34da69bae370ad4b",
+    "rows": {}
+  }
+}

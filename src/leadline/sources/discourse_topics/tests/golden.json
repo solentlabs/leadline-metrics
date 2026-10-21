@@ -1,0 +1,32 @@
+{
+  "two_threads": {
+    "case_sha256": "6b0c51c34e7373df1ad5ad001322e60b397b8d915b39d5eb35abe20606aaea2b",
+    "rows": {
+      "forum.jsonl": "{\"date\": \"2026-09-23\", \"topic_id\": 1001, \"label\": \"main\", \"views\": 5400, \"replies\": 60, \"likes\": 88, \"last_post\": \"2026-09-20\", \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-23\", \"topic_id\": 1002, \"label\": \"other-thread\", \"views\": 700, \"replies\": 4, \"likes\": 2, \"last_post\": \"2026-09-20\", \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "failed_or_unparseable_threads_are_skipped": {
+    "case_sha256": "d1d3218bffa00d67be35ce1072082879b794fa3debf1054b0261be6948640c24",
+    "rows": {
+      "forum.jsonl": "{\"date\": \"2026-09-23\", \"topic_id\": 1003, \"label\": \"third-thread\", \"views\": 90, \"replies\": 1, \"likes\": 0, \"last_post\": \"2026-09-20\", \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "missing_counts_read_as_zero": {
+    "case_sha256": "5d47a2d7bc2fbfe543179b600dd69a5a8ae4face965332a7ff0a8bbe1780c3c3",
+    "rows": {
+      "forum.jsonl": "{\"date\": \"2026-09-23\", \"topic_id\": 1001, \"label\": \"main\", \"views\": 0, \"replies\": 0, \"likes\": 0, \"last_post\": \"\", \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-23\", \"topic_id\": 1002, \"label\": \"other-thread\", \"views\": 700, \"replies\": 0, \"likes\": 2, \"last_post\": \"2026-09-20\", \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "a_rerun_replaces_only_the_same_thread_and_day": {
+    "case_sha256": "4f1cc03fd941a7e76d782d38b04b5e87b9b33408d4a8c073b06f38b9c18f80aa",
+    "rows": {
+      "forum.jsonl": "{\"date\": \"2026-09-22\", \"topic_id\": 1001, \"label\": \"main\", \"views\": 5300}\n{\"date\": \"2026-09-23\", \"topic_id\": \"1001\", \"label\": \"main\", \"views\": 5400}\nnot json\n{\"date\": \"2026-09-23\", \"topic_id\": 1002, \"label\": \"other-thread\", \"views\": 700}\n{\"date\": \"2026-09-23\", \"topic_id\": 1001, \"label\": \"main\", \"views\": 5500, \"replies\": 61, \"likes\": 90, \"last_post\": \"2026-09-20\", \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "a_topic_starting_late_gets_rows_back_to_its_creation": {
+    "case_sha256": "e2a1e653b1f5eb1fef2e90257d00e5979f1189719be77f5457caaf8584c79210",
+    "rows": {
+      "forum.jsonl": "{\"date\": \"2026-09-10\", \"topic_id\": 1002, \"label\": \"other-thread\", \"views\": 70}\n{\"date\": \"2026-09-18\", \"topic_id\": 1001, \"label\": \"main\", \"views\": null, \"replies\": 1, \"likes\": null, \"last_post\": \"2026-09-18\", \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-19\", \"topic_id\": 1001, \"label\": \"main\", \"views\": null, \"replies\": 1, \"likes\": null, \"last_post\": \"2026-09-18\", \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-20\", \"topic_id\": 1001, \"label\": \"main\", \"views\": null, \"replies\": 3, \"likes\": null, \"last_post\": \"2026-09-20\", \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-21\", \"topic_id\": 1001, \"label\": \"main\", \"views\": 450, \"replies\": 3, \"likes\": 6, \"last_post\": \"2026-09-20\"}\n{\"date\": \"2026-09-23\", \"topic_id\": 1001, \"label\": \"main\", \"views\": 500, \"replies\": 4, \"likes\": 7, \"last_post\": \"2026-09-22\", \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  }
+}

@@ -1,0 +1,2 @@
+# Keep line endings LF everywhere: fixtures and outputs are compared byte for byte.
+* text=auto eol=lf

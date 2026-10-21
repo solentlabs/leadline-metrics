@@ -1,0 +1,60 @@
+{
+  "weekly_snapshot": {
+    "case_sha256": "d94cabea8759b3c56db53480dca4409d168b1598b32aa284885deaa098a17cbd",
+    "rows": {
+      "github-repo-activity-example.jsonl": "{\"date\": \"2026-09-22\", \"label\": \"example\", \"repo\": \"example-org/example-project\", \"stars\": 890}\n{\"date\": \"2026-09-24\", \"label\": \"example\", \"latest_release\": {\"tag\": \"v3.9.0\", \"date\": \"2026-09-23\"}}\n{\"date\": \"2026-09-23\", \"label\": \"example\", \"repo\": \"example-org/example-project\", \"stars\": 900, \"forks\": 40, \"open_issues\": 12, \"codebase_bytes\": 160900, \"velocity_7d\": {\"commits\": 8, \"authors\": 2, \"fixes\": 4, \"fix_ratio\": 50.0, \"redesigns\": 2}, \"issues_7d\": {\"total\": 3, \"external\": 2}, \"contributors\": {\"total\": 10, \"top_contributor\": \"contributor-01\", \"top_contributor_pct\": 34.2}, \"latest_release\": {\"tag\": \"v3.9.0\", \"date\": \"2026-09-20\"}, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "pages_through_the_commits": {
+    "case_sha256": "9d18779187943720da2554d1c36aa1cc3def10e12a65a5ab4b95f2aafe822799",
+    "rows": {
+      "github-repo-activity-example.jsonl": "{\"date\": \"2026-09-23\", \"label\": \"example\", \"repo\": \"example-org/example-project\", \"stars\": 900, \"forks\": 40, \"open_issues\": 12, \"codebase_bytes\": 160900, \"velocity_7d\": {\"commits\": 130, \"authors\": 2, \"fixes\": 0, \"fix_ratio\": 0.0, \"redesigns\": 0}, \"issues_7d\": {\"total\": 3, \"external\": 2}, \"contributors\": {\"total\": 10, \"top_contributor\": \"contributor-01\", \"top_contributor_pct\": 34.2}, \"latest_release\": {\"tag\": \"v3.9.0\", \"date\": \"2026-09-20\"}, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "an_unpublished_latest_release_has_no_date": {
+    "case_sha256": "c330d60e66cd80fb4c2b3bd927af98efe4901a1a1fe72304e2a2d89066570148",
+    "rows": {
+      "github-repo-activity-example.jsonl": "{\"date\": \"2026-09-23\", \"label\": \"example\", \"repo\": \"example-org/example-project\", \"stars\": 900, \"forks\": 40, \"open_issues\": 12, \"codebase_bytes\": 160900, \"velocity_7d\": {\"commits\": 8, \"authors\": 2, \"fixes\": 4, \"fix_ratio\": 50.0, \"redesigns\": 2}, \"issues_7d\": {\"total\": 3, \"external\": 2}, \"contributors\": {\"total\": 10, \"top_contributor\": \"contributor-01\", \"top_contributor_pct\": 34.2}, \"latest_release\": {\"tag\": \"v4.0.0\", \"date\": \"\"}, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "an_issue_with_a_null_user_writes_nothing": {
+    "case_sha256": "38ad3d32aafd72afe7c2d83b1bf2e7bb3e8d20272791bfc22cff30a964f4f64f",
+    "rows": {
+      "github-repo-activity-example.jsonl": "{\"date\": \"2026-09-22\", \"label\": \"example\", \"repo\": \"example-org/example-project\", \"stars\": 890}\n"
+    }
+  },
+  "an_empty_list_body_writes_nothing": {
+    "case_sha256": "1b5d7384b1e32a285c964e14e17311447e56027b076073f1fdbcd8456d7a401c",
+    "rows": {
+      "github-repo-activity-example.jsonl": "{\"date\": \"2026-09-22\", \"label\": \"example\", \"repo\": \"example-org/example-project\", \"stars\": 890}\n"
+    }
+  },
+  "an_unparseable_list_body_writes_nothing": {
+    "case_sha256": "01472efc2a2aae9a704f5ecf244397293c4265084ecc07dfdc289ab96b7fbb87",
+    "rows": {
+      "github-repo-activity-example.jsonl": "{\"date\": \"2026-09-22\", \"label\": \"example\", \"repo\": \"example-org/example-project\", \"stars\": 890}\n"
+    }
+  },
+  "failed_optional_lists_count_as_none": {
+    "case_sha256": "cd82a1a438dbcbabc462bd79e40efbc9652615d01839fccc9f45ae029adef4d0",
+    "rows": {
+      "github-repo-activity-example.jsonl": "{\"date\": \"2026-09-23\", \"label\": \"example\", \"repo\": \"example-org/example-project\", \"stars\": 900, \"forks\": 40, \"open_issues\": 12, \"codebase_bytes\": 0, \"velocity_7d\": {\"commits\": 0, \"authors\": 0, \"fixes\": 0, \"fix_ratio\": 0.0, \"redesigns\": 0}, \"issues_7d\": {\"total\": 0, \"external\": 0}, \"contributors\": {\"total\": 0, \"top_contributor\": \"\", \"top_contributor_pct\": 0.0}, \"latest_release\": {\"tag\": \"\", \"date\": \"\"}, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "a_failed_commits_page_writes_nothing": {
+    "case_sha256": "fdca0d4312f5b13525a3d1ac470d1abe46b2b88c1918d8c787b1ea88e53ec909",
+    "rows": {
+      "github-repo-activity-example.jsonl": "{\"date\": \"2026-09-22\", \"label\": \"example\", \"repo\": \"example-org/example-project\", \"stars\": 890}\n"
+    }
+  },
+  "failed_repository_writes_nothing": {
+    "case_sha256": "fe7afb2ba1982ce16190e77d0823d6d37d728e2bfb778b68560b00bf7d6a9f2e",
+    "rows": {
+      "github-repo-activity-example.jsonl": "{\"date\": \"2026-09-22\", \"label\": \"example\", \"repo\": \"example-org/example-project\", \"stars\": 890}\n"
+    }
+  },
+  "skips_without_a_token": {
+    "case_sha256": "7f67fcff8956da1f9915e0ae9c0d5d62536f3562d769ed63920dc6839224551d",
+    "rows": {}
+  }
+}

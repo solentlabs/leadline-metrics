@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Project-local Claude memory and per-user session settings
+.claude/memory/
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Git worktrees for buildout worker agents
+.claude/worktrees/
+
+# Local paths for the oracle tests (tests/oracle/local_settings.py); never committed
+.leadline-local.json

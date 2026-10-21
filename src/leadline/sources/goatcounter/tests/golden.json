@@ -1,0 +1,84 @@
+{
+  "week_backfills_missing_days_and_refreshes_yesterday": {
+    "case_sha256": "2d6f1dd05dcc96460bdc064f14855d1bbf09c88e3dc2d13085b330dd3dcfe982",
+    "rows": {
+      "goatcounter.jsonl": "{\"date\": \"2026-09-18\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-20\", \"pageviews\": 2, \"top_referrers\": []}\n{\"date\": \"2026-09-16\", \"pageviews\": 6, \"top_referrers\": [], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-17\", \"pageviews\": 9, \"top_referrers\": [], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-19\", \"pageviews\": 15, \"top_referrers\": [], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-21\", \"pageviews\": 21, \"top_referrers\": [], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-22\", \"pageviews\": 24, \"top_referrers\": [{\"ref\": \"github.com\", \"count\": 17}, {\"ref\": \"example.com\", \"count\": 4}, {\"ref\": \"forum.example\", \"count\": 3}, {\"ref\": \"search.example\", \"count\": 2}, {\"ref\": \"blog.example\", \"count\": 1}], \"window_sum\": 105, \"window_total\": 132, \"paths_returned\": 3, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "referrers_of_ten_pages_and_no_window_total": {
+    "case_sha256": "8f1a642fd30e2a9e6d18814a2b6fa977c370f6af9862af7cbbbeb27c6bbbc856",
+    "rows": {
+      "goatcounter.jsonl": "{\"date\": \"2026-09-16\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-17\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-18\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-19\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-20\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-21\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-22\", \"pageviews\": 78, \"top_referrers\": [{\"ref\": \"site-11.example\", \"count\": 11}, {\"ref\": \"site-10.example\", \"count\": 10}, {\"ref\": \"site-9.example\", \"count\": 9}, {\"ref\": \"site-8.example\", \"count\": 8}, {\"ref\": \"site-7.example\", \"count\": 7}], \"window_sum\": 78, \"window_total\": null, \"paths_returned\": 12, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "retries_the_pages_request": {
+    "case_sha256": "09dbed6439919bcf5b54cafb4bd04db9be9e97bc674725b6191eee6e17560c36",
+    "rows": {
+      "goatcounter.jsonl": "{\"date\": \"2026-09-16\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-17\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-18\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-19\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-20\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-21\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-22\", \"pageviews\": 24, \"top_referrers\": [{\"ref\": \"github.com\", \"count\": 17}, {\"ref\": \"example.com\", \"count\": 4}, {\"ref\": \"forum.example\", \"count\": 3}, {\"ref\": \"search.example\", \"count\": 2}, {\"ref\": \"blog.example\", \"count\": 1}], \"window_sum\": 105, \"window_total\": 132, \"paths_returned\": 3, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "three_failed_attempts_write_nothing": {
+    "case_sha256": "09b7885a9110413c9fbe066baf307ebdedad532eadf68daa3173cbe015b1f1d3",
+    "rows": {
+      "goatcounter.jsonl": "{\"date\": \"2026-09-21\", \"pageviews\": 4, \"top_referrers\": []}\n"
+    }
+  },
+  "three_empty_answers_write_nothing": {
+    "case_sha256": "80ff9d7dacba9c81b25aaa308e1eba456db4ae256bdba74293dff4b6a8de33c7",
+    "rows": {
+      "goatcounter.jsonl": "{\"date\": \"2026-09-21\", \"pageviews\": 4, \"top_referrers\": []}\n"
+    }
+  },
+  "unparseable_hits_write_nothing": {
+    "case_sha256": "b29c0917dd7d8512236011673681c2b0d776676ecb75a6a00010dd1691a636b1",
+    "rows": {
+      "goatcounter.jsonl": "{\"date\": \"2026-09-21\", \"pageviews\": 4, \"top_referrers\": []}\n"
+    }
+  },
+  "no_hits_write_nothing": {
+    "case_sha256": "6a429ec10f4cadea5c28ef20c0f90ed8b80ec738524df045cfb976e3ecee679c",
+    "rows": {
+      "goatcounter.jsonl": "{\"date\": \"2026-09-21\", \"pageviews\": 4, \"top_referrers\": []}\n"
+    }
+  },
+  "no_stat_for_yesterday_backfills_only_earlier_days": {
+    "case_sha256": "4ef5321e6d437f4750d44a6cdf0179a529735711e9c9a00080c38371d1ae4749",
+    "rows": {
+      "goatcounter.jsonl": "{\"date\": \"2026-09-16\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-17\", \"pageviews\": 2, \"top_referrers\": [], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-18\", \"pageviews\": 2, \"top_referrers\": [], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-19\", \"pageviews\": 2, \"top_referrers\": [], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-20\", \"pageviews\": 2, \"top_referrers\": [], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "unparseable_total_and_referrers_count_as_none": {
+    "case_sha256": "822282661452f617a01700c5aa1a63a1fa123ac7971f6dfc2117e1c1257b5685",
+    "rows": {
+      "goatcounter.jsonl": "{\"date\": \"2026-09-16\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-17\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-18\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-19\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-20\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-21\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-22\", \"pageviews\": 24, \"top_referrers\": [{\"ref\": \"github.com\", \"count\": 12}, {\"ref\": \"example.com\", \"count\": 4}, {\"ref\": \"search.example\", \"count\": 2}, {\"ref\": \"blog.example\", \"count\": 1}, {\"ref\": \"t.example\", \"count\": 1}], \"window_sum\": 105, \"window_total\": null, \"paths_returned\": 3, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "pages_without_an_id_have_no_referrers": {
+    "case_sha256": "853eab2f7442bce0d054483c7936a92aee04f94ecd506f942f1872e72c10e03b",
+    "rows": {
+      "goatcounter.jsonl": "{\"date\": \"2026-09-16\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-17\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-18\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-19\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-20\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-21\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-22\", \"pageviews\": 24, \"top_referrers\": [{\"ref\": \"github.com\", \"count\": 12}, {\"ref\": \"example.com\", \"count\": 4}], \"window_sum\": 105, \"window_total\": 132, \"paths_returned\": 3, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "an_undated_stat_counts_only_in_the_window_sum": {
+    "case_sha256": "64c2e176555731e12c99e9a9eaec7bd6042d2435e53829439032489084a05b67",
+    "rows": {
+      "goatcounter.jsonl": "{\"date\": \"2026-09-16\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-17\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-18\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-19\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-20\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-21\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-22\", \"pageviews\": 7, \"top_referrers\": [{\"ref\": \"github.com\", \"count\": 12}, {\"ref\": \"example.com\", \"count\": 4}], \"window_sum\": 78, \"window_total\": 36, \"paths_returned\": 1, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "bad_seed_lines_are_kept_and_their_days_backfilled": {
+    "case_sha256": "53e0eda0dbdaccc226f0981be3e0065f351a56cd02694d139b680b64907e5b07",
+    "rows": {
+      "goatcounter.jsonl": "{\"date\": \"2026-09-16\", \"pageviews\": 1, \"top_referrers\": []}\nnot json\n{\"pageviews\": 5}\n{\"date\": \"2026-09-18\", \"pageviews\": 1, \"top_referrers\": []}\n{\"date\": \"2026-09-17\", \"pageviews\": 9, \"top_referrers\": [], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-19\", \"pageviews\": 15, \"top_referrers\": [], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-20\", \"pageviews\": 18, \"top_referrers\": [], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-21\", \"pageviews\": 21, \"top_referrers\": [], \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-22\", \"pageviews\": 24, \"top_referrers\": [{\"ref\": \"github.com\", \"count\": 17}, {\"ref\": \"example.com\", \"count\": 4}, {\"ref\": \"forum.example\", \"count\": 3}, {\"ref\": \"search.example\", \"count\": 2}, {\"ref\": \"blog.example\", \"count\": 1}], \"window_sum\": 105, \"window_total\": 132, \"paths_returned\": 3, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "a_seed_line_not_an_object_writes_nothing": {
+    "case_sha256": "57402b67529f7d95b916ae9cc7b265663037ce2afcac8859c956064919a4ba2e",
+    "rows": {
+      "goatcounter.jsonl": "{\"date\": \"2026-09-21\", \"pageviews\": 4, \"top_referrers\": []}\n[\"2026-09-20\"]\n"
+    }
+  },
+  "skips_without_a_token": {
+    "case_sha256": "3aea7a4066217614cbf452a9f3623bde3ad5b1167c55c6534bdee9bc4e8576c1",
+    "rows": {}
+  }
+}

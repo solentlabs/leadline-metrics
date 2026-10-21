@@ -1,0 +1,60 @@
+{
+  "counts_configurations_models_and_vendors": {
+    "case_sha256": "8c4be3381ca31f1523d3f18f6dfd38d01ebfc4e2a9394eb157ba98848fc43db9",
+    "rows": {
+      "catalog-size.jsonl": "{\"date\": \"2026-09-23\", \"models\": 4, \"configs\": 5, \"vendors\": 3, \"models_per_vendor\": {\"acme\": 2, \"orbit\": 1, \"zenith\": 1}, \"tree_truncated\": false, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "a_truncated_tree_is_marked": {
+    "case_sha256": "cf3fe135c56098933d44312e4a573795f74f8118d3104b46b507d475bf0be43b",
+    "rows": {
+      "catalog-size.jsonl": "{\"date\": \"2026-09-23\", \"models\": 1, \"configs\": 2, \"vendors\": 1, \"models_per_vendor\": {\"acme\": 1}, \"tree_truncated\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "a_tree_without_modems": {
+    "case_sha256": "4bdd970cf5c8acf87235964417d4126c0acef0e37dd256e98c89461d35853ea9",
+    "rows": {
+      "catalog-size.jsonl": "{\"date\": \"2026-09-23\", \"models\": 0, \"configs\": 0, \"vendors\": 0, \"models_per_vendor\": {}, \"tree_truncated\": false, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "a_body_without_a_tree_or_truncated_counts_nothing": {
+    "case_sha256": "11c81254cd0214348e16585f6e530b3e675d6778d6183a67a0183afd6fc8ec90",
+    "rows": {
+      "catalog-size.jsonl": "{\"date\": \"2026-09-23\", \"models\": 0, \"configs\": 0, \"vendors\": 0, \"models_per_vendor\": {}, \"tree_truncated\": false, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "skips_without_a_token": {
+    "case_sha256": "3ed132ec1fdbab06068dbd99c07c89c05276411d0b2a9ead64c25c068cde028b",
+    "rows": {}
+  },
+  "failed_fetch_writes_nothing": {
+    "case_sha256": "b226d53236bc295da4e5bae95af9c54d72bb32cbfacd4ba165d869bb87c2aa79",
+    "rows": {
+      "catalog-size.jsonl": "{\"date\": \"2026-09-22\", \"models\": 2, \"configs\": 3, \"vendors\": 1}\n"
+    }
+  },
+  "unparseable_tree_writes_nothing": {
+    "case_sha256": "8938c4403e923da7c242aacb8d80259f70485c8294b0b6ba7bc91e9b89a8d44d",
+    "rows": {
+      "catalog-size.jsonl": "{\"date\": \"2026-09-22\", \"models\": 2, \"configs\": 3, \"vendors\": 1}\n"
+    }
+  },
+  "a_file_starting_late_gets_rows_back_to_the_first_commit_that_matches": {
+    "case_sha256": "5b2dee629d9070ed439de348fc7747d3227e0184a16146f35a58bad6772a4c62",
+    "rows": {
+      "catalog-size.jsonl": "{\"date\": \"2026-09-17\", \"models\": 1, \"configs\": 2, \"vendors\": 1, \"models_per_vendor\": {\"acme\": 1}, \"tree_truncated\": false, \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-18\", \"models\": 1, \"configs\": 2, \"vendors\": 1, \"models_per_vendor\": {\"acme\": 1}, \"tree_truncated\": false, \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-19\", \"models\": 3, \"configs\": 4, \"vendors\": 2, \"models_per_vendor\": {\"acme\": 2, \"zenith\": 1}, \"tree_truncated\": false, \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-20\", \"models\": 3, \"configs\": 4, \"vendors\": 2, \"models_per_vendor\": {\"acme\": 2, \"zenith\": 1}, \"tree_truncated\": false, \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-21\", \"models\": 3, \"configs\": 4, \"vendors\": 2}\n{\"date\": \"2026-09-22\", \"models\": 3, \"configs\": 4, \"vendors\": 2}\n{\"date\": \"2026-09-23\", \"models\": 4, \"configs\": 5, \"vendors\": 3, \"models_per_vendor\": {\"acme\": 2, \"orbit\": 1, \"zenith\": 1}, \"tree_truncated\": false, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "content_counts_files_by_the_value_a_pattern_reads": {
+    "case_sha256": "5db09e7276e2914ac388ad7d4714efc58c4224e54f6fce34f3a894ef8ebc8272",
+    "rows": {
+      "catalog-size.jsonl": "{\"date\": \"2026-09-23\", \"models\": 4, \"configs\": 5, \"vendors\": 3, \"models_per_vendor\": {\"acme\": 2, \"orbit\": 1, \"zenith\": 1}, \"tree_truncated\": false, \"by_status\": {\"awaiting\": 1, \"confirmed\": 3, \"unknown\": 1}, \"by_status_blobs\": {\"awaiting\": [\"341e1f54cb67d05d2ed91ceecce1c86d07ecf114\"], \"confirmed\": [\"101f92e921248487d158ad9e6a4e81ba642331ab\", \"a0f7bee7cf3c3fe26c2e672239fa83abbbc75644\"], \"unknown\": [\"8cbaef7da3786c5434f066662e85c5dbbcc4ab38\"]}, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  },
+  "content_is_rebuilt_for_every_past_day": {
+    "case_sha256": "3168116ba82783cabbabca8984f4e0f77f907fc9b6849d3a8e3ae691afdcdd82",
+    "rows": {
+      "catalog-size.jsonl": "{\"date\": \"2026-09-17\", \"models\": 1, \"configs\": 2, \"vendors\": 1, \"models_per_vendor\": {\"acme\": 1}, \"tree_truncated\": false, \"by_status\": {\"awaiting\": 2}, \"by_status_blobs\": {\"awaiting\": [\"ed021a3860cbba26425af065c47c1191054b970d\"]}, \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-18\", \"models\": 1, \"configs\": 2, \"vendors\": 1, \"models_per_vendor\": {\"acme\": 1}, \"tree_truncated\": false, \"by_status\": {\"awaiting\": 2}, \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-19\", \"models\": 3, \"configs\": 4, \"vendors\": 2, \"models_per_vendor\": {\"acme\": 2, \"zenith\": 1}, \"tree_truncated\": false, \"by_status\": {\"awaiting\": 1, \"confirmed\": 2, \"unknown\": 1}, \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-20\", \"models\": 3, \"configs\": 4, \"vendors\": 2, \"models_per_vendor\": {\"acme\": 2, \"zenith\": 1}, \"tree_truncated\": false, \"by_status\": {\"awaiting\": 1, \"confirmed\": 2, \"unknown\": 1}, \"backfilled\": true, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n{\"date\": \"2026-09-21\", \"models\": 3, \"configs\": 4, \"vendors\": 2, \"models_per_vendor\": {\"acme\": 2, \"zenith\": 1}, \"tree_truncated\": false, \"by_status\": {\"awaiting\": 1, \"confirmed\": 2, \"unknown\": 1}, \"captured_at\": \"2026-09-21T23:30:00+00:00\"}\n{\"date\": \"2026-09-22\", \"models\": 3, \"configs\": 4, \"vendors\": 2, \"models_per_vendor\": {\"acme\": 2, \"zenith\": 1}, \"tree_truncated\": false, \"by_status\": {\"awaiting\": 1, \"confirmed\": 2, \"unknown\": 1}, \"captured_at\": \"2026-09-22T23:30:00+00:00\"}\n{\"date\": \"2026-09-23\", \"models\": 4, \"configs\": 5, \"vendors\": 3, \"models_per_vendor\": {\"acme\": 2, \"orbit\": 1, \"zenith\": 1}, \"tree_truncated\": false, \"by_status\": {\"awaiting\": 1, \"confirmed\": 3, \"unknown\": 1}, \"by_status_blobs\": {\"awaiting\": [\"341e1f54cb67d05d2ed91ceecce1c86d07ecf114\"], \"confirmed\": [\"101f92e921248487d158ad9e6a4e81ba642331ab\", \"a0f7bee7cf3c3fe26c2e672239fa83abbbc75644\"], \"unknown\": [\"8cbaef7da3786c5434f066662e85c5dbbcc4ab38\"]}, \"captured_at\": \"2026-09-23T23:31:05+00:00\"}\n"
+    }
+  }
+}
