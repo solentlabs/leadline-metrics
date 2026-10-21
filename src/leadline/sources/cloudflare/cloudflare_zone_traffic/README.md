@@ -48,7 +48,7 @@ so a day older than that has the daily fields only.
 
 ## How a run goes
 
-- **The first run** reads the year (365 days) of the daily dataset and writes
+- **The first run** reads the 363 days of the daily dataset that Cloudflare answers for (it keeps a year) and writes
   a row for every day from the first one Cloudflare has to yesterday, each
   marked `backfilled` but yesterday's. A day the zone had no requests on, after
   its first, is a row of zeros. The per-request fields are filled for the last 30

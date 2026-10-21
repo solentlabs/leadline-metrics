@@ -18,7 +18,8 @@ DEFAULT_FILE = config.default_file(NAME, "label")  # cloudflare-zone-traffic-{la
 KEYS = ("label", "zone", "top")  # the keys an entry may have, besides `file`
 TOP = 50  # the default length of each list of the per-request dataset
 MAX_TOP = 1000
-HISTORY_DAYS = 365  # what the daily dataset keeps (its notOlderThan, 31539600 s)
+# The daily dataset keeps 365 days and an hour (notOlderThan, 31539600 s); two days of slack for a run west of UTC.
+HISTORY_DAYS = 363
 WINDOW_DAYS = 30  # re-read every run; the per-request dataset answers 30 days at a time and keeps 31
 PAGE = 10000  # the most groups an answer holds (maxPageSize)
 

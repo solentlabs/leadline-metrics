@@ -32,7 +32,7 @@ FILE = f"cloudflare-zone-traffic-{LABEL}.jsonl"
 NOW = "2026-09-23T23:31:05+00:00"  # the scenarios' clock as captured_at gives it
 YESTERDAY = date(2026, 9, 22)
 WINDOW_START = YESTERDAY - timedelta(days=spec.WINDOW_DAYS - 1)  # 2026-08-24
-HISTORY_START = YESTERDAY - timedelta(days=spec.HISTORY_DAYS - 1)  # 2025-09-23
+HISTORY_START = YESTERDAY - timedelta(days=spec.HISTORY_DAYS - 1)  # 2025-09-25
 LEADLINE_CONFIG = [{"label": LABEL, "zone": ZONE}]
 DIVERGENCES: dict[str, str] = {}  # the script has no collector for this source
 

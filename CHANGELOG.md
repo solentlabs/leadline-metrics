@@ -3,8 +3,11 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions
 follow [SemVer](https://semver.org/).
 
-## Unreleased
+## 0.8.1 - 2026-10-21
 
+- `cloudflare_zone_traffic`: the first run asks for 363 days of the daily
+  dataset, not 365; Cloudflare refused a start a day older than it keeps, so
+  the first night wrote an error row and no history.
 - Reports: a row value that is a whole line and reads like a leadline marker
   no longer makes the next run fail on a repeated marker (it is shown with
   its `<` escaped); a byte order mark at the start of a report file no longer

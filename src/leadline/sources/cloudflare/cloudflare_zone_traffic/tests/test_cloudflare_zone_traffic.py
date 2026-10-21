@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -221,6 +221,15 @@ def test_the_year_is_read_once_and_then_the_30_days(tmp_path: Path) -> None:
     seeded = replace(nightly, seed={FILE: json.dumps(old) + "\n" + text})
 
     port.run(cloudflare_zone_traffic, CONFIG, seeded, tmp_path / "next")
+
+
+def test_the_first_day_asked_for_is_inside_the_daily_dataset_for_a_run_west_of_utc() -> None:
+    # Cloudflare refuses a start older than notOlderThan (31539600 s) before the query is made; a run at
+    # 23:30 in UTC-4 is already the next UTC day, so the start must leave that day and the hours of slack.
+    run = datetime(2026, 10, 20, 23, 30, tzinfo=timezone(timedelta(hours=-4)))
+    start = datetime.combine(run.date() - timedelta(days=1 + spec.HISTORY_DAYS - 1), datetime.min.time(), timezone.utc)
+
+    assert run - start <= timedelta(seconds=31539600)
 
 
 # --- failures ---
