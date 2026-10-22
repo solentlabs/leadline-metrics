@@ -2,7 +2,7 @@
 
 The script has no collector for it, so each scenario carries the rows the source must leave (`expected`), written by
 hand and reviewed; they are the source's golden. The run is 2026-09-23, so the day it writes is 2026-09-22 (the zone's
-UTC date), the 30 days it heals begin 2026-08-24, and the year it reads on a first run begins 2025-09-23.
+UTC date), the 28 days it heals begin 2026-08-26, and the year it reads on a first run begins 2025-09-23.
 
 Every answer is built by the builders of the cloudflare group from made-up values (no capture holds these answers).
 """
@@ -31,7 +31,7 @@ ZONE = "zone0tag0example"  # a made-up zone tag
 FILE = f"cloudflare-zone-traffic-{LABEL}.jsonl"
 NOW = "2026-09-23T23:31:05+00:00"  # the scenarios' clock as captured_at gives it
 YESTERDAY = date(2026, 9, 22)
-WINDOW_START = YESTERDAY - timedelta(days=spec.WINDOW_DAYS - 1)  # 2026-08-24
+WINDOW_START = YESTERDAY - timedelta(days=spec.WINDOW_DAYS - 1)  # 2026-08-26
 HISTORY_START = YESTERDAY - timedelta(days=spec.HISTORY_DAYS - 1)  # 2025-09-25
 LEADLINE_CONFIG = [{"label": LABEL, "zone": ZONE}]
 DIVERGENCES: dict[str, str] = {}  # the script has no collector for this source
@@ -287,14 +287,14 @@ SCENARIOS = [
         },
     ),
     Scenario(
-        "a_nightly_run_reads_30_days_and_corrects_a_changed_total",
+        "a_nightly_run_reads_28_days_and_corrects_a_changed_total",
         [],
         [
             daily_answer(zone_daily(zone_days()), start=WINDOW_START),
             *per_request(path_groups(), totals_groups()),
         ],
         seed={
-            FILE: stored(day(60), True, requests=11)  # older than the 30 days: the year was read before
+            FILE: stored(day(60), True, requests=11)  # older than the 28 days: the year was read before
             + stored(day(2), True, **{**DAY_2, "requests": 99})
             + stored(day(1), True, **DAY_1)
         },

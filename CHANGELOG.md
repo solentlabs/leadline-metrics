@@ -3,6 +3,14 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions
 follow [SemVer](https://semver.org/).
 
+## 0.8.2 - 2026-10-22
+
+- `cloudflare_zone_traffic`: the per-request dataset is read for the last 28
+  days, not 30. Cloudflare keeps it 31 days, and a run in the evening west of
+  UTC is already the next UTC day, so a 30-day start was over the limit: the
+  night of 2026-10-21 wrote yesterday's row `partial`, with every
+  per-request field null.
+
 ## 0.8.1 - 2026-10-21
 
 - `cloudflare_zone_traffic`: the first run asks for 363 days of the daily

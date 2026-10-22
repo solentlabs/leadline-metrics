@@ -112,6 +112,11 @@ def _unmarked(text: str) -> str:
     return re.sub(r"^<!-- leadline:(?:start|end) \S+ -->\n", "", text, flags=re.M)
 
 
+def _without_critical(text: str) -> str:
+    """`text` without the critical lines: the script has none, and last night's would be carried into its file."""
+    return re.sub(r"^## Critical\n.*?(?=^# )", "", text, flags=re.M | re.S)
+
+
 def test_the_reports_config_gives_the_scripts_reports(tmp_path: Path) -> None:
     script = script_harness.script_path()
     real = script.parent / "metrics"
@@ -131,7 +136,7 @@ def test_the_reports_config_gives_the_scripts_reports(tmp_path: Path) -> None:
     start = {file: _unmarked((real / file).read_text(encoding="utf-8")) for file in files if (real / file).exists()}
     for file, text in start.items():
         seeded = Path(os.path.normpath(work / "community" / "metrics" / script_name.get(file, file)))
-        seeded.write_text(text, encoding="utf-8")
+        seeded.write_text(_without_critical(text) if file == lines_file else text, encoding="utf-8")
     done = script_harness.run_script(case, work)
     assert done.returncode == 0, done.output
     assert done.unmatched == []

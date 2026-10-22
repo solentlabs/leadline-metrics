@@ -20,7 +20,7 @@ TOP = 50  # the default length of each list of the per-request dataset
 MAX_TOP = 1000
 # The daily dataset keeps 365 days and an hour (notOlderThan, 31539600 s); two days of slack for a run west of UTC.
 HISTORY_DAYS = 363
-WINDOW_DAYS = 30  # re-read every run; the per-request dataset answers 30 days at a time and keeps 31
+WINDOW_DAYS = 28  # re-read every run; the per-request dataset keeps 31 days, and a run west of UTC is a day ahead
 PAGE = 10000  # the most groups an answer holds (maxPageSize)
 
 # The daily dataset (httpRequests1dGroups), exact totals for a whole day: a row field and the API's.

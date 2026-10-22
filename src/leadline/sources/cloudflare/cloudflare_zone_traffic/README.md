@@ -7,9 +7,9 @@
   code, browser, operating system, device type, data center, path, host and
   more. Counts only, never a visitor's address.
 - **Requests:** Cloudflare's GraphQL Analytics API, one query for the daily
-  dataset (the whole year on the first run, then the last 30 days) and one for
+  dataset (the whole year on the first run, then the last 28 days) and one for
   each of the per-request dataset's parts (the day's visits and origin
-  response times, and each of 13 lists), for the last 30 days. `check` asks
+  response times, and each of 13 lists), for the last 28 days. `check` asks
   for one day of the zone.
 - **Credentials:** `CLOUDFLARE_API_TOKEN`; the source is skipped while it is
   unset. The token needs the zone permission Analytics: Read
@@ -29,7 +29,7 @@
 
 ## The row
 
-A row is one UTC day of the zone, written for yesterday and healed for the 30
+A row is one UTC day of the zone, written for yesterday and healed for the 28
 days before it. Every count is a whole number; a map is `{name: count}`, the
 largest first, with the name deciding a tie, and an item with no name is
 `(none)`.
@@ -51,9 +51,9 @@ so a day older than that has the daily fields only.
 - **The first run** reads the 363 days of the daily dataset that Cloudflare answers for (it keeps a year) and writes
   a row for every day from the first one Cloudflare has to yesterday, each
   marked `backfilled` but yesterday's. A day the zone had no requests on, after
-  its first, is a row of zeros. The per-request fields are filled for the last 30
-  days. Until the file holds a row older than 30 days, a run reads the year.
-- **Every run after** reads the last 30 days. A good row keeps its fields; the
+  its first, is a row of zeros. The per-request fields are filled for the last 28
+  days. Until the file holds a row older than 28 days, a run reads the year.
+- **Every run after** reads the last 28 days. A good row keeps its fields; the
   daily totals are corrected to what Cloudflare says now (each correction is
   recorded for health), and a per-request field is added where the row lacks
   it, never changed (it is a sample). A day with no row or a failed one is

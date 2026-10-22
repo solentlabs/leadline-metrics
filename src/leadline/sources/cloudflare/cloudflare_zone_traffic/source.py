@@ -240,7 +240,7 @@ def _collect(ctx: Context, entry: Any) -> None:
     yesterday = ctx.date - timedelta(days=1)
     window_start = yesterday - timedelta(days=spec.WINDOW_DAYS - 1)
     existing = store.rows_by_date(path)
-    # The year is read once: until the file holds a row older than the 30 days every run heals.
+    # The year is read once: until the file holds a row older than the 28 days every run heals.
     older = any((parsed := store.parse_date(day)) is not None and parsed < window_start for day in existing)
     start = window_start if older else yesterday - timedelta(days=spec.HISTORY_DAYS - 1)
     ctx.log.info("Collecting Cloudflare zone traffic for %s (%s to %s)...", label, start, yesterday)

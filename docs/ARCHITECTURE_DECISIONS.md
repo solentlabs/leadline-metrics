@@ -576,7 +576,7 @@ ray id. There is no setting to switch one on.
 The daily dataset (a year of exact totals) is read in full on the first run
 and filled back to the first day Cloudflare has, each filled day marked
 `backfilled`. The per-request dataset (31 days, sampled by Cloudflare) is
-read for the last 30 days, one query for each list, so a list that fails
+read for the last 28 days (a run west of UTC is a day ahead, and Cloudflare refuses a start older than 31 days), one query for each list, so a list that fails
 leaves only its own field null and the row `partial`; its values are filled
 where a row lacks them and never changed, since a later sample would only
 move them, while the daily totals are corrected to what Cloudflare says now,

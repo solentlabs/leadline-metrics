@@ -145,7 +145,7 @@ def test_a_changed_daily_total_is_a_correction_and_the_day_keeps_its_other_field
     done = port.run(
         cloudflare_zone_traffic,
         CONFIG,
-        port.scenario(NAME, "a_nightly_run_reads_30_days_and_corrects_a_changed_total"),
+        port.scenario(NAME, "a_nightly_run_reads_28_days_and_corrects_a_changed_total"),
         tmp_path,
     )
 
@@ -155,7 +155,7 @@ def test_a_changed_daily_total_is_a_correction_and_the_day_keeps_its_other_field
 
 
 def test_a_list_already_in_a_row_is_not_rewritten_by_a_later_sample(tmp_path: Path) -> None:
-    scenario = port.scenario(NAME, "a_nightly_run_reads_30_days_and_corrects_a_changed_total")
+    scenario = port.scenario(NAME, "a_nightly_run_reads_28_days_and_corrects_a_changed_total")
     other = [zone_request_group(cz.day(2), 999, clientRequestPath="/")]  # Cloudflare's sample moved
     answers = cz.per_request(other, cz.totals_groups())
     scenario = replace(scenario, responses=[scenario.responses[0], *answers])
@@ -209,15 +209,15 @@ def test_a_list_that_fails_keeps_the_value_an_earlier_run_of_the_day_got(tmp_pat
     assert done.ctx.critical == []
 
 
-def test_the_year_is_read_once_and_then_the_30_days(tmp_path: Path) -> None:
+def test_the_year_is_read_once_and_then_the_28_days(tmp_path: Path) -> None:
     first = port.scenario(NAME, "first_run_fills_the_history_and_yesterday")
     done = port.run(cloudflare_zone_traffic, CONFIG, first, tmp_path)
     assert done.status == 0
 
-    # The file now holds days older than the 30; a second night asks only for the 30.
+    # The file now holds days older than the 28; a second night asks only for the 28.
     old = {"date": "2026-01-01", "zone": "example", "status": "ok", "requests": 1}
     text = (tmp_path / FILE).read_text(encoding="utf-8")
-    nightly = port.scenario(NAME, "a_nightly_run_reads_30_days_and_corrects_a_changed_total")
+    nightly = port.scenario(NAME, "a_nightly_run_reads_28_days_and_corrects_a_changed_total")
     seeded = replace(nightly, seed={FILE: json.dumps(old) + "\n" + text})
 
     port.run(cloudflare_zone_traffic, CONFIG, seeded, tmp_path / "next")
@@ -230,6 +230,15 @@ def test_the_first_day_asked_for_is_inside_the_daily_dataset_for_a_run_west_of_u
     start = datetime.combine(run.date() - timedelta(days=1 + spec.HISTORY_DAYS - 1), datetime.min.time(), timezone.utc)
 
     assert run - start <= timedelta(seconds=31539600)
+
+
+def test_the_first_day_of_the_per_request_window_is_inside_its_31_days_for_a_run_west_of_utc() -> None:
+    # Live 2026-10-21: a run at 23:30 in UTC-4 asked for 31 days and 3.5 hours; Cloudflare refused it ("cannot
+    # request data older than 4w3d"). The window starts WINDOW_DAYS before the local date's yesterday.
+    run = datetime(2026, 10, 21, 23, 30, tzinfo=timezone(timedelta(hours=-4)))
+    start = datetime.combine(run.date() - timedelta(days=1 + spec.WINDOW_DAYS - 1), datetime.min.time(), timezone.utc)
+
+    assert run - start <= timedelta(days=31)
 
 
 # --- failures ---
