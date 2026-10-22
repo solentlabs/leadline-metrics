@@ -5,6 +5,28 @@ follow [SemVer](https://semver.org/).
 
 ## 0.8.2 - 2026-10-22
 
+- An answer without a count, flag or list a source reads is a failure row (or a
+  partial one where only a part is missing) whose reason names what is
+  missing, not a row of zeros, `false` or no pages. This covers
+  `github_repo_stats`, `github_repo_activity`, `github_issues`,
+  `github_traffic`, `github_traffic_daily`, `github_releases`, `goatcounter` and
+  `discourse_topics`.
+- A bot challenge (a 403 or 503 with Cloudflare's "Just a moment..." page or
+  `cf-mitigated: challenge`) is no longer critical at once: it is a failed night
+  that recovers, and critical after consecutive ones. The forum answered the
+  NAS one on 2026-10-21 and the job exited 1.
+- `cloudflare_analytics_engine`: `refetch_days` is at most 90, not 365. The
+  dataset keeps three months, and a window reaching further back rewrote the
+  days it no longer holds as rows of zeros.
+- `github_tree_counts`: the history rebuild asks for at most 500 trees a night
+  (it was unbounded without `content`), so a long history no longer spends the
+  GitHub rate limit the other sources share; the next night goes on.
+- `github_traffic`: a failed or unusable referrers answer leaves `top_referrers`
+  null in a `partial` row (views and clones kept), not `[]` in a good row that
+  read as no referrers; a later good run fills it.
+- A redirect to another origin no longer carries the `Authorization`,
+  `Cookie` or `Proxy-Authorization` header (urllib copied every header, so a
+  token could reach a host the config did not name).
 - `cloudflare_zone_traffic`: the per-request dataset is read for the last 28
   days, not 30. Cloudflare keeps it 31 days, and a run in the evening west of
   UTC is already the next UTC day, so a 30-day start was over the limit: the

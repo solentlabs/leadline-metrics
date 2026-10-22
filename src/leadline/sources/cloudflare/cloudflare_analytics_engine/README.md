@@ -10,7 +10,7 @@
   sets `file`.
 - **Config entry:** `sources.cloudflare_analytics_engine` is a list; each entry
   has `dataset`, `layouts` ([see its keys](#layouts)) and, optionally,
-  `refetch_days` (default 7, at most 365).
+  `refetch_days` (default 7, at most 90).
 
 ```json
 {"dataset": "example_events", "layouts": [{"dimensions": {"event": {"column": "blob1", "pattern": "[a-z.]+"}}, "fields": [{"key": "events", "by": "event"}]}]}

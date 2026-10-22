@@ -170,7 +170,10 @@ def test_rows_match_the_scripts(scenario: Any, tmp_path: Path) -> None:
 
 
 def test_the_divergences_are_the_decided_ones() -> None:
-    assert sorted(port.divergences(NAME)) == ["failed_or_unparseable_threads_are_skipped"]
+    assert sorted(port.divergences(NAME)) == [
+        "failed_or_unparseable_threads_are_skipped",
+        "missing_counts_read_as_zero",
+    ]
 
 
 def test_a_row_whose_topic_id_is_a_string_is_a_line_without_a_usable_key(tmp_path: Path) -> None:
@@ -187,6 +190,19 @@ def test_a_row_whose_topic_id_is_a_string_is_a_line_without_a_usable_key(tmp_pat
 
 
 # --- ADR: a failure is recorded as a failure, per topic ---
+
+
+def test_a_topic_without_its_counts_is_a_parse_failed_row_naming_them_not_zeros(tmp_path: Path) -> None:
+    """The script reads views and likes it can't find as 0; the other topic is still written."""
+    scenario = port.scenario(NAME, "missing_counts_read_as_zero")
+
+    done = port.run(source, dt.leadline_config(scenario), scenario, tmp_path)
+
+    good = scenarios.load_golden(NAME)[scenario.name]["rows"][FILE].splitlines(keepends=True)[-1]
+    assert done.rows == {
+        FILE: failure_row(1001, "main", "parse_failed", "topic response is missing views, like_count, posts_count")
+        + good
+    }
 
 
 def test_each_topic_that_fails_writes_its_own_failure_row(tmp_path: Path) -> None:
@@ -235,6 +251,17 @@ def test_an_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int
     assert done.rows == {FILE: failure_row(1001, "main", "fetch_failed", "topic request failed", str(code))}
     assert done.ctx.critical == [Critical(NAME, FILE, f"{BASE}: HTTP {code} for topic 1001 (main)")]
     assert done.status == 1
+
+
+CHALLENGE = "<!DOCTYPE html><html><head><title>Just a moment...</title></head><body></body></html>"
+
+
+def test_a_bot_challenge_is_recoverable_not_critical(tmp_path: Path) -> None:
+    """Live 2026-10-21: the forum's host challenged the NAS; one failed night recovers (ADR)."""
+    done = run(tmp_path, exchange(dt.topic_url(1001), CHALLENGE, status=403))
+
+    assert done.rows == {FILE: failure_row(1001, "main", "fetch_failed", "topic request failed", "403")}
+    assert (done.status, done.ctx.critical) == (0, [])
 
 
 def test_a_rate_limit_is_recoverable(tmp_path: Path) -> None:
@@ -306,6 +333,10 @@ def test_check_finds_each_topic(tmp_path: Path) -> None:
             Finding("warn", f"{BASE}: could not read topic 1001 (main): HTTP 429"),
         ),
         (
+            exchange(dt.topic_url(1001), CHALLENGE, status=403),
+            Finding("warn", f"{BASE}: could not read topic 1001 (main): HTTP 403"),
+        ),
+        (
             exchange(dt.topic_url(1001), "<html>Oops</html>"),
             Finding("warn", f"{BASE}: could not read topic 1001 (main): topic response was not JSON"),
         ),
@@ -314,7 +345,7 @@ def test_check_finds_each_topic(tmp_path: Path) -> None:
             Finding("warn", f"{BASE}: could not read topic 1001 (main): topic response had an unexpected shape"),
         ),
     ],
-    ids=["missing", "private", "rate limited", "not JSON", "not a topic"],
+    ids=["missing", "private", "rate limited", "bot challenge", "not JSON", "not a topic"],
 )
 def test_check_reports_each_topics_trouble_and_goes_on(tmp_path: Path, response: Any, finding: Finding) -> None:
     findings = check(tmp_path, config(TWO), response, dt.topic(1002, 700, 5, 2))

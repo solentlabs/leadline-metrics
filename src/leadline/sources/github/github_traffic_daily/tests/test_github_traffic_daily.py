@@ -265,6 +265,35 @@ def test_any_answer_the_source_cant_use_is_a_parse_failed_row(
     assert done.rows == {FILE: EARLIER + failure_row("parse_failed", f"{kind} response had an unexpected shape")}
 
 
+@pytest.mark.parametrize(
+    ("views", "reason"),
+    [
+        ({}, "views response is missing views"),
+        ({"count": 0, "uniques": 0}, "views response is missing views"),
+        (
+            {**VIEWS, "views": [{"timestamp": DAY["timestamp"], "uniques": 1}]},
+            "views response is missing count in a day",
+        ),
+        (
+            {**VIEWS, "views": [{"timestamp": DAY["timestamp"], "count": 3}]},
+            "views response is missing uniques in a day",
+        ),
+    ],
+    ids=["an empty object", "no list of days", "a day without a count", "a day without uniques"],
+)
+def test_an_answer_without_its_counts_is_a_parse_failed_row_naming_them_not_zeros(
+    tmp_path: Path, views: Any, reason: str
+) -> None:
+    """ADR: a failure is recorded as a failure. The script read what was absent as 0."""
+    scenario = without_yesterday(
+        "unparseable_clones_write_nothing", responses=[exchange(gd.VIEWS, views), exchange(gd.CLONES, CLONES)]
+    )
+
+    done = port.run(source, CONFIG, scenario, tmp_path)
+
+    assert done.rows == {FILE: EARLIER + failure_row("parse_failed", reason)}
+
+
 # --- failures: recoverable or not ---
 
 

@@ -560,6 +560,29 @@ def test_a_rate_limit_stops_the_rebuild_for_the_night_and_the_next_night_goes_on
     assert again.rows[FILE] == tc.REBUILT + tc.LATE + tc.TODAY
 
 
+def test_the_rebuild_asks_for_no_more_trees_than_a_budget_a_night_and_goes_on_the_next(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A long history must not spend the day's rate limit that the other sources share."""
+    monkeypatch.setattr(tree_source, "TREE_BUDGET", 2)
+    scenario = port.scenario(NAME, LATE_SCENARIO)
+    night = scenario.responses[:-1]  # today's tree, the commits, and the trees of the first two days with one
+
+    first = port.run(github_tree_counts, CONFIG, replace(scenario, responses=night), tmp_path / "first")
+    resumed = [*scenario.responses[:1], *tc.commits(tc.HISTORY), tc.commit_tree(*tc.HISTORY[3])]
+    again = port.run(
+        github_tree_counts, CONFIG, replace(scenario, seed=first.rows, responses=resumed), tmp_path / "next"
+    )
+
+    rebuilt = tc.REBUILT.splitlines(keepends=True)
+    assert first.rows[FILE] == "".join(rebuilt[:2]) + tc.LATE + tc.TODAY
+    assert "Stopped rebuilding past tree counts for solentlabs/example after 2 tree(s); the next night goes on" in (
+        first.log
+    )
+    assert (first.status, again.status) == (0, 0)
+    assert again.rows[FILE] == tc.REBUILT + tc.LATE + tc.TODAY
+
+
 def test_a_new_file_asks_for_no_history_on_its_first_night(tmp_path: Path) -> None:
     scenario = port.scenario(NAME, LATE_SCENARIO)
 

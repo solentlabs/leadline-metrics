@@ -135,14 +135,15 @@ def test_the_divergences_are_the_decided_ones() -> None:
     ]
 
 
-def test_missing_counts_read_as_zero_as_the_script_reads_them(tmp_path: Path) -> None:
+def test_missing_counts_are_a_parse_failed_row_naming_them_not_zeros(tmp_path: Path) -> None:
+    """The script reads a missing count as 0; leadline records the failure (ADR: a failure is recorded as a failure)."""
     bare = exchange(grs.REPO_URL, {"full_name": REPO})
-    no_totals = exchange(grs.VIEWS, {"views": []})
 
-    done = run(tmp_path, bare, no_totals, CLONES)
+    done = run(tmp_path, bare, exchange(grs.VIEWS, {"views": []}), CLONES)
 
-    zeros = {"stars": 0, "forks": 0, "watchers": 0, "open_issues": 0, "views_14d": 0, "views_unique_14d": 0}
-    assert done.rows[FILE] == EARLIER + row(**zeros, clones_14d=28, clones_unique_14d=14)
+    reason = "repository response is missing stargazers_count, forks_count, subscribers_count, open_issues_count"
+    failure = f'"status": "parse_failed", "reason": "{reason}", "captured_at": "{NOW}"'
+    assert done.rows[FILE] == EARLIER + f'{{"date": "2026-09-23", "repo": "{REPO}", {failure}}}\n'
 
 
 # --- decided divergences: the port reads the JSON ---
@@ -231,6 +232,13 @@ def test_unparseable_views_are_null_in_a_partial_row(tmp_path: Path) -> None:
     done = port.run(source, CONFIG, port.scenario(NAME, "unparseable_traffic_writes_nothing"), tmp_path)
 
     assert done.rows == {FILE: EARLIER + partial_row("views response was not JSON", **NO_VIEWS)}
+    assert (done.status, done.ctx.critical) == (0, [])
+
+
+def test_clones_without_their_counts_are_null_in_a_partial_row_naming_them_not_zero(tmp_path: Path) -> None:
+    done = run(tmp_path, REPOSITORY, VIEWS, exchange(grs.CLONES, {"clones": []}))
+
+    assert done.rows == {FILE: EARLIER + partial_row("clones response is missing count, uniques", **NO_CLONES)}
     assert (done.status, done.ctx.critical) == (0, [])
 
 

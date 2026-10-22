@@ -88,9 +88,9 @@ in the normal run, and a new file gets it on the first run of a later day.
   response times, contributor regions and catalog counts. The
   traffic and downloads sources backfill the window their service gives on
   the first run.
-- A long catalog history (`github_tree_counts` with `content`) reads at most
-  1000 blobs a night, so it can take a few nights; each night goes on where
-  the last stopped.
+- A long catalog history (`github_tree_counts`) asks for at most 500 trees a
+  night, and with `content` reads at most 1000 blobs, so it can take a few
+  nights; each night goes on where the last stopped.
 - Contributor comments (`github_contributor_locations` with `comments`) are
   read one issue a run after the first night's pass, so a region from
   comments arrives slowly.

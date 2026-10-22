@@ -50,15 +50,22 @@ the configured user agent and a 60-second timeout.
   succeeds on its first attempt, or is answered from what was kept, logs
   no such line.
   Request headers, tokens included, are never logged.
+- **Redirects** are followed, but a redirect to another origin (scheme, host or
+  port) drops the `Authorization`, `Cookie` and `Proxy-Authorization` headers,
+  so a token never reaches a host the config did not name.
 - **Rate limits and rejections** (ADR: one failed night recovers;
   consecutive failures are critical):
   - `HttpError.rate_limited`: a spent rate limit, which waiting fixes: a
     429, or a 403 with `Retry-After` or `X-RateLimit-Remaining: 0` (APIs
     such as GitHub's answer a spent limit with 403). It is recoverable,
     never critical, and retried like any other failure.
+  - `HttpError.challenged`: a bot challenge, a 403 or 503 with Cloudflare's
+    "Just a moment..." page or `cf-mitigated: challenge` header: the host
+    asks for a browser, no credential was wrong, and it may pass tomorrow.
+    It is recoverable, never critical at once.
   - `HttpError.unfixable`: an error waiting can't fix: a status in
-    `http.UNFIXABLE` (401, 403, 404) that isn't a rate limit, nor in the
-    request's `recoverable`.
+    `http.UNFIXABLE` (401, 403, 404) that isn't a rate limit or a bot
+    challenge, nor in the request's `recoverable`.
   - `recoverable`: the statuses in `http.UNFIXABLE` that the source's API
     answers at times for a request waiting fixes (`goatcounter`'s 404).
     The request retries them like any other failure, and their error
@@ -103,7 +110,9 @@ row's reason:
 
 - `read_json(kind, response)`: the answer's JSON.
 - `counts(kind, answer, fields)`: each of `fields` (the row's key to the
-  answer's) read from an object, 0 where absent, each an int.
+  answer's) read from an object, each an int. An absent field is unusable,
+  and the message names each (`views response is missing uniques`): an
+  answer without a count is not a count of 0.
 - `config.is_count(value)`: an int, never a boolean. It is in `config` so
   that a source's `spec.py`, which imports no `http`, can use it too.
 - An answer it can't use raises `UnusableError`, whose message is the

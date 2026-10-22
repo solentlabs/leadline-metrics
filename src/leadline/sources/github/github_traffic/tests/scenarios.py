@@ -2,7 +2,7 @@
 
 The script's collect_github_traffic reads the 14-day views and clones and the popular referrers, and
 writes one row for the run's date into github-traffic.jsonl: the totals, their ratio of total to
-unique, the last day the window holds, and the top five referrers (none when that request fails). A
+unique, the last day the window holds, and the top five referrers (an empty list when that request fails). A
 failed views or clones fetch, or a body that doesn't parse, writes nothing. The script pastes the
 clones and referrers into Python string literals, so a backslash escape or ''' in them writes no
 row, and nor do referrers that aren't a list. The same window day by day is github_traffic_daily.
@@ -11,7 +11,9 @@ Where leadline differs by a decision, the scenario is in DIVERGENCES, and
 tests/test_github_traffic.py asserts leadline's side: leadline reads the JSON itself, so a quote or
 ''' in the referrers writes the real row, and a failed views or clones fetch or an answer it
 can't use writes a failure row (`fetch_failed` or `parse_failed`) for the run's date, where the script
-writes nothing (ADR: a failure is recorded as a failure).
+writes nothing (ADR: a failure is recorded as a failure). Referrers that fail or can't be used leave
+`top_referrers` null in a `partial` row, where the script writes an empty list (ADR: a partly failed row
+keeps its good parts).
 """
 
 from __future__ import annotations
@@ -43,9 +45,10 @@ LEADLINE_CONFIG = [{"repo": REPO, "file": FILE}]
 
 # The scenarios where leadline's rows differ from the script's by a decision, and the decision.
 DIVERGENCES = {
+    "failed_referrers_leave_the_list_empty": "ADR: a partly failed row keeps its good parts",
     "an_escaped_quote_in_the_referrers_writes_nothing": "the port reads the JSON, not code pasted from it",
     "triple_quotes_in_the_referrers_write_nothing": "the port reads the JSON, not code pasted from it",
-    "referrers_not_a_list_write_nothing": "ADR: a failure is recorded as a failure",
+    "referrers_not_a_list_write_nothing": "ADR: a partly failed row keeps its good parts",
     "unparseable_views_write_nothing": "ADR: a failure is recorded as a failure",
     "failed_views_write_nothing": "ADR: a failure is recorded as a failure",
     "failed_clones_write_nothing": "ADR: a failure is recorded as a failure",

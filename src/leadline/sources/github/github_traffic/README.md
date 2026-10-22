@@ -7,7 +7,8 @@
   token needs push access to the repo, for its traffic.
 - **Writes:** one row a day per entry, to its default file unless the entry sets
   `file`: the views' and clones' totals and unique visitors, `window_end`, and
-  the top five referrers.
+  the top five referrers. Referrers that fail leave that field null in a
+  `partial` row.
 - **Config entry:** `sources.github_traffic` is a list; each entry has `repo`
   (`owner/name`).
 

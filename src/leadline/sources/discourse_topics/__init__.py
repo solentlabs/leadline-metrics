@@ -3,11 +3,11 @@
 Each entry names a forum (`base_url`) and its `topics`, each an id and a label. Each topic is read
 from `<base_url>/t/<id>.json`, one request each, as the script's collect_forum reads its threads, and
 written as one row for the run's date, keyed by the date and the topic's id (`store.SECOND_KEY`):
-its views, its replies (its posts but the first; a missing post count reads as no replies), its
-likes and the day of its last post (empty when it has none). A missing view or like count reads as
-0, as in the script. A row whose `topic_id` isn't a number (a string, from a hand-edited file) is a
-line without a usable key: it is kept, as the script keeps it, and never replaced (ADR: store never
-fails on a line it can't use).
+its views, its replies (its posts but the first), its likes and the day of its last post (empty when
+it has none). A view, like or post count the answer lacks is a `parse_failed` row naming it, where
+the script reads it as 0 (ADR: a failure is recorded as a failure). A row whose `topic_id` isn't a
+number (a string, from a hand-edited file) is a line without a usable key: it is kept, as the script
+keeps it, and never replaced (ADR: store never fails on a line it can't use).
 
 After a topic's good row, it writes a row for each day from the topic's creation to the day before
 the topic's first row a night wrote (store.rebuild_days): its replies and last post by the end of that

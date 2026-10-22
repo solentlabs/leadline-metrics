@@ -13,7 +13,7 @@ from leadline import config
 NAME = "cloudflare_analytics_engine"
 DEFAULT_FILE = config.default_file(NAME, "dataset")  # cloudflare-analytics-engine-{dataset}.jsonl
 REFETCH_DAYS = 7  # the script's USAGE_REFETCH_DAYS
-MAX_REFETCH_DAYS = 365  # Analytics Engine keeps about three months; a larger window only risks date overflow
+MAX_REFETCH_DAYS = 90  # Analytics Engine keeps three months; a day it no longer holds would be rewritten as zeros
 # What a query may hold, each checked by validate before any query is built from it.
 DATASET = re.compile(r"[a-z0-9_]+")  # the script's rule for a dataset's name
 DIMENSION = re.compile(r"[a-z][a-z0-9_]*")  # a dimension's name, which is its column's alias in a query

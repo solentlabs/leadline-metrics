@@ -250,7 +250,10 @@ failure, and the port doesn't keep that.
 **Decision:** An answer a source can't use (a body that isn't JSON or
 isn't the shape the source reads, a missing or null part it needs) writes a
 failure row for the date: a `status` other than `ok` and a `reason`, with no
-counts. It never writes nothing, and never zeros. A status keeps one
+counts. It never writes nothing, and never zeros: a count, flag or list the
+answer lacks is not 0, false or none. The `reason` names what is missing
+(`views response is missing uniques`), so a reader can tell what to look for
+and the night can be recovered. A status keeps one
 meaning: `cloudflare_web`'s `no_account` means only that the account filter
 matched nothing, and a malformed answer, `data` null included, is
 `parse_failed`. Every reader of the rows (health, reports) skips failure
@@ -1236,9 +1239,10 @@ lists for a matching file, and a blob is read once, ever:
   the counts the counts of its last commit's tree, as the other counts are
   rebuilt (past values a source can rebuild are filled, never changed). It
   reads each blob of every tree once, and a night's rebuild stops before the
-  next tree once it has read `BLOB_BUDGET` (1000) blobs, so a long history
-  spreads over nights; a failed request stops it for the night. A past row a
-  night wrote keeps the counts it has; the fill adds only the counts by
+  next tree once it has asked for `TREE_BUDGET` (500) trees or read
+  `BLOB_BUDGET` (1000) blobs, so a long history spreads over nights and the
+  rate limit the other sources share is left to them; a failed request stops
+  it for the night. A past row a night wrote keeps the counts it has; the fill adds only the counts by
   value.
 
 **Rationale:** A file's blob SHA names its text, so the value read for a SHA

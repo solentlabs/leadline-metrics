@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any
 
 from leadline import store
@@ -30,7 +31,7 @@ def check(ctx: Context, cfg: Any) -> list[Finding]:
 
 
 def _totals(kind: str, answer: Any) -> tuple[int, int]:
-    """The answer's `count` and `uniques`, 0 where absent, as the script reads them."""
+    """The answer's `count` and `uniques`; one it lacks is unusable (counts)."""
     found = counts(kind, answer, {"total": "count", "unique": "uniques"})
     return found["total"], found["unique"]
 
@@ -60,13 +61,12 @@ def _ratio(total: int, unique: int) -> float:
     return round(total / unique, 2) if unique > 0 else 0
 
 
-def _row(views: Any, clones: Any, referrers: Any, day: str) -> dict[str, Any]:
-    """The script's row, in its key order. Raises UnusableError."""
+def _row(views: Any, clones: Any, referrers: list[dict[str, Any]] | None, day: str) -> dict[str, Any]:
+    """The script's row, in its key order; `top_referrers` is null where the referrers could not be read.
+    Raises UnusableError."""
     views_total, views_unique = _totals("views", views)
     window_end = _window_end(views)
     clones_total, clones_unique = _totals("clones", clones)
-    if not isinstance(referrers, list):
-        raise unexpected("referrers")
     return {
         "date": day,
         "window_end": window_end,
@@ -76,17 +76,26 @@ def _row(views: Any, clones: Any, referrers: Any, day: str) -> dict[str, Any]:
         "clones_unique": clones_unique,
         "clones_total": clones_total,
         "clones_ratio": _ratio(clones_total, clones_unique),
-        "top_referrers": [_referrer(item) for item in referrers[:TOP_REFERRERS]],
+        "top_referrers": referrers,
     }
 
 
-def _referrers(ctx: Context, repo: str) -> Response | None:
-    """The referrers answer, or None when the fetch fails: they are optional, as in the script."""
+def _referrers(ctx: Context, repo: str, path: Path) -> tuple[list[dict[str, Any]] | None, str | None]:
+    """The top referrers and None, or, where they failed or can't be used, None and the reason: they are one part
+    of the row (ADR: a partly failed row keeps its good parts)."""
     try:
-        return ctx.http.request(f"{github.API}/repos/{repo}/traffic/popular/referrers", headers=github.headers())
+        answer = ctx.http.request(f"{github.API}/repos/{repo}/traffic/popular/referrers", headers=github.headers())
+        found = read_json("referrers", answer)
+        if not isinstance(found, list):
+            raise unexpected("referrers")
+        return [_referrer(item) for item in found[:TOP_REFERRERS]], None
     except HttpError as e:
         ctx.log.info("WARN: Failed to fetch GitHub referrers for %s: HTTP %s", repo, e.http_code)
-        return None
+        ctx.record_unfixable(spec.NAME, path.name, e, f"{repo}: HTTP {e.http_code} from GitHub's traffic API")
+        return None, f"referrers request failed (HTTP {e.http_code})"
+    except UnusableError as e:
+        ctx.log.info("WARN: Failed to parse GitHub referrers for %s: %s", repo, e)
+        return None, str(e)
 
 
 def _collect(ctx: Context, entry: Any) -> None:
@@ -96,9 +105,9 @@ def _collect(ctx: Context, entry: Any) -> None:
     try:
         for kind in ("views", "clones"):
             answers[kind] = ctx.http.request(f"{github.API}/repos/{repo}/traffic/{kind}", headers=github.headers())
-        referrers = _referrers(ctx, repo)
+        referrers, why = _referrers(ctx, repo, path)
         views, clones = read_json("views", answers["views"]), read_json("clones", answers["clones"])
-        row = _row(views, clones, [] if referrers is None else read_json("referrers", referrers), day)
+        row = _row(views, clones, referrers, day)
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch GitHub %s for %s: HTTP %s", kind, repo, e.http_code)
         ctx.record_unfixable(spec.NAME, path.name, e, f"{repo}: HTTP {e.http_code} from GitHub's traffic API")
@@ -107,6 +116,9 @@ def _collect(ctx: Context, entry: Any) -> None:
         ctx.log.info("ERROR: Failed to parse GitHub traffic for %s: %s", repo, e)
         failure = {"status": "parse_failed", "reason": str(e)}
     else:
-        store.write_good(path, row, ctx, spec.NAME)
+        if why is None:
+            store.write_good(path, row, ctx, spec.NAME)
+        else:
+            store.write_partial(path, row, {why: ["top_referrers"]}, ctx, spec.NAME)
         return
     store.write_failure(path, {"date": day, **failure}, ctx.now)

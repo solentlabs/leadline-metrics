@@ -17,8 +17,8 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from http.client import HTTPException
-from typing import Any, Callable, Collection, Mapping, Optional, Sequence, Tuple
+from http.client import HTTPException, HTTPMessage
+from typing import IO, Any, Callable, Collection, Mapping, Optional, Sequence, Tuple
 from urllib.parse import urlsplit, urlunsplit
 
 from leadline.config import is_count
@@ -33,6 +33,7 @@ RETRY_BACKOFF_S = 10
 # failed night recovers; consecutive failures are critical"). A 403 that is a rate limit is not one of
 # them, nor a status the request names recoverable for its API: HttpError.unfixable is the test.
 UNFIXABLE = frozenset({401, 403, 404})
+CHALLENGE_CODES = frozenset({403, 503})  # the statuses a bot challenge comes with
 
 # What a failure's log line keeps of it: the body's first characters, and these response headers.
 CAUSE_CHARS = 200
@@ -70,12 +71,21 @@ class HttpError(Exception):
         return self.code == 403 and ("retry-after" in self.headers or remaining == "0")
 
     @property
+    def challenged(self) -> bool:
+        """A bot challenge (Cloudflare's "Just a moment..." page, or its `cf-mitigated: challenge` header): the
+        host asks for a browser and may not tomorrow. No credential was wrong, so waiting can fix it."""
+        marked = self.headers.get("cf-mitigated", "").strip().lower() == "challenge"
+        return self.code in CHALLENGE_CODES and (marked or "<title>Just a moment...</title>" in self.reason)
+
+    @property
     def unfixable(self) -> bool:
-        """An error waiting can't fix: a status in UNFIXABLE that isn't a rate limit, nor named recoverable.
+        """An error waiting can't fix: a status in UNFIXABLE that isn't a rate limit or a bot challenge, nor named
+        recoverable.
 
         Never retried; critical.
         """
-        return self.code in UNFIXABLE and not self.rate_limited and self.code not in self.recoverable
+        recoverable = self.rate_limited or self.challenged or self.code in self.recoverable
+        return self.code in UNFIXABLE and not recoverable
 
     @property
     def detail(self) -> str:
@@ -129,23 +139,52 @@ def unexpected(kind: str) -> UnusableError:
 
 
 def counts(kind: str, answer: Any, fields: Mapping[str, str]) -> dict[str, int]:
-    """Each of `fields` (the row's key -> the answer's) read from the object `answer`, 0 where absent.
+    """Each of `fields` (the row's key -> the answer's) read from the object `answer`.
 
-    Raises `unexpected(kind)` unless `answer` is an object and each is a count.
+    Raises `unexpected(kind)` unless `answer` is an object and each is a count, and an UnusableError naming each
+    field the answer lacks (`views response is missing uniques`): an answer without a count is not a count of 0
+    (ADR: a failure is recorded as a failure).
     """
     if not isinstance(answer, dict):
         raise unexpected(kind)
-    found = {key: answer.get(field, 0) for key, field in fields.items()}
+    absent = [field for field in fields.values() if field not in answer]
+    if absent:
+        raise UnusableError(f"{kind} response is missing {', '.join(absent)}")
+    found = {key: answer[field] for key, field in fields.items()}
     if not all(is_count(n) for n in found.values()):
         raise unexpected(kind)
     return found
+
+
+CREDENTIAL_HEADERS = ("authorization", "cookie", "proxy-authorization")
+
+
+# cspell:ignore newurl
+class _SameOriginCredentials(urllib.request.HTTPRedirectHandler):
+    """Follows a redirect as urllib does, but a request to another origin (scheme, host or port) carries none of
+    the CREDENTIAL_HEADERS: urllib copies every header, so a token would reach whoever a server redirects to."""
+
+    def redirect_request(
+        self, req: urllib.request.Request, fp: IO[bytes], code: int, msg: str, headers: HTTPMessage, newurl: str
+    ) -> urllib.request.Request | None:
+        follow = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if follow is not None:
+            here, there = urlsplit(req.full_url), urlsplit(newurl)
+            if (here.scheme, here.netloc.lower()) != (there.scheme, there.netloc.lower()):
+                for name in list(follow.headers):
+                    if name.lower() in CREDENTIAL_HEADERS:
+                        del follow.headers[name]
+        return follow
+
+
+_OPENER = urllib.request.build_opener(_SameOriginCredentials)
 
 
 def urlopen(request: urllib.request.Request, timeout: float) -> Response:
     """The real transport. Any failure, HTTP or connection, raises HttpError."""
     try:
         # Sources build every URL from https endpoints and the user's own config.
-        with urllib.request.urlopen(request, timeout=timeout) as resp:  # noqa: S310
+        with _OPENER.open(request, timeout=timeout) as resp:
             headers = {name.lower(): value for name, value in resp.headers.items()}
             return Response(resp.status, headers, resp.read())
     except urllib.error.HTTPError as e:

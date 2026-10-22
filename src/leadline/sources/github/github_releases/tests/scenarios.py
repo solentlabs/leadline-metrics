@@ -7,7 +7,8 @@ that doesn't parse, or an error object in place of the list writes nothing.
 
 Where leadline differs by a decision, the scenario is in DIVERGENCES, and
 tests/test_github_releases.py asserts leadline's side: each of those answers writes a failure row
-(`fetch_failed` or `parse_failed`) for the run's date, where the script writes nothing (ADR: a failure
+(`fetch_failed` or `parse_failed`) for the run's date, where the script writes nothing, and a release or
+asset without a field the script defaults (a flag, a count) is a `parse_failed` row naming it (ADR: a failure
 is recorded as a failure).
 """
 
@@ -32,6 +33,7 @@ DIVERGENCES = {
     "failed_fetch_writes_nothing": "ADR: a failure is recorded as a failure",
     "unparseable_body_writes_nothing": "ADR: a failure is recorded as a failure",
     "a_body_not_a_list_writes_nothing": "ADR: a failure is recorded as a failure",
+    "missing_fields_take_the_defaults": "ADR: a failure is recorded as a failure",
 }
 
 

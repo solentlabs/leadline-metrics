@@ -7,8 +7,9 @@ one row for the run's date under the entry's label: the repo, its stars, forks a
 code size; the week's commits, authors, fixes and redesigns (each commit's first line matched,
 ignoring case, against the entry's patterns, by default the script's, under which "Debug" is a fix);
 the week's issues, and those opened by others than the owner; the top contributor's share; and the
-latest release, whose date is "" while it is unpublished. A missing count reads as 0, and an empty
-list as none, as in the script.
+latest release, whose date is "" while it is unpublished. An empty list reads as none, as in the
+script; a missing count is a `parse_failed` row naming it, where the script reads 0 (ADR: a failure is
+recorded as a failure).
 
 The repository and the commits are the row's required parts: the script writes nothing without them.
 The issues, contributors, releases and languages are optional: the script counts a failed fetch as

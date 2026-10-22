@@ -8,7 +8,7 @@ import re
 from collections import Counter
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, Collection, NamedTuple
+from typing import Any, Collection, Mapping, NamedTuple, Sequence
 
 from leadline import store
 from leadline.config import is_count
@@ -142,19 +142,30 @@ def _objects(kind: str, value: Any) -> list[dict[str, Any]]:
     return value
 
 
+def _require(kind: str, found: Mapping[str, Any], fields: Sequence[str], where: str = "") -> None:
+    """Raises UnusableError naming each of `fields` the object lacks: what is absent is not zero or none (ADR: a
+    failure is recorded as a failure)."""
+    absent = [field for field in fields if field not in found]
+    if absent:
+        raise UnusableError(f"{kind} response is missing {', '.join(absent)}{where}")
+
+
 def _pages(answer: Any) -> list[Page]:
-    """Each page, with its id and stats, as the script reads them (a missing list as none, a missing count as 0).
+    """Each page, with its id and stats, as the script reads them (an absent list or count makes the answer unusable).
 
     Raises UnusableError for any other answer: a stat whose day or count it can't read makes the whole
     answer one it can't use.
     """
     if not isinstance(answer, dict):
         raise unexpected("hits")
+    _require("hits", answer, ["hits"])
     pages = []
-    for hit in _objects("hits", answer.get("hits", [])):
+    for hit in _objects("hits", answer["hits"]):
+        _require("hits", hit, ["stats"], " in a page")
         stats = []
-        for stat in _objects("hits", hit.get("stats", [])):
-            day, daily = stat.get("day", ""), stat.get("daily", 0)
+        for stat in _objects("hits", hit["stats"]):
+            _require("hits", stat, ["daily"], " in a day")
+            day, daily = stat.get("day", ""), stat["daily"]  # a stat with no day counts only in the window sum
             if not (isinstance(day, str) and (day == "" or _DAY.fullmatch(day)) and is_count(daily)):
                 raise unexpected("hits")
             stats.append((day, daily))
@@ -167,9 +178,11 @@ def _refs(kind: str, answer: Any) -> list[tuple[str, int]]:
     """A page's referrers the script counts: each name, stripped, and its count, where both are set."""
     if not isinstance(answer, dict):
         raise unexpected(kind)
+    _require(kind, answer, ["refs"])
     found = []
-    for ref in _objects(kind, answer.get("refs", [])):
-        name, count = ref.get("name", ""), ref.get("count", 0)
+    for ref in _objects(kind, answer["refs"]):
+        _require(kind, ref, ["name", "count"], " in a referrer")
+        name, count = ref["name"], ref["count"]
         if not (isinstance(name, str) and is_count(count)):
             raise unexpected(kind)
         if name.strip() and count:

@@ -288,6 +288,24 @@ def test_pages_it_cant_use_are_a_parse_failed_row(tmp_path: Path, body: Any) -> 
     assert done.rows == {FILE: EARLIER + failure_row("parse_failed", "hits response had an unexpected shape")}
 
 
+@pytest.mark.parametrize(
+    ("body", "reason"),
+    [
+        ({}, "hits response is missing hits"),
+        ({"hits": [{"path_id": 1}]}, "hits response is missing stats in a page"),
+        ({"hits": [{"path_id": 1, "stats": [{"day": "2026-09-22"}]}]}, "hits response is missing daily in a day"),
+    ],
+    ids=["no pages", "a page without stats", "a stat without its count"],
+)
+def test_pages_without_their_lists_or_counts_are_a_parse_failed_row_naming_them(
+    tmp_path: Path, body: Any, reason: str
+) -> None:
+    """ADR: a failure is recorded as a failure. The script read what was absent as no pages and 0 views."""
+    done = run(tmp_path, exchange(gc.HITS, body), gc.total(gc.THREE), seed=EARLIER)
+
+    assert done.rows == {FILE: EARLIER + failure_row("parse_failed", reason)}
+
+
 def test_a_pages_404_is_retried_and_recoverable(tmp_path: Path) -> None:
     """GoatCounter answers 404 for a readable site at times (ADR: one failed night recovers; consecutive
     failures are critical): the pages' request is retried, as the script retries it, and is not critical."""

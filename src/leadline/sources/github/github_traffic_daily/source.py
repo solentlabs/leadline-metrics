@@ -31,19 +31,27 @@ def check(ctx: Context, cfg: Any) -> list[Finding]:
 
 
 def _days(kind: str, answer: Any) -> list[tuple[str, int, int]]:
-    """Each day's date, count and uniques (0 where absent, as the script reads them), in the answer's order.
+    """Each day's date, count and uniques, in the answer's order.
 
     Raises UnusableError for any other answer, a day without a timestamp included: its counts belong
-    to a day that can't be told.
+    to a day that can't be told. An answer without the list of days, or a day without its count or uniques,
+    is not one of zeros: the error names what is missing (ADR: a failure is recorded as a failure).
     """
-    items = answer.get(kind, []) if isinstance(answer, dict) else None
+    if not isinstance(answer, dict):
+        raise unexpected(kind)
+    if kind not in answer:
+        raise UnusableError(f"{kind} response is missing {kind}")
+    items = answer[kind]
     if not isinstance(items, list):
         raise unexpected(kind)
     days = []
     for item in items:
         if not isinstance(item, dict):
             raise unexpected(kind)
-        stamp, count, unique = item.get("timestamp"), item.get("count", 0), item.get("uniques", 0)
+        absent = [field for field in ("count", "uniques") if field not in item]
+        if absent:
+            raise UnusableError(f"{kind} response is missing {', '.join(absent)} in a day")
+        stamp, count, unique = item.get("timestamp"), item["count"], item["uniques"]
         if not (isinstance(stamp, str) and _DAY.match(stamp) and is_count(count) and is_count(unique)):
             raise unexpected(kind)
         days.append((stamp[:10], count, unique))

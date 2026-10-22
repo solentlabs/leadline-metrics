@@ -124,8 +124,17 @@ def test_the_divergences_are_the_decided_ones() -> None:
     assert sorted(port.divergences(NAME)) == [
         "a_body_not_a_list_writes_nothing",
         "failed_fetch_writes_nothing",
+        "missing_fields_take_the_defaults",
         "unparseable_body_writes_nothing",
     ]
+
+
+def test_a_release_without_its_flags_is_not_filled_with_defaults(tmp_path: Path) -> None:
+    """The script's scenario: a bare release and asset take false and 0; leadline records what is missing."""
+    done = port.run(github_releases, CONFIG, port.scenario(NAME, "missing_fields_take_the_defaults"), tmp_path)
+
+    reason = "response is missing prerelease, draft, published_at in a release"
+    assert done.rows == {FILE: failure_row("parse_failed", reason)}
 
 
 def test_only_the_first_page_is_read_as_the_script_reads_it(tmp_path: Path) -> None:
@@ -172,6 +181,46 @@ def test_an_object_in_place_of_the_list_is_a_parse_failed_row(tmp_path: Path) ->
     assert (done.status, done.ctx.critical) == (0, [])
 
 
+RELEASE = {"tag_name": "v1.0.0", "prerelease": False, "draft": False, "published_at": None}
+ASSET = {"name": "a.zip", "download_count": 3, "size": 1}
+
+
+@pytest.mark.parametrize(
+    ("release", "reason"),
+    [
+        ({"tag_name": "v1.0.0", "assets": []}, "response is missing prerelease, draft, published_at in a release"),
+        ({**RELEASE, "assets": None}, None),
+        (
+            {"prerelease": False, "draft": False, "published_at": None, "assets": []},
+            "response is missing tag_name in a release",
+        ),
+        ({**RELEASE}, "response is missing assets in a release"),
+        ({**RELEASE, "assets": [{"download_count": 3, "size": 1}]}, "response is missing name in an asset"),
+        ({**RELEASE, "assets": [{"name": "a.zip", "size": 1}]}, "response is missing download_count in an asset"),
+        ({**RELEASE, "assets": [{"name": "a.zip", "download_count": 3}]}, "response is missing size in an asset"),
+    ],
+    ids=[
+        "no flags",
+        "assets null",
+        "no tag",
+        "no assets",
+        "an asset without a name",
+        "an asset without its downloads",
+        "an asset without its size",
+    ],
+)
+def test_a_release_or_asset_without_its_fields_is_a_parse_failed_row_naming_them_not_defaults(
+    tmp_path: Path, release: Any, reason: str | None
+) -> None:
+    """ADR: a failure is recorded as a failure. The script read a missing flag as false and a missing count as 0,
+    which would count a draft's downloads or show none for an asset."""
+    scenario = replace(port.scenario(NAME, "a_body_not_a_list_writes_nothing"), responses=[exchange(URL, [release])])
+
+    done = port.run(github_releases, CONFIG, scenario, tmp_path)
+
+    assert done.rows == {FILE: EARLIER + failure_row("parse_failed", reason or "response had an unexpected shape")}
+
+
 @pytest.mark.parametrize(
     "body",
     [
@@ -180,10 +229,9 @@ def test_an_object_in_place_of_the_list_is_a_parse_failed_row(tmp_path: Path) ->
         '"v1.0.0"',
         5,
         ["v1.0.0"],
-        [{"tag_name": "v1.0.0", "assets": None}],
-        [{"tag_name": "v1.0.0", "assets": {"name": "a.zip"}}],
-        [{"tag_name": "v1.0.0", "assets": ["a.zip"]}],
-        [{"tag_name": "v1.0.0", "assets": [{"download_count": 3}]}],
+        [{**RELEASE, "assets": None}],
+        [{**RELEASE, "assets": {"name": "a.zip"}}],
+        [{**RELEASE, "assets": ["a.zip"]}],
     ],
     ids=[
         "an empty object, which the script reads as no releases",
@@ -194,7 +242,6 @@ def test_an_object_in_place_of_the_list_is_a_parse_failed_row(tmp_path: Path) ->
         "null assets",
         "assets an object",
         "an asset not an object",
-        "an asset without a name, which loses the script's row",
     ],
 )
 def test_any_answer_the_source_cant_use_is_a_parse_failed_row(tmp_path: Path, body: Any) -> None:

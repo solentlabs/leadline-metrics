@@ -119,9 +119,9 @@ def test_a_dimension_named_as_a_column_or_a_query_alias_is_a_problem(name: str) 
         ({"dataset": "a"}, ": must be a list of entries"),
         ([{**one()[0], "dataset": "Example-Usage"}], "[0].dataset: must be a name of lowercase letters, digits and _"),
         ([{**one()[0], "dataset": 5}], "[0].dataset: must be a name of lowercase letters, digits and _"),
-        ([{**one()[0], "refetch_days": 0}], "[0].refetch_days: must be a whole number of days, 1 to 365"),
-        ([{**one()[0], "refetch_days": True}], "[0].refetch_days: must be a whole number of days, 1 to 365"),
-        ([{**one()[0], "refetch_days": 366}], "[0].refetch_days: must be a whole number of days, 1 to 365"),
+        ([{**one()[0], "refetch_days": 0}], "[0].refetch_days: must be a whole number of days, 1 to 90"),
+        ([{**one()[0], "refetch_days": True}], "[0].refetch_days: must be a whole number of days, 1 to 90"),
+        ([{**one()[0], "refetch_days": 91}], "[0].refetch_days: must be a whole number of days, 1 to 90"),
         ([{"dataset": "a"}], "[0].layouts: must be a non-empty list of layouts, oldest first"),
         ([{"dataset": "a", "layouts": ["x"]}], "[0].layouts[0]: must be an object"),
         (one(until="2026-09-25T12:00:00Z"), f"{AT}.until: must be left out: the newest layout has no end"),
@@ -362,7 +362,7 @@ def test_a_seed_date_that_is_not_a_string_is_kept_and_the_window_written(tmp_pat
     [
         (
             "no_refetch_days_rewrites_the_file_and_writes_no_day",
-            "[0].refetch_days: must be a whole number of days, 1 to 365",
+            "[0].refetch_days: must be a whole number of days, 1 to 90",
         ),
         (
             "refuses_a_dataset_that_is_not_an_identifier",

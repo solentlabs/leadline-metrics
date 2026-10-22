@@ -19,6 +19,9 @@ from leadline.sources.github.github_tree_counts import spec
 ENV: tuple[str, ...] = (github.CREDENTIAL,)
 LAGGING = False
 Blob = Tuple[str, int]  # a file's blob SHA and the rank of the pattern that counted it, which says how it is read
+TREE_BUDGET = (
+    500  # the trees the history rebuild asks for in a night, so a long history leaves the day's limit to the rest
+)
 UNKNOWN = "unknown"  # the value of a file whose text the content pattern doesn't match, or that has no text
 BLOB_BUDGET = 1000  # the blobs the history rebuild reads in a night, so a long history doesn't spend the day's limit
 UNEXPECTED = "response had an unexpected shape"
@@ -250,7 +253,8 @@ def _rebuild(ctx: Context, entry: Any, path: Path, blobs: _Blobs | None) -> None
     """Write a row for each day before the file's first a night wrote, each counted in the tree of the day's last
     commit, from the first day whose tree matches anything; rows an earlier rebuild added mark where it starts.
     With `content`, each day through yesterday whose good row lacks the counts by value gets them too, and a night
-    reads no more than BLOB_BUDGET blobs (a tree that needs more waits for the next night). A failed request stops it,
+    reads no more than BLOB_BUDGET blobs (a tree that needs more waits for the next night). A night asks for no more
+    than TREE_BUDGET trees, and goes on the next. A failed request stops it,
     keeping the days counted so far (store.fill)."""
     repo, end = entry["repo"], store.first_night(path, ctx)
     by_date = store.rows_by_date(path)
@@ -303,6 +307,13 @@ def _count_days(
             continue
         read: dict[str, list[str]] = {}
         if sha not in counted:
+            if len(counted) >= TREE_BUDGET:
+                ctx.log.info(
+                    "Stopped rebuilding past tree counts for %s after %d tree(s); the next night goes on",
+                    entry["repo"],
+                    len(counted),
+                )
+                break
             if blobs is not None and blobs.reads - first_read >= BLOB_BUDGET:
                 spent = blobs.reads - first_read
                 ctx.log.info(

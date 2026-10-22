@@ -9,7 +9,8 @@ lines are dropped. A thread that fails to fetch (a connection or an error status
 posts_count too) is skipped; the others are still written.
 
 leadline differs by decision on the scenarios in DIVERGENCES, asserted in test_discourse_topics.py:
-a thread that fails to fetch or parse writes its failure row instead of being skipped.
+a thread that fails to fetch or parse writes its failure row instead of being skipped, and a topic without
+its views or likes is a `parse_failed` row naming them, not zeros.
 """
 
 from __future__ import annotations
@@ -132,4 +133,7 @@ SCENARIOS = [
     ),
 ]
 
-DIVERGENCES = {"failed_or_unparseable_threads_are_skipped": "ADR: a failure is recorded as a failure"}
+DIVERGENCES = {
+    "failed_or_unparseable_threads_are_skipped": "ADR: a failure is recorded as a failure",
+    "missing_counts_read_as_zero": "ADR: a failure is recorded as a failure",
+}

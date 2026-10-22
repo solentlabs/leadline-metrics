@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 from leadline import store
-from leadline.config import is_count
 from leadline.context import Context, Finding
 from leadline.http import HttpError, UnusableError, counts, read_json, unexpected
 from leadline.sources.discourse_topics import spec
@@ -71,13 +70,15 @@ def _topic(ctx: Context, base_url: str, topic_id: int) -> Any:
 
 def _counted(answer: Any) -> dict[str, Any]:
     """The topic's views, replies, likes and last post from its answer. Raises UnusableError."""
-    found = counts("topic", answer, COUNTS)  # also refuses an answer that isn't an object
-    posts, last = answer.get("posts_count", 1), answer.get("last_posted_at")
-    if not is_count(posts) or (last and not isinstance(last, str)):
+    found = counts(
+        "topic", answer, {**COUNTS, "posts": "posts_count"}
+    )  # also refuses a non-object, names what is missing
+    last = answer.get("last_posted_at")
+    if last and not isinstance(last, str):
         raise unexpected("topic")
     return {
         "views": found["views"],
-        "replies": posts - 1,
+        "replies": found["posts"] - 1,
         "likes": found["likes"],
         "last_post": last[:10] if last else "",
     }

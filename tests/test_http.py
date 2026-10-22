@@ -6,9 +6,11 @@ import http.client as http_client
 import io
 import json
 import logging
+import threading
 import urllib.error
 import urllib.request
 from email.message import Message
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 import pytest
@@ -173,7 +175,7 @@ def test_urlopen_turns_a_body_cut_short_into_code_0(monkeypatch: pytest.MonkeyPa
         def read(self) -> bytes:
             raise http_client.IncompleteRead(b"par", 100)
 
-    monkeypatch.setattr(urllib.request, "urlopen", lambda request, timeout: Cut())
+    monkeypatch.setattr(http._OPENER, "open", lambda request, timeout: Cut())
 
     with pytest.raises(HttpError) as raised:
         http.urlopen(urllib.request.Request("https://x.test"), 5)
@@ -188,7 +190,7 @@ def test_urlopen_returns_status_lowercased_headers_and_body(monkeypatch: pytest.
         seen.append(timeout)
         return FakeUrlopenResponse(b"[1]", {"Link": "<n>; rel=next", "Content-Type": "application/json"})
 
-    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    monkeypatch.setattr(http._OPENER, "open", fake)
 
     response = http.urlopen(urllib.request.Request("https://x.test"), 5)
 
@@ -201,7 +203,7 @@ def test_urlopen_turns_an_http_error_into_code_and_body(monkeypatch: pytest.Monk
     def fake(request: urllib.request.Request, timeout: float) -> None:
         raise urllib.error.HTTPError(request.full_url, 404, "Not Found", Message(), io.BytesIO(b"no such repo"))
 
-    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    monkeypatch.setattr(http._OPENER, "open", fake)
 
     with pytest.raises(HttpError) as raised:
         http.urlopen(urllib.request.Request("https://x.test/r"), 5)
@@ -223,7 +225,7 @@ def test_urlopen_turns_a_connection_failure_into_code_0(monkeypatch: pytest.Monk
     def fake(request: urllib.request.Request, timeout: float) -> None:
         raise error
 
-    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    monkeypatch.setattr(http._OPENER, "open", fake)
 
     with pytest.raises(HttpError) as raised:
         http.urlopen(urllib.request.Request("https://x.test"), 5)
@@ -357,6 +359,25 @@ def test_a_rejection_or_absence_is_unfixable_whatever_its_headers(code: int, hea
     assert (error.rate_limited, error.unfixable) == (False, True)
 
 
+CHALLENGE = "<!DOCTYPE html><html><head><title>Just a moment...</title></head></html>"
+
+
+@pytest.mark.parametrize(
+    ("body", "headers"),
+    [(CHALLENGE, {}), ("", {"CF-Mitigated": "challenge"}), (CHALLENGE, {"cf-mitigated": "challenge"})],
+    ids=["the page", "the header", "both"],
+)
+def test_a_bot_challenge_is_recoverable_never_unfixable(body: str, headers: dict[str, str]) -> None:
+    """Live 2026-10-21: the forum's host answered the NAS a 403 challenge page; no credential was wrong."""
+    error = HttpError("u", 403, body, headers)
+
+    assert (error.rate_limited, error.unfixable) == (False, False)
+
+
+def test_a_403_page_that_is_not_a_challenge_is_still_unfixable() -> None:
+    assert HttpError("u", 403, "<title>Forbidden</title>", {"cf-mitigated": "block"}).unfixable
+
+
 @pytest.mark.parametrize("code", [0, 200, 500, 502, 503])
 def test_other_failures_are_neither(code: int) -> None:
     error = HttpError("u", code, "x", {"retry-after": "5"})
@@ -379,7 +400,7 @@ def test_urlopen_keeps_an_http_errors_headers_lowercased(monkeypatch: pytest.Mon
         headers["X-RateLimit-Remaining"] = "0"
         raise urllib.error.HTTPError(request.full_url, 403, "Forbidden", headers, io.BytesIO(b"rate limit exceeded"))
 
-    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    monkeypatch.setattr(http._OPENER, "open", fake)
 
     with pytest.raises(HttpError) as raised:
         http.urlopen(urllib.request.Request("https://x.test/r"), 5)
@@ -576,13 +597,21 @@ def test_an_unexpected_shape_is_unusable_naming_its_kind() -> None:
     assert str(http.unexpected("issues")) == "issues response had an unexpected shape"
 
 
-def test_counts_reads_each_field_as_its_row_key_zero_where_absent() -> None:
-    answer = {"count": 5, "other": "x"}
+def test_counts_reads_each_field_as_its_row_key() -> None:
+    answer = {"count": 5, "uniques": 0, "other": "x"}
 
     assert http.counts("views", answer, {"views": "count", "views_unique": "uniques"}) == {
         "views": 5,
         "views_unique": 0,
     }
+
+
+def test_counts_names_each_absent_field_so_the_row_says_what_to_look_for() -> None:
+    """An answer without a count is not a count of zero (ADR: a failure is recorded as a failure)."""
+    with pytest.raises(http.UnusableError) as raised:
+        http.counts("views", {"count": 5}, {"views": "count", "views_unique": "uniques", "clones": "cloned"})
+
+    assert str(raised.value) == "views response is missing uniques, cloned"
 
 
 @pytest.mark.parametrize(
@@ -780,3 +809,59 @@ def test_a_final_failure_line_never_carries_a_request_header() -> None:
         web.request("https://x.test/a", headers={"Authorization": "Bearer t0ken"})
 
     assert "t0ken" not in "\n".join(logged.messages)
+
+
+# --- redirects ---
+
+
+def _serve(handler: type[BaseHTTPRequestHandler]) -> tuple[ThreadingHTTPServer, str]:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, f"http://127.0.0.1:{server.server_address[1]}"
+
+
+def _redirect_run(same_origin: bool) -> list[str | None]:
+    """The Authorization header the redirect's target received, from a request that carried one."""
+    seen: list[str | None] = []
+
+    class Target(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            seen.append(self.headers.get("Authorization"))
+            self.send_response(200)
+            self.send_header("Content-Length", "2")
+            self.end_headers()
+            self.wfile.write(b"[]")
+
+        def log_message(self, *args: object) -> None:
+            return None
+
+    target, target_url = _serve(Target)
+    start_url = ""
+
+    class Start(Target):
+        def do_GET(self) -> None:
+            if self.path == "/next":
+                Target.do_GET(self)
+            else:
+                self.send_response(302)
+                self.send_header("Location", f"{start_url if same_origin else target_url}/next")
+                self.end_headers()
+
+    start, start_url = _serve(Start)
+    try:
+        request = urllib.request.Request(  # noqa: S310 (a local test server)
+            f"{start_url}/first", headers={"Authorization": "Bearer secret"}
+        )
+        assert http.urlopen(request, 5).body == b"[]"
+    finally:
+        start.shutdown()
+        target.shutdown()
+    return seen
+
+
+def test_a_redirect_to_another_host_does_not_carry_the_authorization_header() -> None:
+    assert _redirect_run(same_origin=False) == [None]
+
+
+def test_a_redirect_within_the_same_host_keeps_the_authorization_header() -> None:
+    assert _redirect_run(same_origin=True) == ["Bearer secret"]

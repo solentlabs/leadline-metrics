@@ -16,7 +16,7 @@ UNEXPECTED = "response had an unexpected shape"
 
 
 class _UnreadableError(Exception):
-    """The answer parses as JSON but not as a list of releases."""
+    """The answer parses as JSON but not as a list of releases; its message, if any, says what is missing."""
 
 
 def collect(ctx: Context, cfg: Any) -> None:
@@ -37,24 +37,33 @@ def _list(value: Any) -> list[dict[str, Any]]:
     return value
 
 
+def _present(item: dict[str, Any], fields: tuple[str, ...], where: str) -> None:
+    """Raises _UnreadableError naming each of `fields` the object lacks: a flag or count GitHub left out is not
+    false or 0 (ADR: a failure is recorded as a failure)."""
+    absent = [field for field in fields if field not in item]
+    if absent:
+        raise _UnreadableError(f"response is missing {', '.join(absent)} in {where}")
+
+
 def _asset(asset: dict[str, Any]) -> dict[str, Any]:
-    if "name" not in asset:  # the script reads a['name']: its row is lost without one
-        raise _UnreadableError
-    return {"name": asset["name"], "downloads": asset.get("download_count", 0), "size": asset.get("size", 0)}
+    _present(asset, ("name", "download_count", "size"), "an asset")
+    return {"name": asset["name"], "downloads": asset["download_count"], "size": asset["size"]}
 
 
 def _row(releases: Any, repo: str, day: str) -> dict[str, Any]:
-    """The script's row. An empty object, which the script reads as no releases, is unreadable too."""
-    out = [
-        {
-            "tag": release.get("tag_name"),
-            "prerelease": release.get("prerelease", False),
-            "draft": release.get("draft", False),
-            "published_at": release.get("published_at"),
-            "assets": [_asset(asset) for asset in _list(release.get("assets", []))],
-        }
-        for release in _list(releases)
-    ]
+    """The row. An empty object, which the script reads as no releases, is unreadable too."""
+    out = []
+    for release in _list(releases):
+        _present(release, ("tag_name", "prerelease", "draft", "published_at", "assets"), "a release")
+        out.append(
+            {
+                "tag": release["tag_name"],
+                "prerelease": release["prerelease"],
+                "draft": release["draft"],
+                "published_at": release["published_at"],
+                "assets": [_asset(asset) for asset in _list(release["assets"])],
+            }
+        )
     return {"date": day, "repo": repo, "releases": out}
 
 
@@ -71,8 +80,8 @@ def _collect(ctx: Context, entry: Any) -> None:
         failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": "releases request failed"}
     except ValueError:
         failure = {"status": "parse_failed", "reason": "response was not JSON"}
-    except _UnreadableError:
-        failure = {"status": "parse_failed", "reason": UNEXPECTED}
+    except _UnreadableError as e:
+        failure = {"status": "parse_failed", "reason": str(e) or UNEXPECTED}
     else:
         store.write_good(path, row, ctx, spec.NAME)
         return

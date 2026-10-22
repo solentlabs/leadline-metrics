@@ -43,8 +43,9 @@ one's text (ADR: a tree's files are counted by what they say).
   no earlier row has read, usually none. The row lists the blobs it read
   under the key and `_blobs` (`status_blobs` for `status`), which a reader
   can ignore.
-- Past days get the counts from the tree of their last commit, no more than
-  a thousand blobs read a night, so a long history takes more than one.
+- Past days get the counts from the tree of their last commit: a night asks
+  for at most 500 trees and reads no more than a thousand blobs, so a long
+  history takes more than one night.
 - A blob that can't be read leaves the counts null and the row `partial`;
   the next night tries again.
 - The key must be one no count or row key takes, nor its `_blobs` key.

@@ -122,6 +122,7 @@ def test_the_divergences_are_the_decided_ones() -> None:
     assert sorted(port.divergences(NAME)) == [
         "an_escaped_quote_in_the_referrers_writes_nothing",
         "failed_clones_write_nothing",
+        "failed_referrers_leave_the_list_empty",
         "failed_views_write_nothing",
         "referrers_not_a_list_write_nothing",
         "triple_quotes_in_the_referrers_write_nothing",
@@ -129,11 +130,35 @@ def test_the_divergences_are_the_decided_ones() -> None:
     ]
 
 
-def test_a_failed_referrers_fetch_is_logged_and_leaves_the_list_empty(tmp_path: Path) -> None:
-    """The script's own rule: the referrers are optional, so their failure is no failure row."""
+def partial_row(reason: str) -> str:
+    """The snapshot scenario's row with its referrers null: a partial row (ADR: a partly failed row keeps its good
+    parts)."""
+    golden = scenarios.load_golden(NAME)["snapshot_with_the_top_five_referrers"]["rows"][FILE]
+    row = json.loads(golden)
+    captured_at = row.pop("captured_at")
+    row["top_referrers"] = None
+    return json.dumps({**row, "status": "partial", "reason": reason, "captured_at": captured_at}) + "\n"
+
+
+def test_a_failed_referrers_fetch_is_a_partial_row_with_the_views_and_clones(tmp_path: Path) -> None:
     done = port.run(source, CONFIG, port.scenario(NAME, "failed_referrers_leave_the_list_empty"), tmp_path)
 
+    assert done.rows == {FILE: partial_row("referrers request failed (HTTP 500)")}
     assert f"WARN: Failed to fetch GitHub referrers for {REPO}: HTTP 500" in done.log
+    assert (done.status, done.ctx.critical) == (0, [])
+
+
+def test_a_failed_referrers_fetch_keeps_the_referrers_an_earlier_run_got(tmp_path: Path) -> None:
+    """ADR: a run never erases what it didn't get."""
+    scenario = port.scenario(NAME, "snapshot_with_the_top_five_referrers")
+    port.run(source, CONFIG, scenario, tmp_path / "first")
+    kept = port.scenario(NAME, "failed_referrers_leave_the_list_empty")
+    seeded = replace(kept, seed={FILE: (tmp_path / "first" / FILE).read_text(encoding="utf-8")})
+
+    done = port.run(source, CONFIG, seeded, tmp_path / "second")
+
+    assert port.golden_differences(NAME, "snapshot_with_the_top_five_referrers", tmp_path / "second") == []
+    assert done.rows[FILE].count("\n") == 1
 
 
 # --- decided divergence: the port reads the JSON ---
@@ -193,10 +218,10 @@ def test_unparseable_views_are_a_parse_failed_row(tmp_path: Path) -> None:
     assert (done.status, done.ctx.critical) == (0, [])
 
 
-def test_referrers_not_a_list_are_a_parse_failed_row(tmp_path: Path) -> None:
+def test_referrers_not_a_list_are_a_partial_row(tmp_path: Path) -> None:
     done = port.run(source, CONFIG, port.scenario(NAME, "referrers_not_a_list_write_nothing"), tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("parse_failed", "referrers response had an unexpected shape")}
+    assert done.rows == {FILE: EARLIER + partial_row("referrers response had an unexpected shape")}
     assert (done.status, done.ctx.critical) == (0, [])
 
 
@@ -223,12 +248,7 @@ VIEWS = github_traffic("views", gt.VIEWS_BY_DAY)
         ({"views": {**VIEWS, "views": [{"timestamp": 20260923}]}}, "views"),
         ({"views": {**VIEWS, "views": [{"timestamp": "yesterday"}]}}, "views"),
         ({"clones": [1]}, "clones"),
-        ({"clones": {"count": True}}, "clones"),
-        ({"referrers": "null"}, "referrers"),
-        ({"referrers": ["github.com"]}, "referrers"),
-        ({"referrers": [{"referrer": "github.com", "count": 3}]}, "referrers"),
-        ({"referrers": [{"referrer": None, "count": 3, "uniques": 1}]}, "referrers"),
-        ({"referrers": [{"referrer": "github.com", "count": "3", "uniques": 1}]}, "referrers"),
+        ({"clones": {"count": True, "uniques": 1}}, "clones"),
     ],
     ids=[
         "views a list",
@@ -241,11 +261,6 @@ VIEWS = github_traffic("views", gt.VIEWS_BY_DAY)
         "a timestamp not a date",
         "clones a list",
         "a clones count a boolean",
-        "referrers null",
-        "a referrer not an object",
-        "a referrer without uniques",
-        "a referrer without a name",
-        "a referrer count not a number",
     ],
 )
 def test_any_answer_the_source_cant_use_is_a_parse_failed_row(tmp_path: Path, answers: Any, kind: str) -> None:
@@ -254,6 +269,31 @@ def test_any_answer_the_source_cant_use_is_a_parse_failed_row(tmp_path: Path, an
     done = port.run(source, CONFIG, scenario, tmp_path)
 
     assert done.rows == {FILE: EARLIER + failure_row("parse_failed", f"{kind} response had an unexpected shape")}
+
+
+@pytest.mark.parametrize(
+    "referrers",
+    [
+        "null",
+        ["github.com"],
+        [{"referrer": "github.com", "count": 3}],
+        [{"referrer": None, "count": 3, "uniques": 1}],
+        [{"referrer": "github.com", "count": "3", "uniques": 1}],
+    ],
+    ids=[
+        "referrers null",
+        "a referrer not an object",
+        "a referrer without uniques",
+        "a referrer without a name",
+        "a referrer count not a number",
+    ],
+)
+def test_referrers_the_source_cant_use_are_a_partial_row_not_an_empty_list(tmp_path: Path, referrers: Any) -> None:
+    scenario = replace(port.scenario(NAME, "unparseable_views_write_nothing"), responses=replies(referrers=referrers))
+
+    done = port.run(source, CONFIG, scenario, tmp_path)
+
+    assert done.rows == {FILE: EARLIER + partial_row("referrers response had an unexpected shape")}
 
 
 def test_only_the_top_five_referrers_are_read(tmp_path: Path) -> None:
