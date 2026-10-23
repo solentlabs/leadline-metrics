@@ -18,7 +18,7 @@ import port
 import pytest
 
 from leadline import store, trends
-from leadline.config import Card, Hide, Section, Shown, section_lines
+from leadline.config import Card, Hide, Note, Section, Shown, section_lines
 from leadline.context import Context, Critical
 from leadline.http import Http
 
@@ -1489,3 +1489,116 @@ def test_a_section_with_only_zero_counts_in_bars_stays_since_they_are_drawn(tmp_
     data = built(tmp_path, Section("a", "x", "a.jsonl", [Shown("d", "D", "daily")], "Aye"))
 
     assert EMBEDDED.sub("", trends.page(data)).count("<section>") == 1
+
+
+# ---- derived fields, bands, tips and notes ------------------------------------------------------
+
+
+def test_a_minus_field_holds_the_value_at_its_field_less_the_value_at_its_minus_per_row(tmp_path: Path) -> None:
+    rows: list[dict[str, Any]] = [
+        {"date": "2026-09-20", "n": 10, "r": 3},
+        {"date": "2026-09-21", "n": 10},
+        {"date": "2026-09-22", "n": None, "r": 3},
+        {"date": "2026-09-23", "n": "x", "r": 3},
+        {"date": "2026-09-24", "n": 12.5, "r": True},
+        {"date": "2026-09-25", "n": 1.5, "r": 1},
+    ]
+    seed(tmp_path, "a.jsonl", rows)
+
+    (section,) = built(tmp_path, Section("a", None, "a.jsonl", [Shown("n", "Out", minus="r")], "L"))["sections"]
+
+    assert section["fields"] == [
+        {"field": "n", "label": "Out", "kind": "snapshot", "minus": "r", "values": [7, None, None, None, None, 0.5]}
+    ]
+
+
+def test_the_default_summary_leaves_a_field_with_minus_out() -> None:
+    plain = Section("s", None, "a.jsonl", [Shown("n", "N")], "L")
+    derived = plain._replace(shown=[*plain.shown, Shown("n", "Out", minus="r", chart="C")])
+
+    assert section_lines(derived) == section_lines(plain)
+
+
+def test_a_band_tip_and_format_are_in_the_data(tmp_path: Path) -> None:
+    seed(tmp_path, "a.jsonl", [{"date": "2026-09-24", "n": 9, "r": 2, "p": 22.2}])
+    shown = [
+        Shown("n", "N", chart="C", tip=("r", "p")),
+        Shown("n", "Out", chart="C", minus="r", band="n"),
+        Shown("r", "Rank", charted=False),
+        Shown("p", "Pct", charted=False, format=".1f", complement=True),
+    ]
+
+    (section,) = built(tmp_path, Section("a", None, "a.jsonl", shown, "L"))["sections"]
+
+    first, second, _, pct = section["fields"]
+    assert (first["tip"], second["band"], pct["format"], pct["values"]) == (["r", "p"], "n", ".1f", [77.8])
+    assert "band" not in first
+    assert "tip" not in second
+
+
+def test_a_section_carries_its_notes_only_when_it_has_some(tmp_path: Path) -> None:
+    seed(tmp_path, "a.jsonl", [{"date": "2026-09-24", "n": 1}])
+    plain = Section("a", None, "a.jsonl", [Shown("n", "N")], "L")
+    noted = plain._replace(notes=(Note("2026-09-22", "Moved"),))
+
+    without, with_notes = (built(tmp_path, s)["sections"][0] for s in (plain, noted))
+
+    assert "notes" not in without
+    assert with_notes["notes"] == [{"date": "2026-09-22", "text": "Moved"}]
+
+
+@pytest.mark.parametrize(
+    ("shown", "bug"),
+    [
+        ([Shown("n", "N", minus="")], None),
+        ([Shown("n", "N", minus=5)], "n: minus: must be a non-empty string"),  # type: ignore[arg-type]
+        ([Shown("n", "N", "daily", minus="r")], "n: minus: only a snapshot, change or value takes it"),
+        ([Shown("n", "N", minus="r", complement=True)], "n: minus: not with complement"),
+        ([Shown("n", "N", into="b", minus="r"), Shown("b", "B", "breakdown")], "n: minus: not with into"),
+        (
+            [Shown("a[].n", "N", "breakdown", by="k", minus="r")],
+            "a[].n: minus: only a snapshot, change or value takes it",
+        ),
+        ([Shown("n", "N", band="m")], "n: band: needs chart"),
+        ([Shown("n", "N", chart="C", band="m")], "n: band: names no field of the chart C"),
+        ([Shown("n", "N", chart="C"), Shown("m", "M", chart="D", band="n")], "m: band: names no field of the chart D"),
+        ([Shown("n", "N", chart="C", band="n")], "n: band: names its own field"),
+        ([Shown("n", "N", chart="C", tip=("x",))], "n: tip: x names no field of the section"),
+        ([Shown("n", "N", chart="C", tip="r")], "n: tip: must be a tuple of field paths"),  # type: ignore[arg-type]
+        ([Shown("n", "N", chart="C", tip=("",))], "n: tip: must be a tuple of field paths"),
+        ([Shown("n", "N", "daily", tip=("n",))], "n: tip: only a snapshot or change takes it"),
+    ],
+    ids=[
+        "an empty minus is none",
+        "minus not a string",
+        "minus of a daily count",
+        "minus with complement",
+        "minus into a stack",
+        "minus on a breakdown",
+        "band without chart",
+        "band names nothing",
+        "band in another chart",
+        "band names itself",
+        "tip names nothing",
+        "tip a string",
+        "tip an empty path",
+        "tip on a daily count",
+    ],
+)
+def test_a_band_minus_or_tip_that_cannot_be_drawn_so_is_a_bug(
+    tmp_path: Path, shown: list[Shown], bug: str | None
+) -> None:
+    ctx = context(tmp_path)
+
+    trends.write(ctx, [Section("a", None, "a.jsonl", shown, "Label")], HEALTH)
+
+    assert ctx.critical == ([] if bug is None else [Critical("trends", None, f"crashed: ValueError: {bug}")])
+
+
+def test_two_fields_of_one_path_coexist_and_a_band_names_the_one_without_minus(tmp_path: Path) -> None:
+    seed(tmp_path, "a.jsonl", [{"date": "2026-09-24", "n": 9, "r": 2}])
+    shown = [Shown("n", "N", chart="C"), Shown("n", "Out", chart="C", minus="r", band="n"), Shown("r", "R")]
+
+    (section,) = built(tmp_path, Section("a", None, "a.jsonl", shown, "L"))["sections"]
+
+    assert [f["values"] for f in section["fields"]] == [[9], [7], [2]]

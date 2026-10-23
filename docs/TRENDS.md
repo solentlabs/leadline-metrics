@@ -55,6 +55,7 @@ All sources are current when `stale` and `failed` are both empty.
 | `dates` | list of strings | the dates of the file's good rows, one a date (its last line), oldest first; empty until there is one |
 | `fields` | list | one per field the summary shows, in its order, below |
 | `card`, `row`, `about` | strings | only for a section that is a row of a card: the card's name, the row's title and a sentence on what the row shows; optional keys, so the `format` stays 3 |
+| `notes` | list | only for a section with notes (an entry's [`notes`](CONFIGURATION.md#notes)): `{"date", "text"}` objects, in the config's order; an optional key, so the `format` stays 3 |
 
 Only the fields the summary shows, and the `charts` its source adds for the
 pages alone, are here, never whole rows: the row files hold the rest.
@@ -76,9 +77,14 @@ caps (the installs total, whose stack of versions adds up to it); `lines`,
 start, below; `half`, `true`, for a breakdown whose chart is half width;
 `trend`, `true`, for a `daily` field whose chart has a line of 7-day averages;
 `color`, one of `s1` to `s6`, for a field drawn in that theme color, not the
-default; and `chart`, for a `snapshot` or `change` that is a line of a
+default; `chart`, for a `snapshot` or `change` that is a line of a
 chart shared with the section's other fields of the same `chart`, the chart's
-name; then its
+name; `minus`, the path of the field a derived field is less (its `values` are
+the field's less that one's in each row, null where either is missing or not a
+number; the default summary leaves such a field out); `band`, the path of a
+field of the same chart the area is shaded to; `tip`, a list of paths of other
+fields of the section the hover lists; `format`, the field's format spec, when
+set; then its
 series. Each series has a value for each of the section's `dates`, in order
 (except a `since` field's, below).
 
@@ -224,9 +230,24 @@ it to open it.
   | ---- | ----- | -------- |
   | `snapshot`, `change` | a line over a light fill through readings on consecutive days, with a dot at its newest value; two readings more than a day apart (whether or not a row with no value lies between) are joined by a dashed line over the same fill, which is not a reading; a reading with none beside it is a dot | the date and the value of the nearest row with one |
   | the fields of a `chart` | one figure captioned by the chart's name, at its first field's place, with a line for each field, each in a color of its own and with no fill, drawn as above, on one axis fitted to all of them, and a key above it naming each line with its newest value | the date, and each line's label and value on that row, for those with one |
+  | the fields of a `chart`, with `band` | as the fields of a `chart`, and the area between the line of the field with `band` and the line of the field it names is shaded, behind the lines, in the chart's first color at 18% opacity, over the runs of consecutive days where both have a number (a date where either has none is not shaded); the axis runs from zero | as the fields of a `chart` |
+  | the fields of a `chart`, with `tip` | as the fields of a `chart` | after the lines, each field their `tip` names, once, as its label and value in its own `format` (`.1f` is one decimal; any other spec shows the number as is), a field with `complement` as its complement; a field with no value on that row leaves its line out |
   | `daily` | a bar a day, from zero; a day with no count has no bar | the date, the value, and the total of the 7 rows through it |
   | `daily` with `trend` | the bars, and over them a faint line (ink at 55%, no markers) of each day's average: the mean of the days that have a count among the 7 ending that day, drawn where at least 4 of the 7 have one. It is unbroken through a day with no count and breaks only where fewer than 4 days have | as `daily`, and "7d avg" and the mean where the line is |
   | `breakdown` | each band's count, stacked from zero, so its top edge is the total (with `lines`, a line for each band on one axis, none added to another: each band's own count, solid over a translucent area (opacity 0.4) of the line's color from the baseline to the line, the newest band in front so older areas show through, its newest count named in a key above the chart, and with `bands` `release` only the newest 5 releases, the older ones added up as one line, "older"); named at the right edge with its newest count where it is thick enough | the date, each band with a count and its share (a band with none is left out), and the fields it caps (`into`) as the totals, or with none, the stack's total |
+
+  **Notes** (`notes` of a section) are drawn on each chart of lines of the
+  section (a chart of fields, a single line, a breakdown with `lines`; not a
+  stack, bars or a chart of days since a start): a dashed vertical line at the
+  note's date and its text above the plot area, never over the lines, which
+  stays clear of the plot's top. A note dated outside the range the chart
+  draws (the chosen range, or before its first reading or after the run date)
+  is not drawn. A text near the right edge is anchored by its end so that it is
+  not cut off.
+
+  **A derived field** (`minus`) is a line like any other; `Shown` fields
+  with one path (a field and the field derived from it) coexist, and a `band`
+  or `tip` that names that path means the one without `minus`.
 
   **A card** is a panel that more than one source's sections make: a section
   with `card`, `row` and `about` is a row of it, and the sections of one entry

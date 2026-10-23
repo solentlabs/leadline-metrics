@@ -309,6 +309,8 @@ folder, headed `Summary`:
   A snapshot, change or value the source marks `complement` shows 100 less
   the field, and its changes are that value's (`- Percentile rank (HA
   custom integrations): 73.4 · +0.5 in 7d`, from a `percentile` of 26.6).
+  A field with `minus` (a line of a chart that is one field less another)
+  is for trends alone: the summary leaves it out.
 
 `leadline default-reports --config P` prints the default summary as a
 `reports` setting, to paste into the config and change.

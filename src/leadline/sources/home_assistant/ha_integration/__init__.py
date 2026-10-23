@@ -13,6 +13,10 @@ decision:
   where the script writes no installs (ADR: a failure is recorded as a failure).
 - A failure never replaces a good row (docs/ARCHITECTURE_DECISIONS.md).
 - An error waiting can't fix (401, 403, 404) is critical at once.
+
+Trends charts the installs by version, and, on one chart, the feed's size and the integrations the
+integration outranks (the size less its rank), shaded between, with the rank and percentile on the hover. An
+entry's optional `notes` (`[{"date": "2026-10-22", "text": "HA changed the feed"}]`) mark dates on it.
 """
 
 from typing import TYPE_CHECKING

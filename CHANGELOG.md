@@ -5,6 +5,16 @@ follow [SemVer](https://semver.org/).
 
 ## Unreleased
 
+- `ha_integration`: one chart replaces the rank and percentile charts: the
+  feed's size and the integrations we outrank (its size less our rank) on one
+  axis from zero, shaded between, so a change in what Home Assistant's feed
+  lists moves both lines and leaves the gap. Its hover adds the night's rank
+  and percentile. Installs by version are unchanged. Behind it, generic
+  settings for a chart: `Shown.minus` (a line that is a difference of two
+  fields), `band` (the area between two lines) and `tip` (more fields on the
+  hover), and an entry's `notes` (dated remarks drawn as dashed vertical lines
+  on its line charts; `ha_integration` takes them).
+
 - A count a source reads is never negative: an answer with a negative where a
   count belongs is unusable (a failure row), not stored as it is.
 

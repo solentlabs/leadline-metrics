@@ -10,6 +10,7 @@ import json
 import re
 import string
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, NamedTuple, Sequence
@@ -520,6 +521,9 @@ BREAKDOWN_TOP = 5  # the keys a breakdown shows; the rest are added up as one
 CHART_KINDS = ("snapshot", "change")  # the kinds that may share a chart as lines with `chart`
 COMPLEMENT_KINDS = ("snapshot", "change", "value")  # the kinds a summary may show as their complement
 BANDS = ("line", "release")  # how a breakdown of versions bands them: by release line, or every exact release
+MINUS_KINDS = ("snapshot", "change", "value")  # the kinds a chart-only difference (`minus`) may be of
+NOTES_MAX = 10  # the notes an entry may carry
+NOTE_TEXT_MAX = 60  # the characters of a note's text
 COLORS = ("s1", "s2", "s3", "s4", "s5", "s6")  # the theme tokens (--s1 ...) a field may be drawn in
 VERSION = re.compile(r"\d+(\.\d+)*(-[0-9A-Za-z.-]+)?")  # a version, as a breakdown's keys may be: 1.2.0, 2.0.0-beta.1
 
@@ -539,7 +543,7 @@ class Shown(NamedTuple):
     percent read the other way round: a rank's percentile, lower better, as the share ranked below it. Only the
     COMPLEMENT_KINDS take it.
 
-    Twelve settings shape trends' charts only; the summary and the rows are the same. `charted=False` leaves a field
+    Fifteen settings shape trends' charts only; the summary and the rows are the same. `charted=False` leaves a field
     off the pages. `into` names a `breakdown` of the same summary whose counts add up to this field (or a part of
     them): the field is not charted alone, but beside that stack, which it caps. `neutral` lists a breakdown's keys
     that mean none of the others (`unknown`): each is a band of its own, kept whatever its rank.
@@ -562,6 +566,13 @@ class Shown(NamedTuple):
     (a `snapshot` or `change` that is charted alone), instead of a chart for each. `trend` (a `daily` count only)
     draws the mean of the days that have a count in each 7 as a faint line over the bars, where at least 4 of the
     7 days have one. `color` (one of COLORS) draws the field's chart in that theme token, not the default.
+    `minus` (a snapshot, change or value) makes the field a derived one, for the chart alone: its series is the value
+    at `field` less the value at `minus` (a dotted path) in each row, None where either is missing or not a number.
+    The default summary leaves such a field out. `band` (a field of the same `chart`, named by its path; of two fields
+    with one path it is the one without `minus`) shades the area between this field's line and that field's line, on
+    the dates where both have a number. `tip` (a snapshot or change) lists the paths of other fields of the section
+    whose value on each night is added to the chart's hover, as its label and value, a field with `complement` as its
+    complement and every one in its own `format`; a night where it has none leaves its line out.
     """
 
     field: str
@@ -582,6 +593,9 @@ class Shown(NamedTuple):
     chart: str = ""
     trend: bool = False
     color: str = ""
+    minus: str = ""
+    band: str = ""
+    tip: tuple[str, ...] = ()
 
 
 def complement(value: Any) -> Any:
@@ -618,6 +632,46 @@ class Card(NamedTuple):
     about: str
 
 
+class Note(NamedTuple):
+    """A dated remark on a section's line charts (an entry's `notes`): trends marks `date` with a dashed vertical line
+    and `text` above the plot, where the date falls inside the range drawn."""
+
+    date: str
+    text: str
+
+
+def notes_problems(notes: Any) -> list[str]:
+    """What is wrong with an entry's `notes` setting (`[{"date": "2026-10-22", "text": "HA changed the feed"}]`), each
+    as `notes: problem`, for a source's own `validate`; pass `entry.get("notes", [])`."""
+    if not isinstance(notes, list):
+        return ["notes: must be a list of {date, text} objects"]
+    if len(notes) > NOTES_MAX:
+        return [f"notes: at most {NOTES_MAX} notes, not {len(notes)}"]
+    found = []
+    for i, note in enumerate(notes):
+        if not isinstance(note, dict) or set(note) != {"date", "text"}:
+            found.append(f"notes[{i}]: must be an object with date and text")
+            continue
+        if not _is_date(note["date"]):
+            found.append(f"notes[{i}].date: must be a date, YYYY-MM-DD")
+        text = note["text"]
+        if not isinstance(text, str) or not text.strip() or len(text) > NOTE_TEXT_MAX:
+            found.append(f"notes[{i}].text: must be 1 to {NOTE_TEXT_MAX} characters")
+    return found
+
+
+def notes(entry: Mapping[str, Any]) -> tuple[Note, ...]:
+    """An entry's valid `notes` as Notes, for a source's `summary` (`notes=config.notes(entry)`)."""
+    return tuple(Note(note["date"], note["text"]) for note in entry.get("notes", ()))
+
+
+def _is_date(value: Any) -> bool:
+    try:
+        return isinstance(value, str) and len(value) == 10 and date.fromisoformat(value).isoformat() == value
+    except ValueError:
+        return False
+
+
 class Section(NamedTuple):
     """A section of the default summary: the rows of `file` that `where` keeps, titled by the source and the
     entry's `name`, showing each of `shown`, then `lines`, report lines of the source's own. `label` is the source's
@@ -625,7 +679,8 @@ class Section(NamedTuple):
     those of `shown`: the default summary shows none of them. `hide` are the items left out of the file's lists
     wherever the section's file is read for display: its trends and every report that reads it (`hidden`). `card`
     makes it a row of a card in trends. `part` names a second section of one entry (`stars`), after the name in the
-    title, so the entry's sections have titles of their own."""
+    title, so the entry's sections have titles of their own. `notes` are dated remarks trends marks on the section's
+    line charts (`Note`); the default summary ignores them."""
 
     source: str
     name: str | None
@@ -638,6 +693,7 @@ class Section(NamedTuple):
     hide: Sequence[Hide] = ()
     card: Card | None = None
     part: str = ""
+    notes: tuple[Note, ...] = ()
 
     @property
     def title(self) -> str:
@@ -673,7 +729,7 @@ def section_lines(section: Section) -> list[dict[str, Any]]:
     reads: dict[str, Any] = {"from": section.file, **({"where": dict(section.where)} if section.where else {})}
     heading = {**reads, "field": "date", "text": "### " + _literal(section.title)}
     blank = {**reads, "field": "date", "text": "", "as_of": ""}
-    fields = [_summary_line(reads, field) for field in section.shown]
+    fields = [_summary_line(reads, field) for field in section.shown if not field.minus]
     return [blank, heading, dict(blank), *fields, *(dict(line) for line in section.lines)]
 
 
@@ -731,6 +787,37 @@ def check_shown(shown: Shown) -> None:
     _check_by(shown)
     _check_lines(shown)
     _check_chart(shown)
+    _check_derived(shown)
+
+
+def _check_derived(shown: Shown) -> None:
+    """Raise ValueError for a `minus`, `band` or `tip` that cannot be drawn: a minus that is no text, or on a kind
+    not in MINUS_KINDS, or with `complement`, `into` or `by`; a band with no `chart` or naming its own field; a tip
+    that is not a tuple of field paths or is on a kind that is not a chart's line."""
+    _check_minus(shown)
+    if shown.band:
+        if not shown.chart:
+            raise ValueError(f"{shown.field}: band: needs chart")
+        if shown.band == shown.field and not shown.minus:
+            raise ValueError(f"{shown.field}: band: names its own field")
+    if not isinstance(shown.tip, (tuple, list)) or not all(isinstance(p, str) and p for p in shown.tip):
+        raise ValueError(f"{shown.field}: tip: must be a tuple of field paths")
+    if shown.tip and shown.kind not in CHART_KINDS:
+        raise ValueError(f"{shown.field}: tip: only a snapshot or change takes it")
+
+
+def _check_minus(shown: Shown) -> None:
+    """Raise ValueError for a `minus` that is no text, or on a kind not in MINUS_KINDS, or with `complement`, `into`
+    or `by`."""
+    if not isinstance(shown.minus, str):
+        raise ValueError(f"{shown.field}: minus: must be a non-empty string")
+    if not shown.minus:
+        return
+    if shown.kind not in MINUS_KINDS:
+        raise ValueError(f"{shown.field}: minus: only a snapshot, change or value takes it")
+    for name, used in (("complement", shown.complement), ("into", shown.into), ("by", shown.by)):
+        if used:
+            raise ValueError(f"{shown.field}: minus: not with {name}")
 
 
 def _check_lines(shown: Shown) -> None:

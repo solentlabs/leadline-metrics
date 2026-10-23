@@ -146,6 +146,17 @@ Which file an entry writes. Each file has one writer.
   entries whose defaults would collide (two `discourse_topics` forums)
   each set a `file`.
 
+### Notes
+
+**`notes`**, optional in an entry of a source that passes it on (today
+`ha_integration`): a list of at most 10 `{"date": "YYYY-MM-DD", "text": "..."}`
+objects, each a remark on a date, its text 1 to 60 characters
+(`{"date": "2026-10-22", "text": "HA changed the feed"}`). [Trends](TRENDS.md)
+marks each on the entry's line charts with a dashed vertical line at the date
+and the text above the plot, when the date is inside the range drawn. Rows and
+reports are unchanged. A bad date, a long or empty text, an unknown key in a
+note or more than 10 notes is a config error.
+
 ## Sources
 
 Every source, with what it reads. Each links to its README, which holds

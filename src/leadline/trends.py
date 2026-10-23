@@ -277,6 +277,10 @@ def _section(
     for shown in shown_all:
         if shown.into and shown.into not in stacks:
             raise ValueError(f"{shown.field}: into: names no breakdown of the summary")
+    for shown in shown_all:
+        check_shown(shown)
+    _check_partners(shown_all)
+    notes = {"notes": [{"date": note.date, "text": note.text} for note in section.notes]} if section.notes else {}
     card = {"card": section.card.name, "row": section.card.row, "about": section.card.about} if section.card else {}
     return {
         "source": section.source,
@@ -290,7 +294,35 @@ def _section(
         "dates": [row["date"] for row in rows],
         "fields": [_field(rows, shown) for shown in shown_all],
         **card,
+        **notes,
     }
+
+
+def _drawing(shown: Shown) -> dict[str, Any]:
+    """The settings of a field that only shape how the pages draw it, those it sets."""
+    settings: dict[str, Any] = {
+        "chart": shown.chart,
+        "half": shown.half,
+        "trend": shown.trend,
+        "color": shown.color,
+        "minus": shown.minus,
+        "band": shown.band,
+        "tip": list(shown.tip),
+        "format": shown.format,
+    }
+    return {key: value for key, value in settings.items() if value}
+
+
+def _check_partners(shown_all: Sequence[Shown]) -> None:
+    """Raise ValueError for a `band` that names no field of its chart, or a `tip` that names no field of the section.
+    A path names the field that has it without `minus`: a derived field shares its path with the field it is made of."""
+    plain = {shown.field: shown for shown in shown_all if not shown.minus}
+    for shown in shown_all:
+        if shown.band and (shown.band not in plain or plain[shown.band].chart != shown.chart):
+            raise ValueError(f"{shown.field}: band: names no field of the chart {shown.chart}")
+        for path in shown.tip:
+            if path not in plain:
+                raise ValueError(f"{shown.field}: tip: {path} names no field of the section")
 
 
 def _field(rows: Sequence[store.Row], shown: Shown) -> dict[str, Any]:
@@ -303,14 +335,7 @@ def _field(rows: Sequence[store.Row], shown: Shown) -> dict[str, Any]:
         "label": _title(shown.label) if stacked else shown.label,
         "kind": shown.kind,
     }
-    if shown.chart:
-        field["chart"] = shown.chart
-    if shown.half:
-        field["half"] = True
-    if shown.trend:
-        field["trend"] = True
-    if shown.color:
-        field["color"] = shown.color
+    field.update(_drawing(shown))
     if shown.into or not shown.charted:
         field["charted"] = False
     if shown.into:
@@ -323,7 +348,19 @@ def _field(rows: Sequence[store.Row], shown: Shown) -> dict[str, Any]:
         return {**field, **_breakdown(objects, shown.neutral, shown.bands, shown.lines, shown.prereleases), **drawn}
     if shown.complement:
         return {**field, "complement": True, "values": [complement(store.value(row, shown.field)) for row in rows]}
+    if shown.minus:
+        return {
+            **field,
+            "values": [_less(store.value(row, shown.field), store.value(row, shown.minus)) for row in rows],
+        }
     return {**field, "values": [store.value(row, shown.field) for row in rows]}
+
+
+def _less(whole: Any, part: Any) -> Any:
+    """`whole` less `part`; None unless both are numbers (a boolean is none)."""
+    if any(isinstance(v, bool) or not isinstance(v, (int, float)) for v in (whole, part)):
+        return None
+    return whole - part
 
 
 def _by_key(rows: Sequence[store.Row], shown: Shown) -> list[dict[str, float] | None]:
@@ -844,7 +881,8 @@ _SCRIPT = """
 (function () {
   "use strict";
   var data = JSON.parse(document.getElementById("trends-data").textContent);
-  var DAY = 864e5, HEIGHT = 170, STACK = 240, L = 44, T = 8, B = 22, LABELS = 96;
+  var DAY = 864e5, HEIGHT = 170, STACK = 240, L = 44, TOP = 8, B = 22, LABELS = 96;
+  var NOTE = 16;  // the room above a plot for its notes' text
   var TREND_DAYS = 4;  // the days of 7 that must have a count for the trend to have a mean there
   var CHAR = 6.8;  // the width of a character of the page's 11px monospace
   var end = time(data.date), days = +document.querySelector('.ranges [aria-pressed="true"]').dataset.days;
@@ -855,6 +893,12 @@ _SCRIPT = """
   function time(d) { return Date.parse(d + "T00:00:00Z"); }
   function num(v) { return typeof v === "number" && isFinite(v); }
   function show(v) { return num(v) ? exact.format(v) : String(v); }
+  // A number in its field's `format`: a fixed count of decimals (".1f") as that, any other spec as a plain number.
+  function formatted(v, spec) {
+    var m = /^\\.(\\d)f$/.exec(spec || "");
+    return m ? new Intl.NumberFormat("en", { minimumFractionDigits: +m[1], maximumFractionDigits: +m[1] }).format(v)
+      : show(v);
+  }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; }); }
   // An axis that fits its readings: the fewest of 4 grid steps, each 1, 1.5, 2, 2.5, 3, 4, 5, 6 or 8 times a power
   // of ten, that run from a multiple of the step a little below the smallest reading to a little above the largest
@@ -924,10 +968,21 @@ _SCRIPT = """
     return keys.concat([{ name: "other", values: field.other, color: "var(--s6)" }]);
   }
 
-  // The lines of a chart of several fields (`chart`): each field of the section with that name, in its own color.
+  // The field a path names: of two with one path (a field and one derived from it with `minus`), the one without.
+  function named(section, path) {
+    return section.fields.filter(function (f) { return f.field === path && !f.minus; })[0];
+  }
+
+  // The lines of a chart of several fields (`chart`): each field of the section with that name, in its color if it
+  // names a theme token, else the palette's. A field with a `band` has the values of the field it shades to, and its
+  // `tip` fields are the others its hover lists.
   function lineLayers(section, field) {
     return section.fields.filter(function (f) { return f.chart === field.chart; }).map(function (f, k) {
-      return { name: f.label, values: f.values, color: PALETTE[k % PALETTE.length] };
+      var partner = f.band ? named(section, f.band) : null;
+      return {
+        name: f.label, values: f.values, tip: f.tip || [], band: partner ? partner.values : null,
+        color: /^s[1-6]$/.test(f.color) ? "var(--" + f.color + ")" : PALETTE[k % PALETTE.length]
+      };
     });
   }
 
@@ -994,6 +1049,7 @@ _SCRIPT = """
     var stop = since && dates.length ? time(dates[dates.length - 1]) : end;
     var lined = breakdown && !!field.lines, stack = breakdown && !lined;  // a breakdown is a stack, or lines
     var H = stack ? STACK : HEIGHT;
+    var T = TOP;
     figure.querySelector(".now").textContent = caption(section, field);
     var from = days && !since ? end - (days - 1) * DAY : (dates.length ? time(dates[0]) : end);
     var tint = /^s[1-6]$/.test(field.color) ? "var(--" + field.color + ")" : null;  // a theme token, or the default
@@ -1015,8 +1071,14 @@ _SCRIPT = """
       plot.textContent = "No rows in this range.";
       return;
     }
-    var W = Math.max(plot.clientWidth, 240), R = 10, pw = W - L - R, ph = H - T - B;
     var left = Math.min(from, time(dates[present[0]])), span = Math.max(stop - left, DAY);
+    // The notes on a chart of lines that fall inside what it draws; they take room above the plot.
+    var marks = (daily || stack || since ? [] : section.notes || []).filter(function (note) {
+      var t = time(note.date);
+      return t >= left && t <= stop;
+    });
+    if (marks.length) { T = TOP + NOTE; }
+    var W = Math.max(plot.clientWidth, 240), R = 10, pw = W - L - R, ph = H - T - B;
     function xAt(t) { return L + (t - left) / span * pw; }
     function x(i) { return xAt(time(dates[i])); }
     var totals = {};
@@ -1030,8 +1092,9 @@ _SCRIPT = """
         present.forEach(function (i) { if (num(layer.values[i])) { vals.push(layer.values[i]); } });
       });
     }
-    var axis = fit(daily || stack ? Math.min(0, Math.min.apply(null, vals)) : Math.min.apply(null, vals),
-      daily || stack ? Math.max(0, Math.max.apply(null, vals)) : Math.max.apply(null, vals));
+    var zero = daily || stack || layers.some(function (layer) { return layer.band; });  // a band is read from zero
+    var axis = fit(zero ? Math.min(0, Math.min.apply(null, vals)) : Math.min.apply(null, vals),
+      zero ? Math.max(0, Math.max.apply(null, vals)) : Math.max.apply(null, vals));
     var lo = axis[0], hi = axis[1];
     function y(v) { return T + ph - (v - lo) / (hi - lo) * ph; }
     if (stack) {  // the band names at the right edge need room: as much as the longest takes, at most 40% of the width
@@ -1114,7 +1177,20 @@ _SCRIPT = """
     } else {
       // Readings on consecutive days are a solid line over a fill; a run of one, a dot. Two runs with more than a
       // day between them are joined by a dashed line over the same fill, which is not a reading. The lines of a
-      // chart each have a color and no fill.
+      // chart each have a color and no fill. A band is the area between a line and the line it names, in the chart's
+      // first color, behind the lines, over the runs of consecutive days where both have a number.
+      layers.forEach(function (layer) {
+        if (!layer.band) { return; }
+        var both = present.filter(function (i) { return num(layer.values[i]) && num(layer.band[i]); });
+        runs(both.map(function (i) { return time(dates[i]); })).forEach(function (run) {
+          if (run.length < 2) { return; }
+          var rows = run.map(function (n) { return both[n]; });
+          var upper = rows.map(function (i) { return x(i) + "," + y(layer.band[i]); });
+          var lower = rows.map(function (i) { return x(i) + "," + y(layer.values[i]); }).reverse();
+          svg.push('<polygon points="' + upper.concat(lower).join(" ") + '" fill="' + layers[0].color +
+            '" fill-opacity="0.18"/>');
+        });
+      });
       layers.forEach(function (layer) {
         var color = multi ? layer.color : (tint || "var(--accent)");
         var fill = function (points) {  // a breakdown's lines have areas, the newest in front; a chart's lines none
@@ -1153,6 +1229,13 @@ _SCRIPT = """
         dot(own[own.length - 1], 3);
       });
     }
+    marks.forEach(function (note) {  // a dashed line at the date, its text above the plot, at the line's side that fits
+      var at = xAt(time(note.date)), flip = at + 3 + note.text.length * CHAR > W - R + 4;
+      svg.push('<line class="note" x1="' + at + '" x2="' + at + '" y1="' + T + '" y2="' + (T + ph) +
+        '" stroke="var(--muted)" stroke-dasharray="2 3"/>');
+      svg.push('<text class="note" x="' + (flip ? at - 3 : at + 3) + '" y="' + (T - 5) + '" text-anchor="' +
+        (flip ? "end" : "start") + '" style="fill:var(--muted)">' + esc(note.text) + "</text>");
+    });
     svg.push('<line class="cross" y1="' + T + '" y2="' + (T + ph) + '" stroke="var(--muted)" ' +
       'stroke-dasharray="3 3" visibility="hidden"/>');
     svg.push('<rect class="hit" x="' + L + '" y="' + T + '" width="' + pw + '" height="' + ph +
@@ -1179,10 +1262,19 @@ _SCRIPT = """
           return b.name + "  " + show(b.values[i]) + share;
         }), counts.length ? counts : ["Total  " + show(totals[i])]);
       }
+      // The other fields a chart's fields list on hover, once each, those that have a number that night.
+      function tipped(paths) {
+        return paths.filter(function (path, n) { return paths.indexOf(path) === n; }).map(function (path) {
+          return named(section, path);
+        }).filter(function (f) { return f && num(f.values[i]); }).map(function (f) {
+          return f.label + "  " + formatted(f.values[i], f.format);
+        });
+      }
       if (multi) {
-        return [name(i)].concat(layers.filter(function (l) { return num(l.values[i]); }).map(function (l) {
+        var listed = layers.filter(function (l) { return num(l.values[i]); }).map(function (l) {
           return l.name + "  " + show(l.values[i]);
-        }));
+        });
+        return [name(i)].concat(listed, tipped(layers.reduce(function (a, l) { return a.concat(l.tip || []); }, [])));
       }
       var text = show(field.values[i]);
       if (daily) {
@@ -1190,7 +1282,7 @@ _SCRIPT = """
         text += " that day" + (week.length === 7 && week.every(num) ? " \\u00b7 " + show(sum(week)) + " in 7d" : "") +
           (mean === null ? "" : " \\u00b7 7d avg " + show(Math.round(mean * 10) / 10));
       }
-      return [name(i), text];
+      return [name(i), text].concat(tipped(field.tip || []));
     }
     function hover(event) {
       var r = box.getBoundingClientRect(), px = (event.clientX - r.left) * W / r.width;

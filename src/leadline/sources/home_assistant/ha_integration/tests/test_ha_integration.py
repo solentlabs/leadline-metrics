@@ -7,6 +7,7 @@ a decision are listed in scenarios.py (DIVERGENCES) and asserted here instead.
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +16,7 @@ import pytest
 import scenarios
 from scenarios.builders.common import exchange, failed
 
-from leadline import config
+from leadline import config, trends
 from leadline.context import Critical, Finding
 from leadline.http import SavedResponses
 from leadline.sources.home_assistant import ha_integration
@@ -77,6 +78,53 @@ def test_a_valid_config_has_no_problems() -> None:
 )
 def test_validate_names_each_problem_by_its_path(cfg: Any, problems: list[str]) -> None:
     assert ha_integration.validate(cfg) == problems
+
+
+def test_valid_notes_have_no_problems() -> None:
+    notes = [{"date": "2026-10-22", "text": "HA changed the feed"}, {"date": "2026-10-23", "text": "x" * 60}]
+
+    assert ha_integration.validate([{"integration": "a", "notes": notes}, {"integration": "b", "notes": []}]) == []
+
+
+@pytest.mark.parametrize(
+    ("notes", "problems"),
+    [
+        ("x", ["[0].notes: must be a list of {date, text} objects"]),
+        ([1], ["[0].notes[0]: must be an object with date and text"]),
+        ([{"date": "2026-10-22"}], ["[0].notes[0]: must be an object with date and text"]),
+        ([{"date": "2026-10-22", "text": "a", "x": 1}], ["[0].notes[0]: must be an object with date and text"]),
+        ([{"date": "2026-13-01", "text": "a"}], ["[0].notes[0].date: must be a date, YYYY-MM-DD"]),
+        ([{"date": "26-10-22", "text": "a"}], ["[0].notes[0].date: must be a date, YYYY-MM-DD"]),
+        ([{"date": 20261022, "text": "a"}], ["[0].notes[0].date: must be a date, YYYY-MM-DD"]),
+        ([{"date": "2026-10-22", "text": ""}], ["[0].notes[0].text: must be 1 to 60 characters"]),
+        ([{"date": "2026-10-22", "text": "x" * 61}], ["[0].notes[0].text: must be 1 to 60 characters"]),
+        ([{"date": "2026-10-22", "text": 5}], ["[0].notes[0].text: must be 1 to 60 characters"]),
+        ([{"date": "2026-10-22", "text": "a"}] * 11, ["[0].notes: at most 10 notes, not 11"]),
+    ],
+    ids=[
+        "not a list",
+        "a note not an object",
+        "no text",
+        "an extra key",
+        "not a calendar date",
+        "not a full date",
+        "a date not text",
+        "empty text",
+        "text too long",
+        "text not a string",
+        "too many",
+    ],
+)
+def test_validate_names_each_problem_with_notes(notes: Any, problems: list[str]) -> None:
+    assert ha_integration.validate([{"integration": "a", "notes": notes}]) == problems
+
+
+def test_its_summary_passes_the_entrys_notes_on() -> None:
+    plain, noted = ha_integration.summary(
+        [{"integration": "a"}, {"integration": "b", "notes": [{"date": "2026-10-22", "text": "HA changed the feed"}]}]
+    )
+
+    assert (plain.notes, noted.notes) == ((), (config.Note("2026-10-22", "HA changed the feed"),))
 
 
 def test_valid_bands_have_no_problems() -> None:
@@ -374,22 +422,58 @@ def test_check_reports_api_trouble_as_a_finding_never_a_crash(tmp_path: Path, re
 def test_its_installs_total_is_charted_only_as_the_top_of_the_versions_stack() -> None:
     (section,) = ha_integration.summary(CONFIG)
 
-    assert {shown.field: shown.into for shown in section.shown} == {
-        "total": "versions",
-        "versions": "",
-        "rank": "",
-        "tracked_integrations": "",
-    }
+    assert [(shown.field, shown.into) for shown in section.shown if shown.into or shown.kind == "breakdown"] == [
+        ("total", "versions"),
+        ("versions", ""),
+    ]
 
 
-def test_its_rank_is_charted_beside_the_feed_size_it_is_a_position_in() -> None:
+def test_its_chart_has_the_feed_size_and_the_integrations_it_outranks_shaded_between() -> None:
     (section,) = ha_integration.summary(CONFIG)
+    tracked, outranked = (shown for shown in section.shown if shown.chart)
 
-    assert {shown.field: shown.chart for shown in section.shown if shown.field != "versions"} == {
-        "total": "",
-        "rank": ha_integration.spec.CHART,
-        "tracked_integrations": ha_integration.spec.CHART,
-    }
+    assert (tracked.field, tracked.chart, tracked.color, tracked.tip) == (
+        "tracked_integrations",
+        ha_integration.spec.CHART,
+        "s3",
+        ("rank", "percentile"),
+    )
+    assert (outranked.field, outranked.minus, outranked.band, outranked.chart, outranked.color) == (
+        "tracked_integrations",
+        "rank",
+        "tracked_integrations",
+        ha_integration.spec.CHART,
+        "s1",
+    )
+
+
+def test_its_rank_and_percentile_are_in_the_summary_and_on_the_chart_only_as_the_hover() -> None:
+    (section,) = ha_integration.summary(CONFIG)
+    rank, percentile = (shown for shown in section.shown if shown.field in ("rank", "percentile"))
+
+    assert (rank.charted, rank.chart, percentile.charted, percentile.chart) == (False, "", False, "")
+    assert (percentile.format, percentile.complement) == (".1f", True)
+
+
+def test_its_trends_chart_draws_the_two_lines_the_band_and_a_hover_with_the_rank_from_the_golden_rows(
+    tmp_path: Path,
+) -> None:
+    (section,) = ha_integration.summary(
+        [{**CONFIG[0], "notes": [{"date": "2026-09-22", "text": "HA changed the feed"}]}]
+    )
+    (tmp_path / "hacs.jsonl").write_text(
+        '{"date": "2026-09-22", "total": 90, "rank": 3, "tracked_integrations": 60, "percentile": 5.0}\n'
+        '{"date": "2026-09-23", "total": 95, "rank": 30, "tracked_integrations": 51, "percentile": 58.8}\n',
+        encoding="utf-8",
+    )
+
+    data = trends.build(tmp_path, date(2026, 9, 23), [section], "health.jsonl")
+
+    (built,) = data["sections"]
+    by_label = {field["label"]: field for field in built["fields"]}
+    assert by_label["Integrations we outrank"]["values"] == [57, 21]
+    assert by_label["Custom integrations HA tracks"]["values"] == [60, 51]
+    assert built["notes"] == [{"date": "2026-09-22", "text": "HA changed the feed"}]
 
 
 def test_its_summary_shows_its_fields_from_the_golden_rows(tmp_path: Path) -> None:
@@ -399,6 +483,7 @@ def test_its_summary_shows_its_fields_from_the_golden_rows(tmp_path: Path) -> No
         "",
         "- Installs: 95",
         "- Installs by version: 3.12.0 55 · 3.13.1 40",
+        "- Custom integrations HA tracks: 51",
         "- Rank in the HA feed (lower is better): 30",
-        "- Integrations in the HA feed: 51",
+        "- Percentile rank (HA custom integrations): 41.2",
     ]

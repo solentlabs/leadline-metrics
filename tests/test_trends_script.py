@@ -18,7 +18,7 @@ import pytest
 from test_trends import built, seed
 
 from leadline import trends
-from leadline.config import Section, Shown
+from leadline.config import Note, Section, Shown
 
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="needs node to run the page's script")
 
@@ -57,9 +57,17 @@ else { console.log(svg); }
 """
 
 
-def run(tmp_path: Path, rows: Iterable[Mapping[str, Any]], shown: Shown | list[Shown], width: int, mode: str) -> str:
+def run(
+    tmp_path: Path,
+    rows: Iterable[Mapping[str, Any]],
+    shown: Shown | list[Shown],
+    width: int,
+    mode: str,
+    notes: tuple[Note, ...] = (),
+) -> str:
     seed(tmp_path, "a.jsonl", rows)
-    data = built(tmp_path, Section("s", None, "a.jsonl", shown if isinstance(shown, list) else [shown], "Label"))
+    section = Section("s", None, "a.jsonl", shown if isinstance(shown, list) else [shown], "Label", notes=notes)
+    data = built(tmp_path, section)
     # Bytes both ways: text mode would translate newlines and use the locale's code page on Windows.
     page = trends.page(data).encode("utf-8")
     done = subprocess.run(["node", "-e", DRIVER, "0", str(width), mode], input=page, capture_output=True, check=True)
@@ -516,3 +524,152 @@ def test_a_colour_is_a_theme_token_for_the_bars_and_the_line_and_the_default_is_
     assert "--bar" not in green
     assert 'stroke="var(--s4)"' in line
     assert 'fill="var(--s4)" fill-opacity="0.14"' in line
+
+
+# ---- derived lines, bands, tips and notes -------------------------------------------------------
+
+FEED = [
+    Shown("n", "Tracked", chart="C", color="s3", tip=("r", "p")),
+    Shown("n", "Outranked", chart="C", color="s1", minus="r", band="n"),
+    Shown("r", "Rank", charted=False),
+    Shown("p", "Percentile", charted=False, format=".1f", complement=True),
+]
+
+
+def feed(start: str = "2026-09-19", count: int = 6) -> list[dict[str, Any]]:
+    """A feed that jumps by 1500 on its 4th night, our rank with it: the gap hardly changes."""
+    rows = []
+    for k in range(count):
+        tracked = 1000 + (1500 if k >= 3 else 0)
+        rank = 222 + (330 if k >= 3 else 0)
+        row = days(start, [k], "n", [tracked])[0]
+        rows.append({**row, "r": rank, "p": round(100 * rank / tracked, 1)})
+    return rows
+
+
+def found(pattern: str, text: str, group: int = 0) -> str:
+    """The text a pattern matches in `text` (its `group`); the test fails if it matches none."""
+    match = re.search(pattern, text)
+    assert match is not None, pattern
+    return match.group(group)
+
+
+def polygons(svg: str) -> list[str]:
+    return re.findall(r'<polygon [^>]*fill-opacity="0.18"[^>]*>', svg)
+
+
+def test_a_derived_line_is_drawn_beside_the_line_it_is_made_of_in_the_colors_the_fields_name(tmp_path: Path) -> None:
+    svg = draw(tmp_path, feed(), FEED)
+
+    assert re.findall(r'<polyline [^>]*stroke="(var\(--s\d\))" stroke-width="1.8"', svg) == ["var(--s3)", "var(--s1)"]
+    assert "Outranked 1,948" in svg
+    assert "Tracked 2,500" in svg
+
+
+def test_the_area_between_two_lines_is_a_translucent_polygon_of_the_first_fields_color_behind_the_lines(
+    tmp_path: Path,
+) -> None:
+    svg = draw(tmp_path, feed(), FEED)
+
+    (area,) = polygons(svg)
+    assert 'fill="var(--s3)"' in area
+    assert svg.index(area) < svg.index("<polyline")
+    assert len(found(r'points="([^"]*)"', area, 1).split()) == 12  # 6 nights along each line
+
+
+def test_a_band_is_drawn_only_between_dates_where_both_lines_have_a_number(tmp_path: Path) -> None:
+    rows = feed()
+    rows[2]["r"] = None  # no outranked count that night: the band stops before it and starts again after
+    svg = draw(tmp_path, rows, FEED)
+
+    areas = polygons(svg)
+    assert [len(found(r'points="([^"]*)"', a, 1).split()) for a in areas] == [4, 6]
+
+
+def test_a_band_whose_partner_has_no_number_draws_nothing_and_does_not_throw(tmp_path: Path) -> None:
+    rows = [{k: v for k, v in row.items() if k != "r"} for row in feed()]
+
+    svg = draw(tmp_path, rows, FEED)
+
+    assert polygons(svg) == []
+    assert "<polyline" in svg  # the tracked line is still drawn
+
+
+def test_a_chart_with_a_band_runs_its_axis_from_zero(tmp_path: Path) -> None:
+    with_band = axis(draw(tmp_path / "a", feed(), FEED))
+    without = axis(draw(tmp_path / "b", feed(), [FEED[0]._replace(tip=()), FEED[1]._replace(band="")]))
+
+    assert with_band[0] == "0"
+    assert without[0] != "0"
+
+
+def test_the_hover_adds_the_tip_fields_each_in_its_format_a_complement_as_its_complement(tmp_path: Path) -> None:
+    lines = run(tmp_path, feed(), FEED, 700, "hover:700").split("\n")
+
+    assert lines == [
+        "2026-09-24",
+        "Tracked  2,500",
+        "Outranked  1,948",
+        "Rank  552",
+        "Percentile  77.9",
+    ]
+
+
+def test_a_night_without_a_tip_value_leaves_its_line_out(tmp_path: Path) -> None:
+    rows = feed()
+    rows[-1]["p"] = None
+
+    lines = run(tmp_path, rows, FEED, 700, "hover:700").split("\n")
+
+    assert lines == ["2026-09-24", "Tracked  2,500", "Outranked  1,948", "Rank  552"]
+
+
+NOTE = (Note("2026-09-22", "HA changed the feed"),)
+
+
+def noted(tmp_path: Path, notes: tuple[Note, ...] = NOTE, width: int = 700, rows: Any = None) -> str:
+    seed(tmp_path, "a.jsonl", rows or feed())
+    return run(tmp_path, rows or feed(), FEED, width, "svg", notes)
+
+
+def test_a_note_in_the_range_is_a_dashed_vertical_line_with_its_text_above_the_plot(tmp_path: Path) -> None:
+    svg = noted(tmp_path)
+
+    (line,) = re.findall(r'<line class="note" x1="([\d.]+)" x2="([\d.]+)" y1="([\d.]+)" y2="([\d.]+)"[^>]*>', svg)
+    assert line[0] == line[1]
+    assert float(line[2]) < float(line[3])
+    assert 'stroke-dasharray="' in found(r'<line class="note"[^>]*>', svg, 0)
+    (label,) = re.findall(r'<text class="note"[^>]* y="([\d.]+)"[^>]*>HA changed the feed</text>', svg)
+    assert float(label) < float(line[2])  # above where the plot (and its lines) start
+
+
+def test_a_note_outside_the_range_draws_nothing(tmp_path: Path) -> None:
+    svg = noted(tmp_path, (Note("2025-01-01", "Old"), Note("2027-01-01", "Future")))
+
+    assert 'class="note"' not in svg
+
+
+def test_a_note_near_the_right_edge_is_anchored_to_end_so_it_does_not_clip(tmp_path: Path) -> None:
+    near, far = noted(tmp_path / "a", (Note("2026-09-24", "HA changed the feed"),)), noted(tmp_path / "b")
+
+    assert 'text-anchor="end"' in found(r'<text class="note"[^>]*>', near, 0)
+    assert 'text-anchor="start"' in found(r'<text class="note"[^>]*>', far, 0)
+
+
+def test_a_chart_with_a_note_keeps_its_top_clear_for_the_text_and_one_without_is_unchanged(tmp_path: Path) -> None:
+    plain = draw(tmp_path / "a", feed(), FEED)
+    marked = noted(tmp_path / "b")
+
+    def top(svg: str) -> float:
+        return float(found(r'<rect class="hit" x="\d+" y="([\d.]+)"', svg, 1))
+
+    assert top(plain) == 8
+    assert top(marked) > 8
+
+
+def test_a_stack_or_bars_draw_no_note(tmp_path: Path) -> None:
+    rows = [{"date": f"2026-09-{19 + k}", "v": {"1.0": 5 + k}, "d": k + 1} for k in range(6)]
+    stack, bars = Shown("v", "V", "breakdown"), Shown("d", "D", "daily")
+
+    assert 'class="note"' not in run(tmp_path / "a", rows, stack, 700, "svg", NOTE)
+    assert 'class="note"' not in run(tmp_path / "b", rows, bars, 700, "svg", NOTE)

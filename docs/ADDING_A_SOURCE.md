@@ -358,12 +358,18 @@ def _file(entry: Any) -> str:
   `chart` to draw several fields as the lines of one chart; `compare`, the
   spans a `snapshot` or `change` is compared over; `format`, a format spec
   for its numbers; `trend`, a `daily` count's 7-day mean drawn over its
-  bars; `color`, one of the theme tokens `s1` to `s6`), and labels it
+  bars; `color`, one of the theme tokens `s1` to `s6`; `minus`, a path whose
+  value is taken from the field's, per row, for a chart-only line that the
+  default summary leaves out; `band`, the path of a field of the same `chart`
+  to shade the area to; `tip`, paths of other fields of the section that the
+  chart's hover lists), and labels it
   `LABEL`, a short readable name for what it shows, which heads its panel in
   trends (`NuGet downloads`). Pick the few numbers a user checks first
   (`Section.charts` adds fields only trends draws, which the default summary
   doesn't show); a source that reports on a platform rather
-  than the user's projects returns `[]`. Its test renders it from a golden
+  than the user's projects returns `[]`. `Section.notes` (`notes=config.notes(entry)`,
+  with `config.notes_problems` in `validate`) puts an entry's dated remarks
+  on trends' line charts. Its test renders it from a golden
   scenario's rows with `port.summary`, and `tests/test_scenarios.py` checks
   that it is a valid report config, that its sections share one label, and
   that trends charts its fields from the goldens.
