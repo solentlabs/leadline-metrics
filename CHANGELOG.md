@@ -3,12 +3,18 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions
 follow [SemVer](https://semver.org/).
 
+## Unreleased
+
+- A count a source reads is never negative: an answer with a negative where a
+  count belongs is unusable (a failure row), not stored as it is.
+
 ## 0.8.3 - 2026-10-23
 
-- `cloudflare_zone_traffic`: a mean origin response time of `-1`, which Cloudflare gives a
-  day with no origin responses, is no mean for that day and no longer makes the
-  whole per-request part unreadable. It left the newest row `partial` (visits and
-  timings null) each night while such a day was in the 28-day window.
+- `cloudflare_zone_traffic`: a mean origin response time of `-1`, which
+  Cloudflare gives a day with no origin responses, is no mean for that day
+  and no longer makes the whole per-request part unreadable. It left the
+  newest row `partial` (visits and timings null) each night while such a day
+  was in the 28-day window.
 
 - `github_traffic`: the row holds `top_paths`, the ten most viewed paths of the
   14 days (`path`, `title`, `count`, `uniques`), from one more request. GitHub

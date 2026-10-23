@@ -1061,10 +1061,10 @@ def test_a_complement_of_a_daily_count_or_a_breakdown_is_a_bug(kind: str) -> Non
 
 @pytest.mark.parametrize(
     ("value", "count"),
-    [(0, True), (7, True), (True, False), (1.0, False), ("1", False), (None, False)],
-    ids=["zero", "a number", "a boolean", "a float", "a string", "null"],
+    [(0, True), (7, True), (-1, False), (True, False), (1.0, False), ("1", False), (None, False)],
+    ids=["zero", "a number", "a negative", "a boolean", "a float", "a string", "null"],
 )
-def test_a_count_is_an_int_and_never_a_boolean(value: Any, count: bool) -> None:
+def test_a_count_is_a_whole_number_never_negative_and_never_a_boolean(value: Any, count: bool) -> None:
     assert is_count(value) is count
 
 

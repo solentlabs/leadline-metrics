@@ -417,8 +417,8 @@ BACKFILLED = "backfilled"
 
 
 def is_count(value: Any) -> bool:
-    """A count: an int, never a boolean (which Python counts as one)."""
-    return isinstance(value, int) and not isinstance(value, bool)
+    """A count: a whole number of nothing or more, never a boolean (which Python counts as one)."""
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
 def default_file(source: str, key: str | None = None) -> str:

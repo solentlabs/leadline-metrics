@@ -1463,7 +1463,7 @@ review.
 **Decision:** A field that reads a window ending at the run (a window total,
 the window's sum, the pages and referrers seen across it) is a reading of
 that run, kept on its row. A later run does not re-read it for a past day,
-even when the row is `partial` for lack of it. A lookback source that
+even when the row is `partial` for lack of it. A source that
 re-reads days overwrites a day's own counts with good data the next night;
 it does not rebuild a past run's window. A gap that no later run can fill
 stays on the row, null, and ages out of health's gap window.
