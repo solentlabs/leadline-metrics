@@ -6,6 +6,9 @@
 - **Requests:** `data.json` from analytics.home-assistant.io, once a run.
 - **Credentials:** none.
 - **Writes:** one row a day, to its default file unless the entry sets `file`.
+  Besides the totals it holds the installations by core version (`ha_versions`),
+  by operating-system board (`os_boards`) and by supervisor architecture
+  (`supervisor_arch`); each is null where the answer lacks it.
 - **Config entry:** `sources.ha_platform` is one object, not a list, and has
   nothing to set but `file`.
 

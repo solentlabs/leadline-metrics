@@ -377,7 +377,18 @@ def test_its_installs_total_is_charted_only_as_the_top_of_the_versions_stack() -
     assert {shown.field: shown.into for shown in section.shown} == {
         "total": "versions",
         "versions": "",
-        "percentile": "",
+        "rank": "",
+        "tracked_integrations": "",
+    }
+
+
+def test_its_rank_is_charted_beside_the_feed_size_it_is_a_position_in() -> None:
+    (section,) = ha_integration.summary(CONFIG)
+
+    assert {shown.field: shown.chart for shown in section.shown if shown.field != "versions"} == {
+        "total": "",
+        "rank": ha_integration.spec.CHART,
+        "tracked_integrations": ha_integration.spec.CHART,
     }
 
 
@@ -388,5 +399,6 @@ def test_its_summary_shows_its_fields_from_the_golden_rows(tmp_path: Path) -> No
         "",
         "- Installs: 95",
         "- Installs by version: 3.12.0 55 · 3.13.1 40",
-        "- Percentile rank (HA custom integrations): 41.2",
+        "- Rank in the HA feed (lower is better): 30",
+        "- Integrations in the HA feed: 51",
     ]

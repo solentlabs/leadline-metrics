@@ -290,7 +290,7 @@ skipped. Try it with Run workflow on the Actions tab.
 A line from `github-repo-stats-your-repo.jsonl`:
 
 ```json
-{"date": "2026-09-28", "repo": "your-name/your-repo", "stars": 41, "forks": 6, "watchers": 5, "open_issues": 3, "views_14d": 217, "views_unique_14d": 42, "clones_14d": 28, "clones_unique_14d": 14, "captured_at": "2026-09-28T23:30:04+01:00"}
+{"date": "2026-09-28", "repo": "your-name/your-repo", "stars": 41, "forks": 6, "watchers": 5, "open_issues": 3, "network_count": 6, "size_kb": 1024, "pushed_at": "2026-09-28T09:12:44Z", "views_14d": 217, "views_unique_14d": 42, "clones_14d": 28, "clones_unique_14d": 14, "captured_at": "2026-09-28T23:30:04+01:00"}
 ```
 
 A failed fetch writes a row with a `status` and a `reason`, and no

@@ -18,7 +18,8 @@
   token needs to read the repo: any token reads a public one; a private one
   needs read access to it.
 - **Writes:** one row a day per entry, to its default file unless the entry sets
-  `file`: the counts and the flow since the previous snapshot.
+  `file`: the counts and the flow since the previous snapshot; the issues closed
+  as not planned, and the pull requests merged, ever (the run date's row only).
 - **Config entry:** `sources.github_issues` is a list; each entry has `repo`
   (`owner/name`); `maintainer` (optional; empty or absent for none, when
   everyone who isn't a bot is community); `queue` ([see its keys](#queue)),

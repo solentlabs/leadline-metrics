@@ -12,6 +12,11 @@ the other days' rows carry page views alone. No pages writes nothing. Referrers 
 in the order their pages came back, and within a page in the answer's order (the script's order
 depends on the file system). Where leadline differs, by decision:
 
+- Its rows also hold `top_pages` after `top_referrers`, from the same answer: the ten pages with the most
+  views in the week, by each page's `count` (ties in the order the pages came back), as `{path, title,
+  count}`. Yesterday's row has them; the other days' rows hold an empty list, as they hold no referrers. A
+  page without a text path or a count is left out, a title that isn't text is null: more data is captured
+  than the script did.
 - The pages are the row's required part: a failed request is a `fetch_failed` row, and an answer it
   can't use (not JSON, not the shape it reads) a `parse_failed` row, where the script writes nothing
   (ADR: a failure is recorded as a failure). Its date is yesterday, the day the newest row should

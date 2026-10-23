@@ -8,8 +8,9 @@
   scheduled run asks pypistats; `check` asks PyPI alone.
 - **Credentials:** none.
 - **Writes:** one row a day per package, to its default file unless the config
-  sets `file`: the day's, week's and month's downloads, the latest version and
-  the required Python.
+  sets `file`: the day's, week's and month's downloads without mirrors, then the
+  same with mirrors (null where pypistats gave no with-mirrors rows), the
+  latest version and the required Python.
 - **Config entry:** `sources.pypi` is one object, not a list. `packages` is the
   PyPI names, in order (each night starts one place further along); `sleep_s` is
   the seconds between pypistats requests; `retry_wait_s` is the seconds the

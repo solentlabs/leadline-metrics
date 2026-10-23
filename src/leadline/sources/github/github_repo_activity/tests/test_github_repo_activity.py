@@ -35,6 +35,7 @@ WEEK: dict[str, Any] = {
     "forks": 40,
     "open_issues": 12,
     "codebase_bytes": 160900,
+    "languages": {"Python": 120000, "JavaScript": 40000, "Dockerfile": 900},
     "velocity_7d": {"commits": 8, "authors": 2, "fixes": 4, "fix_ratio": 50.0, "redesigns": 2},
     "issues_7d": {"total": 3, "external": 2},
     "contributors": {"total": 10, "top_contributor": "contributor-01", "top_contributor_pct": 34.2},
@@ -48,6 +49,9 @@ def row(**fields: Any) -> str:
 
 
 def partial_row(reason: str, **nulls: Any) -> str:
+    """A partial row: WEEK with `nulls` set. The languages are one part with the code size, so null together."""
+    if "codebase_bytes" in nulls and nulls["codebase_bytes"] is None:
+        nulls = {**nulls, "languages": None}
     return row(**{**WEEK, **nulls}, status="partial", reason=reason)
 
 
@@ -167,14 +171,34 @@ def test_rows_match_the_scripts(scenario: Any, tmp_path: Path) -> None:
     assert (done.status, done.ctx.critical) == (0, [])
 
 
+@pytest.mark.parametrize(
+    "scenario",
+    [s for s in scenarios.scenarios(NAME) if port.divergences(NAME).get(s.name) == gra.MORE_DATA],
+    ids=lambda s: s.name,
+)
+def test_the_rows_are_the_scripts_with_the_languages_added(scenario: Any, tmp_path: Path) -> None:
+    """More data is captured than the script did: `languages` beside the code size, which is their sum."""
+    done = port.run(source, CONFIG, scenario, tmp_path)
+
+    assert [d for d in port.golden_differences(NAME, scenario.name, tmp_path) if "languages: only in B" not in d] == []
+    written = json.loads(done.rows[FILE].splitlines()[-1])
+    assert written["languages"] == {"Python": 120000, "JavaScript": 40000, "Dockerfile": 900}
+    assert written["codebase_bytes"] == sum(written["languages"].values())
+    assert list(written)[list(written).index("codebase_bytes") + 1] == "languages"
+    assert (done.status, done.ctx.critical) == (0, [])
+
+
 def test_the_divergences_are_the_decided_ones() -> None:
     assert sorted(port.divergences(NAME)) == [
         "a_failed_commits_page_writes_nothing",
         "an_empty_list_body_writes_nothing",
         "an_issue_with_a_null_user_writes_nothing",
         "an_unparseable_list_body_writes_nothing",
+        "an_unpublished_latest_release_has_no_date",
         "failed_optional_lists_count_as_none",
         "failed_repository_writes_nothing",
+        "pages_through_the_commits",
+        "weekly_snapshot",
     ]
 
 
@@ -398,6 +422,7 @@ def test_empty_lists_read_as_the_script_reads_them(tmp_path: Path) -> None:
 
     none = {
         "codebase_bytes": 0,
+        "languages": {},
         "issues_7d": {"total": 0, "external": 0},
         "contributors": {"total": 0, "top_contributor": "", "top_contributor_pct": 0.0},
         "latest_release": {"tag": "", "date": ""},
@@ -424,12 +449,12 @@ def test_a_rate_limited_list_is_partial_and_recoverable(tmp_path: Path, code: in
 
 
 def test_a_failed_list_keeps_a_good_rows_value_and_the_row_stays_good(tmp_path: Path) -> None:
-    good = row(**{**WEEK, "stars": 899, "codebase_bytes": 1000})
+    good = row(**{**WEEK, "stars": 899, "codebase_bytes": 1000, "languages": {"Go": 1000}})
 
     done = run(tmp_path, week(**{gra.LANGUAGES_URL: failed(gra.LANGUAGES_URL)}), seed=gra.EARLIER + good)
 
-    assert done.rows == {FILE: gra.EARLIER + row(**{**WEEK, "codebase_bytes": 1000})}
-    kept = f"Kept the stored codebase_bytes for 2026-09-23 in {FILE}, which this run failed to get"
+    assert done.rows == {FILE: gra.EARLIER + row(**{**WEEK, "codebase_bytes": 1000, "languages": {"Go": 1000}})}
+    kept = f"Kept the stored codebase_bytes, languages for 2026-09-23 in {FILE}, which this run failed to get"
     assert kept in done.log
 
 

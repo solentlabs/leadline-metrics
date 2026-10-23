@@ -7,6 +7,7 @@ writes nothing are asserted here, on those scenarios without that row.
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
@@ -106,15 +107,35 @@ def test_rows_match_the_scripts(scenario: Any, tmp_path: Path) -> None:
     assert done.status == (1 if done.ctx.critical else 0)
 
 
-def test_there_are_no_divergences() -> None:
-    assert port.divergences(NAME) == {}
+def test_the_divergences_are_the_decided_ones() -> None:
+    assert sorted(port.divergences(NAME)) == ["ignores_clones_days_views_lack"]
+
+
+def test_a_day_with_clones_and_no_views_is_a_row_with_zero_views(tmp_path: Path) -> None:
+    """The script wrote rows for the views' days only, so a day GitHub counted clones for, and no views, was lost."""
+    done = port.run(source, CONFIG, port.scenario(NAME, "ignores_clones_days_views_lack"), tmp_path)
+
+    rows = [json.loads(line) for line in done.rows[FILE].splitlines()]
+    by_day = {row["date"]: row for row in rows}
+    clones_only = [day for day in gd.CLONES_BY_DAY if day in gd.WINDOW[7:9] and day not in gd.WINDOW[9:12]]
+    assert len(clones_only) == 2
+    for day in clones_only:
+        assert by_day[day.isoformat()] == {
+            "date": day.isoformat(),
+            "views": 0,
+            "views_unique": 0,
+            "clones": gd.CLONES_BY_DAY[day][0],
+            "clones_unique": gd.CLONES_BY_DAY[day][1],
+            "captured_at": by_day[day.isoformat()]["captured_at"],
+        }
+    assert sorted(by_day) == [d.isoformat() for d in gd.WINDOW[7:12] if d.isoformat() < "2026-09-23"]
 
 
 def test_each_backfilled_day_is_logged(tmp_path: Path) -> None:
     done = port.run(source, CONFIG, port.scenario(NAME, "ignores_clones_days_views_lack"), tmp_path)
 
     backfilled = [line for line in done.log if line.startswith("GitHub daily traffic backfill: ")]
-    assert backfilled == [f"GitHub daily traffic backfill: 2026-09-{day}" for day in (19, 20, 21)]
+    assert backfilled == [f"GitHub daily traffic backfill: 2026-09-{day}" for day in (17, 18, 19, 20, 21)]
 
 
 def test_a_current_file_is_logged_as_current(tmp_path: Path) -> None:
@@ -326,7 +347,10 @@ def test_a_rate_limit_is_recoverable_and_not_retried(tmp_path: Path, code: int, 
 def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
     other = f"{GITHUB_API}/repos/a/other/traffic"
     day = {gd.WINDOW[-2]: (4, 2)}
-    answers = [exchange(f"{other}/views", github_traffic("views", day)), exchange(f"{other}/clones", CLONES)]
+    answers = [
+        exchange(f"{other}/views", github_traffic("views", day)),
+        exchange(f"{other}/clones", github_traffic("clones", day)),
+    ]
     scenario = without_yesterday("failed_views_write_nothing", responses=[failed(gd.VIEWS), *answers])
 
     done = port.run(source, [*CONFIG, {"repo": "a/other"}], scenario, tmp_path)

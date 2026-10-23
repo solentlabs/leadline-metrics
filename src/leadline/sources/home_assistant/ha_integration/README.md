@@ -17,6 +17,13 @@
 {"integration": "my_integration", "bands": "release"}
 ```
 
+## Reading the rank
+
+The rank is a position in the feed as it stands that night, and Home Assistant
+changes what the feed lists. The summary and trends therefore show the rank
+beside the number of integrations tracked, as one chart; a rank that moves
+while the installs do not is read against that count.
+
 ## `bands`
 
 `bands`, optional: how the trends page bands the installs by version. A

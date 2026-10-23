@@ -4,14 +4,19 @@ Each entry names a forum (`base_url`) and its `topics`, each an id and a label. 
 from `<base_url>/t/<id>.json`, one request each, as the script's collect_forum reads its threads, and
 written as one row for the run's date, keyed by the date and the topic's id (`store.SECOND_KEY`):
 its views, its replies (its posts but the first), its likes and the day of its last post (empty when
-it has none). A view, like or post count the answer lacks is a `parse_failed` row naming it, where
+it has none), then what the answer also tells, all optional and null where it lacks them: `participants`
+(`participant_count`), `closed`, `solved` (true when `has_accepted_answer` or `accepted_answer` is truthy,
+null when neither key is there) and `tags` (names, whether the answer gives them as text or as objects with
+a `name`; more data is captured than the script did). A view,
+like or post count the answer lacks is a `parse_failed` row naming it, where
 the script reads it as 0 (ADR: a failure is recorded as a failure). A row whose `topic_id` isn't a
 number (a string, from a hand-edited file) is a line without a usable key: it is kept, as the script
 keeps it, and never replaced (ADR: store never fails on a line it can't use).
 
 After a topic's good row, it writes a row for each day from the topic's creation to the day before
 the topic's first row a night wrote (store.rebuild_days): its replies and last post by the end of that
-day, from each post's creation, and null for its views and likes then (store.fill; ADR: past values a
+day, from each post's creation, and null for its views and likes then, and without the optional fields
+above, which only a night's own answer tells (store.fill; ADR: past values a
 source can rebuild are filled, never changed). The posts the topic's answer leaves out are asked for by
 id, POSTS_CHUNK at a time, only when a day lacks its row; only when the topic's stream holds every post
 it counts. Otherwise the log says why nothing is rebuilt. Where leadline differs, by decision:

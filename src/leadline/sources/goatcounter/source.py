@@ -24,6 +24,7 @@ WINDOW_DAYS = 7  # the week before the run: a single day's window comes back emp
 PAGE_LIMIT = 200  # well past the site's pages: the API's default of 20 would miss some
 REFERRER_PAGES = 10  # the pages whose referrers are fetched
 TOP_REFERRERS = 5
+TOP_PAGES = 10
 _DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
 # A 404 collection gets is recoverable: GoatCounter answers one for a readable site at times (ADR: one
 # failed night recovers; consecutive failures are critical). check() asks without it.
@@ -31,13 +32,15 @@ RECOVERABLE = frozenset({404})
 
 
 class Page(NamedTuple):
-    """A page of `stats/hits`: its id, as the script reads it (None for none), and its stats' days and counts.
+    """A page of `stats/hits`: its id, as the script reads it (None for none), its stats' days and counts,
+    and its `{path, title, count}` for the top pages (None where the answer lacks a usable path or count).
 
     A stat without a day has the day "".
     """
 
     id: str | None
     stats: list[tuple[str, int]]
+    listing: dict[str, Any] | None = None
 
 
 def collect(ctx: Context, cfg: Any) -> None:
@@ -170,8 +173,23 @@ def _pages(answer: Any) -> list[Page]:
                 raise unexpected("hits")
             stats.append((day, daily))
         path_id = hit.get("id", hit.get("path_id"))
-        pages.append(Page(str(path_id) if path_id else None, stats))
+        pages.append(Page(str(path_id) if path_id else None, stats, _listing(hit)))
     return pages
+
+
+def _listing(hit: Mapping[str, Any]) -> dict[str, Any] | None:
+    """A page's path, title (None unless text) and count over the window, for the top pages; None where the
+    path isn't text or the count isn't one: that page is left out, never a failure."""
+    path, title, count = hit.get("path"), hit.get("title"), hit.get("count")
+    if not (isinstance(path, str) and is_count(count)):
+        return None
+    return {"path": path, "title": title if isinstance(title, str) else None, "count": count}
+
+
+def _top_pages(pages: list[Page]) -> list[dict[str, Any]]:
+    """The ten pages with the most views over the window, most first; ties keep the order they came back in."""
+    listed = [page.listing for page in pages if page.listing is not None]
+    return sorted(listed, key=lambda page: -page["count"])[:TOP_PAGES]
 
 
 def _refs(kind: str, answer: Any) -> list[tuple[str, int]]:
@@ -242,11 +260,13 @@ def _write(
             "date": day,
             "pageviews": sum(daily for stat_day, daily in stats if stat_day == day),
             "top_referrers": [],
+            "top_pages": [],
         }
         if day != yesterday:
             store.write_good(path, row, ctx, spec.NAME)
             continue
         row["top_referrers"] = referrers
+        row["top_pages"] = _top_pages(pages)
         row["window_sum"] = sum(daily for stat_day, daily in stats if stat_day <= yesterday)
         row["window_total"] = total
         row["paths_returned"] = len(pages)

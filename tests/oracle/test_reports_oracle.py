@@ -8,10 +8,12 @@ the oracle harness; leadline's engine then runs the config on a copy of what the
 same rows, the health row included.
 
 The config has one file of lines blocks, the lines file: the counterpart of the script's SCRIPT_LINES, whose name
-may differ. Both sides start from the real report files with any leadline marker lines taken out, so the test holds
-whether or not they carry markers; the script's side holds the lines file under the script's name. Each report
-file is prepared as its first leadline write would find it: a file of table blocks is that text with markers put
-around the tables the blocks name (found by their header line), and the lines file starts empty, since the script
+may differ. Where it has several, the lines file is the one with the `critical` block, and the others are
+leadline's own reports, which the script has nothing to match and the test leaves alone. Both sides start from
+the real report files with any leadline marker lines taken out, so the test holds whether or not they carry
+markers; the script's side holds the lines file under the script's name. Each report file is prepared as its
+first leadline write would find it: a file of table blocks is that text with markers put around the tables the
+blocks name (found by their header line), and the lines file starts empty, since the script
 rewrites it whole. Then:
 
 - a file of table blocks, once its marker lines are taken out, is the script's file, byte for byte: the tables
@@ -123,9 +125,13 @@ def test_the_reports_config_gives_the_scripts_reports(tmp_path: Path) -> None:
     files = _by_file(_config())
     cfg = [entry for entries in files.values() for entry in entries]
     lines_files = [file for file, entries in files.items() if not all("table" in entry for entry in entries)]
+    if len(lines_files) > 1:  # the others are leadline's own reports, which the script has no counterpart of
+        lines_files = [file for file in lines_files if any(entry["block"] == "critical" for entry in files[file])]
     assert len(lines_files) == 1, f"the config has {len(lines_files)} files of lines blocks, the script one"
     lines_file = lines_files[0]
     script_name = {lines_file: SCRIPT_LINES}
+    own = [file for file in files if file != lines_file and not all("table" in entry for entry in files[file])]
+    files = {file: entries for file, entries in files.items() if file not in own}
 
     case = tmp_path / "case"
     shutil.copytree(real, case / "seed", ignore=lambda _, names: [n for n in names if not n.endswith(".jsonl")])

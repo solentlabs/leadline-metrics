@@ -4,7 +4,8 @@ It reads each package as the script's collect_pypi does, in the night's order (t
 one place further along each night, on the date's ordinal, so no package is always last), `sleep_s`
 apart: pypistats' daily history (`overall`, two attempts `sleep_s` apart), then PyPI's metadata. The
 run's date gets the day's, week's and month's downloads (without mirrors; a day with no row counts as
-none) and the latest version and required Python, or, while pypistats hasn't published the date, a
+none), the same with mirrors from the answer's `with_mirrors` rows (null for all three where it has none),
+and the latest version and required Python, or, while pypistats hasn't published the date, a
 `fetch_failed` row with `http_code` "200". Then each earlier day since the file's first row that has
 no row, or a row that isn't good, is backfilled from the history, marked `backfilled`, from where a
 month's window is whole in the history (a package first uploaded within it has its whole life there;
@@ -13,6 +14,9 @@ a `fetch_failed` row naming the last status. The retry pass (`retry`, after ever
 collected) waits `retry_wait_s`, then asks again for each package whose row for the run's date is
 that failure. Where leadline differs, by decision:
 
+- It keeps the downloads with mirrors, `downloads_with_mirrors_last_day`, `_last_week` and `_last_month`, which
+  follow the month's downloads, from the same answer, no further request: more data is captured than the
+  script did. A `with_mirrors` row it can't use is left out, never a failure.
 - An error waiting can't fix (401, 403 or 404 that isn't a rate limit) is never retried, in the
   pass or the retry pass, and is critical at once (ADR: one failed night recovers; the script's
   retry pass asks again after a 404).

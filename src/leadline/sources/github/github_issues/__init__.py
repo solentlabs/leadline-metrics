@@ -3,12 +3,19 @@
 Each entry reads the repository, then every page of its open issues and of all its issues (asked for
 by number while the answer's Link names a next page), as the script's collect_github_issues does, and
 writes one row for the run's date: the repo's stars, forks and watchers; its open issues and pull
-requests and the cumulative totals opened and closed, with the flow since the previous snapshot; who
-opened them (the entry's maintainer, if any, the community and bots: a `[bot]` login, `dependabot` or
-`github-actions`); the open issues' ages from the run's clock, comments, the five most commented and
+requests and the cumulative totals opened and closed, with the flow since the previous snapshot, and
+`closed_not_planned_total`, the issues closed as not planned; who opened them (the entry's maintainer,
+if any, the community and bots: a `[bot]` login, `dependabot` or `github-actions`); the open issues' ages from
+the run's clock, comments, the five most commented and
 those with five or more; each label's counts; and triage. The previous snapshot is the last row in the
 file dated before the run, a row with no date counting as a day back; where it has no totals there is
 no flow, as in the script.
+
+The run date's row also holds two totals the script doesn't keep (more data is captured than the script
+did), counted from the same lists: `issues.closed_not_planned_total`, the closed issues, pull requests
+aside, whose `state_reason` is `not_planned`, beside `closed_total`, and `contribution.prs_merged_total`,
+the pull requests whose `merged_at` is set, beside `prs_total`. Only the run date's row has them: the fill
+and the rebuild of past days write the totals they always did.
 
 Before it reads the previous snapshot, it fills the totals opened and closed into each past good row
 that lacks them, counted as the run counts its own, as of the end of the row's day, from every issue's

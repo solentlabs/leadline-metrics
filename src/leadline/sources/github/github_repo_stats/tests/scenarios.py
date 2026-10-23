@@ -11,7 +11,9 @@ tests/test_github_repo_stats.py asserts leadline's side: leadline reads the JSON
 or ''' in the repository writes the real row; a failed or unusable repository writes a failure
 row (`fetch_failed` or `parse_failed`) for the run's date (ADR: a failure is recorded as a failure);
 and failed or unusable views or clones leave those fields null in a partial row, never 0 (ADR: a
-partly failed row keeps its good parts).
+partly failed row keeps its good parts). The rows also hold the repository's `network_count`, `size_kb` and
+`pushed_at`, which the script drops: the scenario that writes a row is in DIVERGENCES for them (more data is
+captured than the script did).
 """
 
 from __future__ import annotations
@@ -38,8 +40,12 @@ TRAFFIC = [
 # leadline's config for these scenarios: the script's repo, writing the script's file.
 LEADLINE_CONFIG = [{"repo": REPO, "file": FILE}]
 
+MORE_DATA = "more data is captured than the script did"
+
 # The scenarios where leadline's rows differ from the script's by a decision, and the decision.
 DIVERGENCES = {
+    # leadline also keeps the repository's network_count, size_kb and pushed_at, which the script's rows lack.
+    "repository_and_its_traffic": MORE_DATA,
     "failed_traffic_counts_as_zero": "ADR: a partly failed row keeps its good parts",
     "unparseable_traffic_writes_nothing": "ADR: a partly failed row keeps its good parts",
     "failed_repository_writes_nothing": "ADR: a failure is recorded as a failure",

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from leadline import store
+from leadline.config import is_count
 from leadline.context import Context, Finding
 from leadline.http import HttpError, UnusableError, counts, read_json, unexpected
 from leadline.sources.discourse_topics import spec
@@ -84,6 +85,27 @@ def _counted(answer: Any) -> dict[str, Any]:
     }
 
 
+def _extras(answer: dict[str, Any]) -> dict[str, Any]:
+    """What a night's answer also tells, all optional (null where the answer lacks it or gives it as another
+    type): the participants, whether the topic is closed, whether it has an accepted answer, and its tags."""
+    participants, closed, tags = answer.get("participant_count"), answer.get("closed"), answer.get("tags")
+    solved = None
+    if "has_accepted_answer" in answer or "accepted_answer" in answer:
+        solved = bool(answer.get("has_accepted_answer") or answer.get("accepted_answer"))
+    return {
+        "participants": participants if is_count(participants) else None,
+        "closed": closed if isinstance(closed, bool) else None,
+        "solved": solved,
+        "tags": [_tag(tag) for tag in tags if _tag(tag)] if isinstance(tags, list) else None,
+    }
+
+
+def _tag(tag: Any) -> str:
+    """A tag's name, whether the answer gives the tag as text or as an object with a `name`; "" for neither."""
+    name = tag.get("name") if isinstance(tag, dict) else tag
+    return name if isinstance(name, str) else ""
+
+
 def _collect(ctx: Context, base_url: str, topic: dict[str, Any], path: Path) -> None:
     topic_id, label = topic["id"], topic["label"]
     row = {"date": ctx.date.isoformat(), "topic_id": topic_id, "label": label}
@@ -91,6 +113,7 @@ def _collect(ctx: Context, base_url: str, topic: dict[str, Any], path: Path) -> 
     try:
         answer = _topic(ctx, base_url, topic_id)
         row.update(_counted(answer))
+        row.update(_extras(answer))
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch forum topic %s: HTTP %s", topic_id, e.http_code)
         reason = f"{base_url}: HTTP {e.http_code} for topic {topic_id} ({label})"

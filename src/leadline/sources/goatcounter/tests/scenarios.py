@@ -17,7 +17,9 @@ by the order the pages came back in (test_goatcounter.py).
 
 leadline differs by decision on the scenarios in DIVERGENCES, asserted in test_goatcounter.py:
 a failed or unusable pages answer is a failure row for yesterday, a failed or unusable total or
-referrers answer is null in a partial row, and a seed line that isn't an object is kept.
+referrers answer is null in a partial row, and a seed line that isn't an object is kept. The rows also
+hold `top_pages`, which the script drops: the scenarios that write a row are in DIVERGENCES for it (more data
+is captured than the script did).
 """
 
 from __future__ import annotations
@@ -188,9 +190,18 @@ SCENARIOS = [
     Scenario("skips_without_a_token", CALLS, env={}, config=CONFIG),
 ]
 
+MORE_DATA = "more data is captured than the script did"
 FAILURE = "ADR: a failure is recorded as a failure"
 PARTIAL = "ADR: a partly failed row keeps its good parts"
 DIVERGENCES = {
+    # leadline also keeps the top pages of the week on yesterday's row (an empty list on the other days'), which
+    # the script's rows lack.
+    "week_backfills_missing_days_and_refreshes_yesterday": MORE_DATA,
+    "retries_the_pages_request": MORE_DATA,
+    "no_stat_for_yesterday_backfills_only_earlier_days": MORE_DATA,
+    "pages_without_an_id_have_no_referrers": MORE_DATA,
+    "an_undated_stat_counts_only_in_the_window_sum": MORE_DATA,
+    "bad_seed_lines_are_kept_and_their_days_backfilled": MORE_DATA,
     "three_failed_attempts_write_nothing": FAILURE,
     "three_empty_answers_write_nothing": FAILURE,
     "unparseable_hits_write_nothing": FAILURE,

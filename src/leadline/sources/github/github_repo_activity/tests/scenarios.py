@@ -16,7 +16,9 @@ tests/test_github_repo_activity.py asserts leadline's side: a failed repository 
 writes a failure row (`fetch_failed`) for the run's date (ADR: a failure is recorded as a failure);
 and an optional list that fails, answers with an empty or unparseable body, or holds an item it
 can't read (an issue whose user is null) is null in a partial row naming what failed, never none
-and never a lost row (ADR: a partly failed row keeps its good parts).
+and never a lost row (ADR: a partly failed row keeps its good parts). The rows also hold `languages`, the
+language map beside the code size, which the script drops: the scenarios that write a row are in DIVERGENCES
+for it (more data is captured than the script did).
 
 The scenarios name neither the collector nor its file as the script does: CALLS finds the collector
 by its shape (the one whose rows carry `velocity_7d`), and its row file, named after the collector
@@ -64,8 +66,14 @@ REPOSITORY = exchange(REPO_URL, github_repo(PROJECT, stars=900, forks=40, open_i
 # leadline's config for these scenarios: the script's repo and label, whose default file is FILE.
 LEADLINE_CONFIG = [{"repo": PROJECT, "label": LABEL}]
 
+MORE_DATA = "more data is captured than the script did"
+
 # The scenarios where leadline's rows differ from the script's by a decision, and the decision.
 DIVERGENCES = {
+    # leadline also keeps the language map, `languages`, beside the code size, which the script's rows lack.
+    "weekly_snapshot": MORE_DATA,
+    "pages_through_the_commits": MORE_DATA,
+    "an_unpublished_latest_release_has_no_date": MORE_DATA,
     "an_issue_with_a_null_user_writes_nothing": "ADR: a partly failed row keeps its good parts",
     "an_empty_list_body_writes_nothing": "ADR: a partly failed row keeps its good parts",
     "an_unparseable_list_body_writes_nothing": "ADR: a partly failed row keeps its good parts",

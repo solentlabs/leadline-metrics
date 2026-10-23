@@ -570,6 +570,30 @@ def test_counts_show_nothing_where_the_newest_row_has_no_object(tmp_path: Path) 
     assert rendered(tmp_path, line) == []
 
 
+def test_counts_over_days_add_up_the_objects_of_the_rows_in_that_many_days_to_the_newest(tmp_path: Path) -> None:
+    rows = [{"date": "2026-09-10", "types": {"os": 100}}, *COUNTS, {"date": "2026-09-25", "types": {"core": 5, "x": 1}}]
+    seed(tmp_path / "out", "t.jsonl", rows)
+    line = {"label": "Types", "from": "t.jsonl", "field": "types", "aggregate": "counts", "days": 3}
+
+    assert rendered(tmp_path, line) == ["- Types: container 50 · os 31 · core 25 · x 1 · none 0"]
+
+
+def test_counts_over_one_day_are_the_newest_rows_alone(tmp_path: Path) -> None:
+    seed(tmp_path / "out", "t.jsonl", COUNTS)
+    line = {"label": "Types", "from": "t.jsonl", "field": "types", "aggregate": "counts", "days": 1}
+
+    assert rendered(tmp_path, line) == ["- Types: container 50 · os 30 · core 20 · none 0"]
+
+
+def test_counts_over_days_skip_a_row_without_an_object_and_show_nothing_where_none_has_one(tmp_path: Path) -> None:
+    seed(tmp_path / "out", "t.jsonl", [*COUNTS, {"date": "2026-09-25", "types": 7}])
+    line = {"label": "Types", "from": "t.jsonl", "field": "types", "aggregate": "counts", "days": 7}
+    assert rendered(tmp_path, line) == ["- Types: container 50 · os 31 · core 20 · none 0"]
+
+    seed(tmp_path / "none", "t.jsonl", [{"date": "2026-09-25", "types": 7}])
+    assert rendered(tmp_path / "none", line) == []
+
+
 # ---- Templates and parts -------------------------------------------------------------------------
 
 
@@ -1048,6 +1072,11 @@ PROBLEMS = {
     "bad_aggregate": (
         [entry(lines=[{**LINE, "aggregate": "average"}])],
         "[0].lines[0].aggregate: must be one of peak, sum, versions, items, latest_release, release_downloads, counts",
+    ),
+    "stray_days": ([entry(lines=[{**LINE, "days": 2}])], "[0].lines[0].days: only counts takes it"),
+    "bad_days": (
+        [entry(lines=[{**LINE, "aggregate": "counts", "days": 0}])],
+        "[0].lines[0].days: must be a whole number, 1 or more",
     ),
     "sum_count": ([entry(lines=[{**LINE, "aggregate": "sum"}])], "[0].lines[0].count: sum needs it"),
     "items_item": ([entry(lines=[{**LINE, "aggregate": "items"}])], "[0].lines[0].item: items needs it"),

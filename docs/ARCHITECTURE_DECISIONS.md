@@ -1457,3 +1457,35 @@ unchecked; the shape test names each such place. An API the script never
 calls isn't in the capture at all, so its builders are unchecked until a
 capture holds its responses; and reviewed rows are only as right as the
 review.
+
+## A run's window fields are readings of that run, never re-read
+
+**Decision:** A field that reads a window ending at the run (a window total,
+the window's sum, the pages and referrers seen across it) is a reading of
+that run, kept on its row. A later run does not re-read it for a past day,
+even when the row is `partial` for lack of it. A lookback source that
+re-reads days overwrites a day's own counts with good data the next night;
+it does not rebuild a past run's window. A gap that no later run can fill
+stays on the row, null, and ages out of health's gap window.
+
+**Rationale:** A window read later is not the reading the run would have
+made: it covers the run date's full day, not the part that had passed, so
+the figure no longer matches its neighbors. A rebuilt value would look like
+the run's reading and be a different measure. Healing it would also cost a
+request for each partial row, for a figure that does not add to the series.
+A run still writes what it got and never erases what it did not
+(a failure is recorded as a failure).
+
+## Fields a plan withholds are not captured
+
+**Decision:** A source captures only the fields the account's plan lets it
+read. When the API refuses a field to the account (the answer names the zone
+and the field), the field is left out of the source, not requested every night
+to fail. Another source that already records the same fact stands in for it.
+
+**Rationale:** Cloudflare's zone analytics withholds some dimensions,
+including the referrer, by plan. A dimension in the nightly query that the
+account cannot read fails its part of the query every night, and the row is
+`partial` for good. Page views already record referrers through
+`cloudflare_web`, so the data is not lost. If the plan changes, adding the
+dimension is one entry in the source's list of dimensions.

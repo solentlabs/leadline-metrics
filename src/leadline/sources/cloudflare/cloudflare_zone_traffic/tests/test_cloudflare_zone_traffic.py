@@ -291,8 +291,8 @@ def test_a_list_the_token_may_not_read_is_critical_once_and_leaves_the_row_parti
 @pytest.mark.parametrize(
     ("dimension", "field", "reason"),
     [
-        ("clientRequestPath", "paths", "paths answer was unreadable"),
-        ("userAgent", "user_agents", "user_agents answer was unreadable"),
+        ("clientRequestPath", "paths", "paths answer was unreadable: groups is not a list of objects"),
+        ("userAgent", "user_agents", "user_agents answer was unreadable: groups is not a list of objects"),
     ],
 )
 def test_a_list_answer_that_cannot_be_read_is_a_part_failure_not_a_crash(
@@ -314,12 +314,27 @@ def test_a_list_answer_that_cannot_be_read_is_a_part_failure_not_a_crash(
     assert (done.status, last["status"], last[field], last["reason"]) == (0, "partial", None, reason)
 
 
-def test_unreadable_totals_leave_visits_and_the_timings_null(tmp_path: Path) -> None:
+DAY = {"dimensions": {"date": "2026-10-01"}}
+
+
+@pytest.mark.parametrize(
+    ("group", "why"),
+    [
+        (5, "groups is not a list of objects"),
+        ({}, "group date is not YYYY-MM-DD"),
+        ({"dimensions": {"date": "yesterday"}}, "group date is not YYYY-MM-DD"),
+        ({**DAY, "sum": {"visits": -1}}, "visits is not a non-negative number"),
+        ({**DAY, "avg": [1]}, "avg is not an object"),
+        ({**DAY, "quantiles": {"originResponseDurationMsP95": "slow"}}, "response time is not a non-negative number"),
+    ],
+    ids=["group", "no date", "bad date", "visits", "avg", "quantile"],
+)
+def test_unreadable_totals_leave_visits_and_the_timings_null_and_say_why(tmp_path: Path, group: Any, why: str) -> None:
     base = port.scenario(NAME, "a_quiet_zone_writes_zeros_for_yesterday")
     query = spec.totals_query(cz.ZONE, cz.WINDOW_START, cz.YESTERDAY)
     broken = exchange(
         CLOUDFLARE_GRAPHQL,
-        {"data": {"viewer": {"zones": [{"groups": [5]}]}}, "errors": None},
+        {"data": {"viewer": {"zones": [{"groups": [group]}]}}, "errors": None},
         method="POST",
         sent=cz.sent(query),
     )
@@ -329,7 +344,36 @@ def test_unreadable_totals_leave_visits_and_the_timings_null(tmp_path: Path) -> 
 
     last = read(tmp_path)[-1]
     assert (last["status"], last["visits"], last["origin_response_ms"]) == ("partial", None, None)
-    assert last["reason"] == "totals answer was unreadable"
+    assert last["reason"] == f"totals answer was unreadable: {why}"
+
+
+def test_a_mean_response_time_of_minus_one_is_no_reading_not_an_unreadable_answer(tmp_path: Path) -> None:
+    """Cloudflare gives -1 as the mean for a day with no origin responses: that day has no mean, and the rest reads."""
+    base = port.scenario(NAME, "a_quiet_zone_writes_zeros_for_yesterday")
+    query = spec.totals_query(cz.ZONE, cz.WINDOW_START, cz.YESTERDAY)
+    group = {
+        "dimensions": {"date": cz.YESTERDAY.isoformat()},
+        "sum": {"visits": 4},
+        "avg": {"originResponseDurationMs": -1},
+        "quantiles": {
+            "originResponseDurationMsP50": 2,
+            "originResponseDurationMsP95": 3,
+            "originResponseDurationMsP99": 4,
+        },
+    }
+    answer = exchange(
+        CLOUDFLARE_GRAPHQL,
+        {"data": {"viewer": {"zones": [{"groups": [group]}]}}, "errors": None},
+        method="POST",
+        sent=cz.sent(query),
+    )
+    kept = [r for r in base.responses if r["request"]["body"] != cz.sent(query)]
+
+    port.run(cloudflare_zone_traffic, CONFIG, replace(base, responses=[*kept, answer]), tmp_path)
+
+    last = read(tmp_path)[-1]
+    assert (last["status"], last["visits"]) == ("ok", 4)
+    assert last["origin_response_ms"] == {"p50": 2, "p95": 3, "p99": 4}
 
 
 # --- check ---

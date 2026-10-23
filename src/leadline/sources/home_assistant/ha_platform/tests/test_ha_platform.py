@@ -6,6 +6,7 @@ a decision are listed in scenarios.py (DIVERGENCES) and asserted here instead.
 
 from __future__ import annotations
 
+import json
 import random
 from dataclasses import replace
 from pathlib import Path
@@ -96,11 +97,98 @@ def test_rows_match_the_scripts(scenario: Any, tmp_path: Path) -> None:
     assert (done.status, done.ctx.critical) == (0, [])
 
 
+ADDED = ("ha_versions", "os_boards", "supervisor_arch")  # not in the script's rows
+
+
+def without_added(folder: Path) -> None:
+    """Take the fields leadline adds (more data is captured than the script did) out of the rows in `folder`, so
+    the script's own can be compared; each is asserted on its own below."""
+    for file in folder.glob("*.jsonl"):
+        lines = []
+        for line in file.read_text(encoding="utf-8").splitlines():
+            row = json.loads(line)
+            lines.append(json.dumps({k: v for k, v in row.items() if k not in ADDED}) + "\n")
+        file.write_text("".join(lines), encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    [s for s in scenarios.scenarios(NAME) if port.divergences(NAME).get(s.name) == hp.MORE_DATA],
+    ids=lambda s: s.name,
+)
+def test_rows_are_the_scripts_with_the_added_fields(scenario: Any, tmp_path: Path) -> None:
+    """More data is captured than the script did: but for the three fields, the rows are the script's."""
+    done = port.run(ha_platform, CONFIG, scenario, tmp_path)
+
+    assert all(key in json.loads(done.rows[FILE].splitlines()[-1]) for key in ADDED)
+    without_added(tmp_path)
+    assert port.golden_differences(NAME, scenario.name, tmp_path) == []
+    assert (done.status, done.ctx.critical) == (0, [])
+
+
+CURRENT = {
+    "active_installations": 100,
+    "reports_integrations": 40,
+    "versions": {"2026.8.3": 30, "2026.9.1": 70},
+    "operating_system": {"boards": {"ova": 20, "rpi4-64": 10}},
+    "supervisor": {"arch": {"amd64": 50, "aarch64": 25}},
+}
+
+
+def run_body(tmp_path: Path, body: Any) -> dict[str, Any]:
+    scenario = replace(
+        port.scenario(NAME, "totals_and_the_top_fifteen_countries"), responses=[exchange(HA_PLATFORM_URL, body)]
+    )
+    done = port.run(ha_platform, CONFIG, scenario, tmp_path)
+    row: dict[str, Any] = json.loads(done.rows[FILE].splitlines()[-1])
+    return row
+
+
+def test_the_row_has_the_core_versions_the_boards_and_the_supervisor_architectures(tmp_path: Path) -> None:
+    row = run_body(tmp_path, {"current": CURRENT})
+
+    assert row["ha_versions"] == {"2026.8.3": 30, "2026.9.1": 70}
+    assert row["os_boards"] == {"ova": 20, "rpi4-64": 10}
+    assert row["supervisor_arch"] == {"amd64": 50, "aarch64": 25}
+    assert list(row)[-5:] == ["countries_tracked", "ha_versions", "os_boards", "supervisor_arch", "captured_at"]
+    assert list(row)[:2] == ["date", "active_installations"]  # the script's fields keep their order
+
+
+BOARDS, ARCH, VERSIONS = (CURRENT["operating_system"]["boards"], CURRENT["supervisor"]["arch"], CURRENT["versions"])  # type: ignore[index]
+
+
+@pytest.mark.parametrize(
+    ("current", "expected"),
+    [
+        (
+            {k: v for k, v in CURRENT.items() if k not in ("versions", "operating_system", "supervisor")},
+            (None, None, None),
+        ),
+        ({**CURRENT, "operating_system": {}, "supervisor": {}}, (VERSIONS, None, None)),
+        ({**CURRENT, "operating_system": None, "supervisor": []}, (VERSIONS, None, None)),
+        ({**CURRENT, "versions": "2026.9.1"}, (None, BOARDS, ARCH)),
+    ],
+    ids=["keys absent", "objects without the keys", "objects not objects", "versions not an object"],
+)
+def test_what_the_answer_lacks_is_null_and_the_row_is_otherwise_unchanged(
+    tmp_path: Path, current: Any, expected: Any
+) -> None:
+    row = run_body(tmp_path, {"current": current})
+
+    assert row["active_installations"] == 100
+    assert "status" not in row
+    assert tuple(row[k] for k in ADDED) == expected
+
+
 def test_the_divergences_are_the_decided_ones() -> None:
     assert sorted(port.divergences(NAME)) == [
         "a_body_without_current_writes_zeros",
         "a_null_country_count_writes_nothing",
         "failed_fetch_writes_nothing",
+        "missing_totals_and_no_installations",
+        "null_reports_integrations_count_as_zero",
+        "tied_countries_keep_the_feeds_order",
+        "totals_and_the_top_fifteen_countries",
         "unparseable_body_writes_nothing",
     ]
 
@@ -184,6 +272,7 @@ def test_a_good_row_replaces_a_failure_row(tmp_path: Path) -> None:
 
     port.run(ha_platform, CONFIG, scenario, tmp_path)
 
+    without_added(tmp_path)
     assert port.golden_differences(NAME, name, tmp_path) == []
 
 

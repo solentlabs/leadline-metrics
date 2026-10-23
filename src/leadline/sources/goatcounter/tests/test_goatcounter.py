@@ -36,6 +36,11 @@ TOP = [
     {"ref": "search.example", "count": 2},
     {"ref": "blog.example", "count": 1},
 ]  # the three pages' referrers, as the script tops them
+PAGES = [
+    {"path": "/page-3", "title": "Example page 3", "count": 52},
+    {"path": "/page-2", "title": "Example page 2", "count": 44},
+    {"path": "/page-1", "title": "Example page 1", "count": 36},
+]  # the three pages by their count over the window, most first (leadline adds them)
 
 
 def golden_lines(name: str) -> list[str]:
@@ -44,8 +49,9 @@ def golden_lines(name: str) -> list[str]:
 
 
 def filled(day: str, pageviews: int) -> str:
-    """A backfilled day's row: its page views, and no referrers."""
-    return json.dumps({"date": day, "pageviews": pageviews, "top_referrers": [], "captured_at": NOW}) + "\n"
+    """A backfilled day's row: its page views, and no referrers or top pages (the week's, on yesterday's row)."""
+    row = {"date": day, "pageviews": pageviews, "top_referrers": [], "top_pages": [], "captured_at": NOW}
+    return json.dumps(row) + "\n"
 
 
 def yesterday(**fields: Any) -> str:
@@ -54,6 +60,7 @@ def yesterday(**fields: Any) -> str:
         "date": "2026-09-22",
         "pageviews": 24,
         "top_referrers": TOP,
+        "top_pages": PAGES,
         "window_sum": 105,
         "window_total": 132,
         "paths_returned": 3,
@@ -155,14 +162,111 @@ def test_rows_match_the_scripts(scenario: Any, tmp_path: Path) -> None:
     assert (done.status, done.ctx.critical) == (0, [])
 
 
+def without_top_pages(text: str) -> str:
+    """Row `text` without the `top_pages` leadline adds (more data is captured than the script did)."""
+    rows = []
+    for line in text.splitlines():
+        try:
+            fields = json.loads(line)
+        except ValueError:  # a seed line that isn't a row stays as it is
+            rows.append(line + "\n")
+            continue
+        rows.append(
+            json.dumps({k: v for k, v in fields.items() if k != "top_pages"}) + "\n"
+            if isinstance(fields, dict)
+            else line + "\n"
+        )
+    return "".join(rows)
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    [s for s in scenarios.scenarios(NAME) if port.divergences(NAME).get(s.name) == gc.MORE_DATA],
+    ids=lambda s: s.name,
+)
+def test_rows_are_the_scripts_with_the_added_top_pages(scenario: Any, tmp_path: Path) -> None:
+    """More data is captured than the script did: but for `top_pages`, the rows are the script's."""
+    done = port.run(source, CONFIG, scenario, tmp_path)
+
+    assert all('"top_pages"' in text for text in done.rows.values())
+    for file, text in done.rows.items():
+        (tmp_path / file).write_text(without_top_pages(text), encoding="utf-8")
+    assert port.golden_differences(NAME, scenario.name, tmp_path) == []
+    assert (done.status, done.ctx.critical) == (0, [])
+
+
+def test_yesterdays_row_has_the_top_pages_of_the_week_after_the_referrers(tmp_path: Path) -> None:
+    done = run(tmp_path, *three_pages())
+
+    written = json.loads(done.rows[FILE].splitlines()[-1])
+    assert written["top_pages"] == PAGES
+    assert list(written) == [
+        "date",
+        "pageviews",
+        "top_referrers",
+        "top_pages",
+        "window_sum",
+        "window_total",
+        "paths_returned",
+        "captured_at",
+    ]
+
+
+def test_the_other_days_rows_have_an_empty_list_of_top_pages_as_of_referrers(tmp_path: Path) -> None:
+    done = run(tmp_path, *three_pages(), seed=EARLIER)
+
+    backfilled = [json.loads(line) for line in done.rows[FILE].splitlines()[1:-1]]
+    assert len(backfilled) == 5
+    assert [(r["top_pages"], r["top_referrers"]) for r in backfilled] == [([], [])] * 5
+
+
+def test_the_top_pages_are_the_ten_with_the_most_views_in_the_answers_order_on_ties(tmp_path: Path) -> None:
+    pages = [gc.page(n, {gc.DAYS[-2]: 5 if n in (1, 2) else n}) for n in range(1, 13)]
+    refs = [exchange(gc.refs_url(n), goatcounter_refs([("a.example", 1)])) for n in range(1, 11)]
+
+    done = run(tmp_path, gc.hits(pages), gc.total(pages), *refs)
+
+    top = json.loads(done.rows[FILE].splitlines()[-1])["top_pages"]
+    assert [p["path"] for p in top] == [f"/page-{n}" for n in (12, 11, 10, 9, 8, 7, 6, 1, 2, 5)]  # 1 and 2 tie at 5
+    assert top[0] == {"path": "/page-12", "title": "Example page 12", "count": 12}
+
+
+def test_a_page_without_a_usable_path_or_count_is_left_out_and_a_missing_title_is_null(tmp_path: Path) -> None:
+    pages = [
+        {k: v for k, v in gc.page(1).items() if k != "title"},
+        {k: v for k, v in gc.page(2).items() if k != "path"},
+        {k: v for k, v in gc.page(3).items() if k != "count"},
+        {**gc.page(4), "count": "many"},
+        {**gc.page(5), "title": 7},
+    ]
+    refs = [exchange(gc.refs_url(n), goatcounter_refs([("a.example", 1)])) for n in range(1, 6)]
+
+    hits = exchange(gc.HITS, {"hits": pages, "more": False})  # the builder sums the counts that are missing here
+
+    done = run(tmp_path, hits, gc.total(pages), *refs)
+
+    written = json.loads(done.rows[FILE].splitlines()[-1])
+    assert written["top_pages"] == [
+        {"path": "/page-5", "title": None, "count": 8 * 5 + 28},
+        {"path": "/page-1", "title": None, "count": 8 + 28},
+    ]
+    assert "status" not in written
+
+
 def test_the_divergences_are_the_decided_ones() -> None:
     assert sorted(port.divergences(NAME)) == [
         "a_seed_line_not_an_object_writes_nothing",
+        "an_undated_stat_counts_only_in_the_window_sum",
+        "bad_seed_lines_are_kept_and_their_days_backfilled",
+        "no_stat_for_yesterday_backfills_only_earlier_days",
+        "pages_without_an_id_have_no_referrers",
         "referrers_of_ten_pages_and_no_window_total",
+        "retries_the_pages_request",
         "three_empty_answers_write_nothing",
         "three_failed_attempts_write_nothing",
         "unparseable_hits_write_nothing",
         "unparseable_total_and_referrers_count_as_none",
+        "week_backfills_missing_days_and_refreshes_yesterday",
     ]
 
 
@@ -187,8 +291,16 @@ def test_refreshing_yesterdays_good_row_is_the_one_correction(tmp_path: Path) ->
         source, CONFIG, port.scenario(NAME, "week_backfills_missing_days_and_refreshes_yesterday"), tmp_path
     )
 
-    new = {"pageviews": 24, "top_referrers": TOP, "window_sum": 105, "window_total": 132, "paths_returned": 3}
-    assert done.ctx.corrections == [Correction(NAME, FILE, "2026-09-22", {"pageviews": 3, "top_referrers": []}, new)]
+    new = {
+        "pageviews": 24,
+        "top_referrers": TOP,
+        "top_pages": PAGES,
+        "window_sum": 105,
+        "window_total": 132,
+        "paths_returned": 3,
+    }
+    old = {"pageviews": 3, "top_referrers": []}
+    assert done.ctx.corrections == [Correction(NAME, FILE, "2026-09-22", old, new)]
 
 
 # --- the order of referrers tied on count ---
@@ -392,7 +504,8 @@ def test_a_failed_total_and_referrers_are_null_in_a_partial_row(tmp_path: Path) 
     row = {**json.loads(script[-1]), "top_referrers": None}
     del row["captured_at"]
     written = json.dumps({**row, "status": "partial", "reason": reason, "captured_at": NOW}) + "\n"
-    assert done.rows == {FILE: "".join(script[:-1]) + written}
+    assert without_top_pages(done.rows[FILE]) == "".join(script[:-1]) + written
+    assert json.loads(done.rows[FILE].splitlines()[-1])["top_pages"]  # the pages' own part is kept
     assert (done.status, done.ctx.critical) == (0, [])
 
 
@@ -403,7 +516,9 @@ def test_an_unparseable_total_and_referrers_are_null_in_a_partial_row(tmp_path: 
     reason = "total response was not JSON; path 2 referrers response was not JSON"
     lines = done.rows[FILE].splitlines(keepends=True)
     assert lines[-1] == partial(reason, window_total=None, top_referrers=None)
-    assert lines[:-1] == golden_lines("unparseable_total_and_referrers_count_as_none")[:-1]
+    assert without_top_pages("".join(lines[:-1])) == "".join(
+        golden_lines("unparseable_total_and_referrers_count_as_none")[:-1]
+    )
 
 
 @pytest.mark.parametrize(

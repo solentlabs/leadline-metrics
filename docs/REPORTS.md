@@ -236,6 +236,9 @@ The items aggregates:
   `share` (its percent of all the counts, rounded); fields `total`, of the
   counts matched, and `rest`, of those past `count`. Default item `{key}
   {count}`, joined ` · `: `os 40 · core 12`.
+  With `days: N` (a whole number, 1 or more), the objects of the rows in the
+  N days up to the newest row's are added up by key, a row without an object
+  skipped: the week's events, not the day's.
 - **`release_downloads`**, with `compare`: each release's downloads gained
   since the row `compare` back, the most first, only those that gained.
   Item fields `tag` and `gain`. Default item `{tag} +{gain}`, joined ` · `:

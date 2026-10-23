@@ -2,10 +2,14 @@
 
 Each entry reads the repository, then its traffic views and clones, one call each, as the script's
 collector does, and writes one row for the run's date: the repo as configured, its stars, forks,
-watchers and open issues, and the views' and clones' 14-day totals and unique visitors. Traffic needs
+watchers and open issues, the repository's `network_count`, `size_kb` (its `size`) and `pushed_at`, and the
+views' and clones' 14-day totals and unique visitors. Traffic needs
 push access to the repo. The repository is the row's required part: the script writes nothing without
 it. Views and clones are optional: the script counts a failed fetch as 0. Where leadline differs, by decision:
 
+- It keeps `network_count`, `size_kb` and `pushed_at` (null for a repository nothing was pushed to) from
+  the repository it already reads: more data is captured than the script did. Like the other counts, an
+  answer without `network_count` or `size`, or with one that isn't a number, is a `parse_failed` row.
 - It reads each answer as JSON, where the script pastes them into Python code, so a quote, backslash
   escape or ''' in the repository writes the real row, not nothing.
 - A count the answer lacks is unusable, not 0: the repository's makes a `parse_failed` row and a traffic

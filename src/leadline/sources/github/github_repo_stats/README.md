@@ -7,8 +7,8 @@
 - **Credentials:** `GITHUB_TOKEN`; the source is skipped while it is unset. The
   token needs push access to the repo, for its traffic.
 - **Writes:** one row a day per entry, to its default file unless the entry sets
-  `file`: the counts, and the views' and clones' 14-day totals and unique
-  visitors.
+  `file`: the counts, the repo's `network_count`, `size_kb` and `pushed_at`, and
+  the views' and clones' 14-day totals and unique visitors.
 - **Config entry:** `sources.github_repo_stats` is a list; each entry has `repo`
   (`owner/name`).
 

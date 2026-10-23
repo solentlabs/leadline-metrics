@@ -7,7 +7,9 @@
 - **Credentials:** `GOATCOUNTER_TOKEN`; the source is skipped while it is unset.
   The token needs the permission to read statistics.
 - **Writes:** one row a day per site, to its default file unless the entry sets
-  `file`. Yesterday's row carries the referrers and totals.
+  `file`. Yesterday's row carries the referrers, `top_pages` (the ten pages with
+  the most views in the week, each `{path, title, count}`) and totals; the other
+  days' rows hold an empty `top_pages`.
 - **Config entry:** `sources.goatcounter` is a list; each entry has `site`, the
   site's code, as in `<site>.goatcounter.com`.
 

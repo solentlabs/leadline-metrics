@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from leadline import store
 from leadline.config import is_count
@@ -16,6 +16,7 @@ from leadline.sources.github.github_traffic import spec
 ENV: tuple[str, ...] = (github.CREDENTIAL,)
 LAGGING = False
 TOP_REFERRERS = 5
+TOP_PATHS = 10
 _DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
@@ -56,14 +57,25 @@ def _referrer(item: Any) -> dict[str, Any]:
     return {"ref": ref, "count": count, "unique": unique}
 
 
+def _popular_path(item: Any) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        raise unexpected("paths")
+    path, title, count, unique = item.get("path"), item.get("title"), item.get("count"), item.get("uniques")
+    if not (isinstance(path, str) and isinstance(title, str) and is_count(count) and is_count(unique)):
+        raise unexpected("paths")
+    return {"path": path, "title": title, "count": count, "uniques": unique}
+
+
 def _ratio(total: int, unique: int) -> float:
     """Total to unique, a noise indicator (over 2 suggests automated or repeat traffic)."""
     return round(total / unique, 2) if unique > 0 else 0
 
 
-def _row(views: Any, clones: Any, referrers: list[dict[str, Any]] | None, day: str) -> dict[str, Any]:
-    """The script's row, in its key order; `top_referrers` is null where the referrers could not be read.
-    Raises UnusableError."""
+def _row(
+    views: Any, clones: Any, referrers: list[dict[str, Any]] | None, paths: list[dict[str, Any]] | None, day: str
+) -> dict[str, Any]:
+    """The script's row, in its key order, and `top_paths`; each of `top_referrers` and `top_paths` is null where
+    it could not be read. Raises UnusableError."""
     views_total, views_unique = _totals("views", views)
     window_end = _window_end(views)
     clones_total, clones_unique = _totals("clones", clones)
@@ -77,25 +89,39 @@ def _row(views: Any, clones: Any, referrers: list[dict[str, Any]] | None, day: s
         "clones_total": clones_total,
         "clones_ratio": _ratio(clones_total, clones_unique),
         "top_referrers": referrers,
+        "top_paths": paths,
     }
 
 
-def _referrers(ctx: Context, repo: str, path: Path) -> tuple[list[dict[str, Any]] | None, str | None]:
-    """The top referrers and None, or, where they failed or can't be used, None and the reason: they are one part
-    of the row (ADR: a partly failed row keeps its good parts)."""
+def _popular(
+    ctx: Context, repo: str, path: Path, kind: str, parse: Callable[[Any], list[dict[str, Any]]]
+) -> tuple[list[dict[str, Any]] | None, str | None]:
+    """The popular `kind` ("referrers" or "paths") parsed by `parse` and None, or, where they failed or can't be
+    used, None and the reason: they are one part of the row (ADR: a partly failed row keeps its good parts)."""
     try:
-        answer = ctx.http.request(f"{github.API}/repos/{repo}/traffic/popular/referrers", headers=github.headers())
-        found = read_json("referrers", answer)
-        if not isinstance(found, list):
-            raise unexpected("referrers")
-        return [_referrer(item) for item in found[:TOP_REFERRERS]], None
+        answer = ctx.http.request(f"{github.API}/repos/{repo}/traffic/popular/{kind}", headers=github.headers())
+        return parse(read_json(kind, answer)), None
     except HttpError as e:
-        ctx.log.info("WARN: Failed to fetch GitHub referrers for %s: HTTP %s", repo, e.http_code)
+        ctx.log.info("WARN: Failed to fetch GitHub %s for %s: HTTP %s", kind, repo, e.http_code)
         ctx.record_unfixable(spec.NAME, path.name, e, f"{repo}: HTTP {e.http_code} from GitHub's traffic API")
-        return None, f"referrers request failed (HTTP {e.http_code})"
+        return None, f"{kind} request failed (HTTP {e.http_code})"
     except UnusableError as e:
-        ctx.log.info("WARN: Failed to parse GitHub referrers for %s: %s", repo, e)
+        ctx.log.info("WARN: Failed to parse GitHub %s for %s: %s", kind, repo, e)
         return None, str(e)
+
+
+def _top_referrers(found: Any) -> list[dict[str, Any]]:
+    """The first TOP_REFERRERS referrers, as the script reads them."""
+    if not isinstance(found, list):
+        raise unexpected("referrers")
+    return [_referrer(item) for item in found[:TOP_REFERRERS]]
+
+
+def _top_paths(found: Any) -> list[dict[str, Any]]:
+    """The TOP_PATHS most viewed paths, whatever order the API lists them in."""
+    if not isinstance(found, list):
+        raise unexpected("paths")
+    return sorted((_popular_path(item) for item in found), key=lambda item: -item["count"])[:TOP_PATHS]
 
 
 def _collect(ctx: Context, entry: Any) -> None:
@@ -105,9 +131,10 @@ def _collect(ctx: Context, entry: Any) -> None:
     try:
         for kind in ("views", "clones"):
             answers[kind] = ctx.http.request(f"{github.API}/repos/{repo}/traffic/{kind}", headers=github.headers())
-        referrers, why = _referrers(ctx, repo, path)
+        referrers, why = _popular(ctx, repo, path, "referrers", _top_referrers)
+        paths, why_paths = _popular(ctx, repo, path, "paths", _top_paths)
         views, clones = read_json("views", answers["views"]), read_json("clones", answers["clones"])
-        row = _row(views, clones, referrers, day)
+        row = _row(views, clones, referrers, paths, day)
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch GitHub %s for %s: HTTP %s", kind, repo, e.http_code)
         ctx.record_unfixable(spec.NAME, path.name, e, f"{repo}: HTTP {e.http_code} from GitHub's traffic API")
@@ -116,9 +143,10 @@ def _collect(ctx: Context, entry: Any) -> None:
         ctx.log.info("ERROR: Failed to parse GitHub traffic for %s: %s", repo, e)
         failure = {"status": "parse_failed", "reason": str(e)}
     else:
-        if why is None:
-            store.write_good(path, row, ctx, spec.NAME)
+        failed = {reason: [field] for reason, field in ((why, "top_referrers"), (why_paths, "top_paths")) if reason}
+        if failed:
+            store.write_partial(path, row, failed, ctx, spec.NAME)
         else:
-            store.write_partial(path, row, {why: ["top_referrers"]}, ctx, spec.NAME)
+            store.write_good(path, row, ctx, spec.NAME)
         return
     store.write_failure(path, {"date": day, **failure}, ctx.now)

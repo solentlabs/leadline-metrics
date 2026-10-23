@@ -33,7 +33,11 @@ class _FailureRowError(Exception):
 
 
 class _UnreadableError(Exception):
-    """The answer parses as JSON but not as the query's result."""
+    """The answer parses as JSON but not as the query's result; `why` names what was wrong, never a value."""
+
+    def __init__(self, why: str) -> None:
+        super().__init__(why)
+        self.why = why
 
 
 class _PartError(Exception):
@@ -99,31 +103,31 @@ def _answer(response: Response) -> dict[str, Any]:
 
 def _zone(data: Any) -> dict[str, Any]:
     if not isinstance(data, dict):
-        raise _UnreadableError
+        raise _UnreadableError("answer is not an object")
     errors = data.get("errors")
     if errors:
         first = errors[:3] if isinstance(errors, list) else None
         if first is None or not all(isinstance(e, dict) for e in first):
-            raise _UnreadableError
+            raise _UnreadableError("errors is not a list of objects")
         raise _FailureRowError("graphql_error", "; ".join(str(e.get("message", e))[:200] for e in first))
     result = data.get("data")
     viewer = result.get("viewer") if isinstance(result, dict) else None
     zones = viewer.get("zones") if isinstance(viewer, dict) else None
     if not isinstance(zones, list):
-        raise _UnreadableError
+        raise _UnreadableError("zones is not a list")
     if not zones:
         raise _FailureRowError("no_zone", "zone filter matched nothing")
     if not isinstance(zones[0], dict):
-        raise _UnreadableError
+        raise _UnreadableError("zone is not an object")
     return zones[0]
 
 
-def _object(value: Any) -> dict[str, Any]:
-    """`value or {}`: a part that may be missing, which must then be an object."""
+def _object(value: Any, name: str) -> dict[str, Any]:
+    """`value or {}`: a part (called `name`) that may be missing, which must then be an object."""
     if not value:
         return {}
     if not isinstance(value, dict):
-        raise _UnreadableError
+        raise _UnreadableError(f"{name} is not an object")
     return value
 
 
@@ -133,28 +137,29 @@ def _groups(zone: dict[str, Any], alias: str) -> list[dict[str, Any]]:
     if not found:
         return []
     if not isinstance(found, list) or not all(isinstance(group, dict) for group in found):
-        raise _UnreadableError
+        raise _UnreadableError(f"{alias} is not a list of objects")
     return found
 
 
-def _count(value: Any) -> int:
-    """A count: none is zero, a number is cut to a whole one; anything else (a boolean, a negative) is unreadable."""
+def _count(value: Any, name: str) -> int:
+    """A count (called `name`): none is zero, a number is cut to a whole one; anything else (a boolean, a negative)
+    is unreadable."""
     if not value:
         return 0
     if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
-        raise _UnreadableError
+        raise _UnreadableError(f"{name} is not a non-negative number")
     return int(value)
 
 
 def _day(group: dict[str, Any]) -> str:
     """The group's date, as the API gives it (`YYYY-MM-DD`)."""
-    day = _object(group.get("dimensions")).get("date")
+    day = _object(group.get("dimensions"), "dimensions").get("date")
     if not isinstance(day, str):
-        raise _UnreadableError
+        raise _UnreadableError("group date is not YYYY-MM-DD")
     try:
         return date.fromisoformat(day).isoformat()
     except ValueError:
-        raise _UnreadableError from None
+        raise _UnreadableError("group date is not YYYY-MM-DD") from None
 
 
 def _name(value: Any) -> str:
@@ -162,7 +167,7 @@ def _name(value: Any) -> str:
     if value is None or value == "":
         return NONE
     if isinstance(value, bool) or not isinstance(value, (str, int)):
-        raise _UnreadableError
+        raise _UnreadableError("an item's name is not text or a number")
     return str(value)
 
 
@@ -177,11 +182,11 @@ def _items(value: Any, dimension: str, count: str) -> dict[str, int]:
     if not value:
         return {}
     if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
-        raise _UnreadableError
+        raise _UnreadableError("a map is not a list of objects")
     totals: dict[str, int] = {}
     for item in value:
         name = _name(item.get(dimension))
-        totals[name] = totals.get(name, 0) + _count(item.get(count))
+        totals[name] = totals.get(name, 0) + _count(item.get(count), count)
     return _ranked(totals)
 
 
@@ -189,9 +194,9 @@ def _read_daily(zone: dict[str, Any]) -> PerDay:
     """Each day's fields from the daily dataset, the last given for a day winning."""
     days: PerDay = {}
     for group in _groups(zone, "daily"):
-        sums = _object(group.get("sum"))
-        fields: Fields = {key: _count(sums.get(api)) for key, api in spec.SCALARS}
-        fields[spec.UNIQUES] = _count(_object(group.get("uniq")).get("uniques"))
+        sums = _object(group.get("sum"), "sum")
+        fields: Fields = {key: _count(sums.get(api), key) for key, api in spec.SCALARS}
+        fields[spec.UNIQUES] = _count(_object(group.get("uniq"), "uniq").get("uniques"), spec.UNIQUES)
         for key, api_map, dimension, count in spec.MAPS:
             fields[key] = _items(sums.get(api_map), dimension, count)
         days[_day(group)] = fields
@@ -202,22 +207,23 @@ def _read_totals(zone: dict[str, Any]) -> PerDay:
     """Each day's visits and origin response times from the per-request dataset."""
     days: PerDay = {}
     for group in _groups(zone, "groups"):
-        quantiles, averages = _object(group.get("quantiles")), _object(group.get("avg"))
+        quantiles, averages = _object(group.get("quantiles"), "quantiles"), _object(group.get("avg"), "avg")
         found = {"avg": averages.get("originResponseDurationMs"), **quantiles}
         timing = {key: _timing(found.get(api)) for key, api in spec.ORIGIN_KEYS}
         days[_day(group)] = {
-            spec.VISITS: _count(_object(group.get("sum")).get(spec.VISITS)),
+            spec.VISITS: _count(_object(group.get("sum"), "sum").get(spec.VISITS), spec.VISITS),
             spec.ORIGIN_MS: {key: ms for key, ms in timing.items() if ms is not None},
         }
     return days
 
 
 def _timing(value: Any) -> int | None:
-    """A response time in milliseconds, rounded; none where the API has none."""
-    if value is None:
+    """A response time in milliseconds, rounded; none where the API has none (null, or the -1 it gives a mean for a
+    day without origin responses)."""
+    if value is None or (not isinstance(value, bool) and value == -1):
         return None
     if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
-        raise _UnreadableError
+        raise _UnreadableError("response time is not a non-negative number")
     return round(float(value))
 
 
@@ -225,9 +231,9 @@ def _read_list(zone: dict[str, Any], dimension: str, top: int) -> dict[str, dict
     """Each day's top `top` values of `dimension` by request count."""
     counts: dict[str, dict[str, int]] = {}
     for group in _groups(zone, "groups"):
-        name = _name(_object(group.get("dimensions")).get(dimension))
+        name = _name(_object(group.get("dimensions"), "dimensions").get(dimension))
         day = counts.setdefault(_day(group), {})
-        day[name] = day.get(name, 0) + _count(group.get("count"))
+        day[name] = day.get(name, 0) + _count(group.get("count"), "count")
     return {day: _ranked(found, top) for day, found in counts.items()}
 
 
@@ -307,8 +313,8 @@ def _read_part(ctx: Context, name: str, dimension: str | None, query: str, top: 
         raise _PartError(f"{name} request failed (HTTP {e.http_code})", e) from e
     except _FailureRowError as e:
         raise _PartError(f"{name} query failed: {e.fields['reason']}") from e
-    except _UnreadableError:
-        raise _PartError(f"{name} answer was unreadable") from None
+    except _UnreadableError as e:
+        raise _PartError(f"{name} answer was unreadable: {e.why}") from None
 
 
 def _zero() -> Fields:

@@ -3,6 +3,52 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions
 follow [SemVer](https://semver.org/).
 
+## 0.8.3 - 2026-10-23
+
+- `cloudflare_zone_traffic`: a mean origin response time of `-1`, which Cloudflare gives a
+  day with no origin responses, is no mean for that day and no longer makes the
+  whole per-request part unreadable. It left the newest row `partial` (visits and
+  timings null) each night while such a day was in the 28-day window.
+
+- `github_traffic`: the row holds `top_paths`, the ten most viewed paths of the
+  14 days (`path`, `title`, `count`, `uniques`), from one more request. GitHub
+  keeps them 14 days only. Paths that fail leave it null in a `partial` row, as
+  the referrers do.
+- `github_repo_activity`: the row holds `languages`, the bytes of code in each
+  language, beside `codebase_bytes`, their sum.
+- `github_repo_stats`: the row holds the repository's `network_count`,
+  `size_kb` and `pushed_at`.
+- `github_issues`: the run date's row holds `issues.closed_not_planned_total`
+  (issues closed as not planned) and `contribution.prs_merged_total` (pull
+  requests merged), both ever, counted from the lists it already reads.
+- `pypi`: the row holds `downloads_with_mirrors_last_day`, `_last_week` and
+  `_last_month`, counted from the pypistats answer it already reads, beside the
+  downloads without mirrors. Null when the answer has no with-mirrors rows.
+- `goatcounter`: yesterday's row holds `top_pages`, the ten pages with the most
+  views in the week (`path`, `title`, `count`), from the answer it already
+  reads; the other days' rows hold an empty list.
+- `ha_platform`: the row holds `ha_versions` (installations by core version),
+  `os_boards` and `supervisor_arch`, null where the answer lacks them.
+- `discourse_topics`: a topic's row holds `participants`, `closed`, `solved`
+  (whether it has an accepted answer) and `tags`; each is null where the
+  answer lacks it.
+
+- `github_traffic_daily`: a day GitHub counted clones for and no views is a row
+  with zero views, not a day never written (the clones were lost; the window
+  keeps 14 days only).
+
+- Reports: `counts` takes `days: N`, adding up an object of counts over the
+  rows of the newest N days (a week of events, error codes or screen views).
+
+- `cloudflare_zone_traffic`: a part of the per-request dataset that cannot be
+  read says why in the row's `reason` (`totals answer was unreadable: visits is
+  not a non-negative number`), naming the field, never a value.
+- `ha_integration`: the summary and trends chart the integration's rank beside
+  the number of integrations in Home Assistant's feed, as one chart, in place
+  of the percentile. The feed changes what it lists (4,303 entries on
+  2026-10-20, 5,668 on 2026-10-22), so a rank or percentile alone moved with
+  no change in installs. Rows are unchanged.
+
 ## 0.8.2 - 2026-10-22
 
 - An answer without a count, flag or list a source reads is a failure row (or a

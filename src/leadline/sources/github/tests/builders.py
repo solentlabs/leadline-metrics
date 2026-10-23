@@ -224,10 +224,12 @@ def github_issue(
     body: str | None = "",
     pull_request: bool = False,
     merged: bool = True,
+    not_planned: bool = False,
 ) -> Json:
     """An item of an issue list: an issue, or with `pull_request` a pull request.
 
-    A closed pull request is merged unless `merged` is false. `author` None is an item whose user is null.
+    A closed pull request is merged unless `merged` is false. `author` None is an item whose user is null. A closed
+    issue was completed unless it was closed `not_planned`.
     """
     api = f"{GITHUB_API}/repos/{full_name}/issues/{number}"
     html = f"https://github.com/{full_name}/{'pull' if pull_request else 'issues'}/{number}"
@@ -288,7 +290,9 @@ def github_issue(
             },
             "timeline_url": f"{api}/timeline",
             "performed_via_github_app": None,
-            "state_reason": ("completed" if closed_at else None) if not pull_request else None,
+            "state_reason": (("not_planned" if not_planned else "completed") if closed_at else None)
+            if not pull_request
+            else None,
         }
     )
     if not pull_request:
@@ -430,6 +434,11 @@ def github_traffic(kind: str, days: Mapping[date, tuple[int, int]]) -> Json:
 def github_referrer(host: str, count: int, uniques: int) -> Json:
     """An item of `traffic/popular/referrers`."""
     return {"referrer": host, "count": count, "uniques": uniques}
+
+
+def github_path(path: str, title: str, count: int, uniques: int) -> Json:
+    """An item of `traffic/popular/paths`."""
+    return {"path": path, "title": title, "count": count, "uniques": uniques}
 
 
 def github_blob_sha(text: str) -> str:

@@ -4,8 +4,9 @@ Each entry reads the repository, every page of its commits since a week before t
 for by number while the answer's Link names a next page), its issues since then, its top ten
 contributors, its five latest releases and its languages, as the script's collector does, and writes
 one row for the run's date under the entry's label: the repo, its stars, forks and open issues, its
-code size; the week's commits, authors, fixes and redesigns (each commit's first line matched,
-ignoring case, against the entry's patterns, by default the script's, under which "Debug" is a fix);
+code size and `languages`, the bytes of code in each language (the script keeps only the sum); the
+week's commits, authors, fixes and redesigns (each commit's first line matched, ignoring case, against the
+entry's patterns, by default the script's, under which "Debug" is a fix);
 the week's issues, and those opened by others than the owner; the top contributor's share; and the
 latest release, whose date is "" while it is unpublished. An empty list reads as none, as in the
 script; a missing count is a `parse_failed` row naming it, where the script reads 0 (ADR: a failure is
@@ -15,6 +16,8 @@ The repository and the commits are the row's required parts: the script writes n
 The issues, contributors, releases and languages are optional: the script counts a failed fetch as
 none. Where leadline differs, by decision:
 
+- It keeps the language map, `languages` beside `codebase_bytes`, their sum: more data is captured than
+  the script did. The two are one part, so a languages list that fails leaves both null.
 - A failed repository or commits fetch is a `fetch_failed` row, and an answer it can't use (not JSON,
   not the shape it reads) a `parse_failed` row, where the script writes nothing (ADR: a failure is
   recorded as a failure).

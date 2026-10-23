@@ -20,9 +20,11 @@ METADATA = ["latest_version", "requires_python"]  # the row's fields the metadat
 
 
 class History(NamedTuple):
-    """pypistats' daily history: downloads without mirrors by day, and the latest and first days it has."""
+    """pypistats' daily history: downloads without mirrors by day, the same with mirrors (None when the answer
+    has no with-mirrors rows), and the latest and first days it has."""
 
     daily: dict[str, int]
+    mirrored: dict[str, int] | None
     published: str
     start: str
 
@@ -194,17 +196,22 @@ def _backfill(
         store.write_good(path, {**row, store.BACKFILLED: True}, ctx, spec.NAME)
 
 
-def _downloads(history: History, day: date) -> dict[str, int]:
-    """The day's, the week's and the month's downloads ending on `day`."""
+def _downloads(history: History, day: date) -> dict[str, int | None]:
+    """The day's, the week's and the month's downloads ending on `day`, without mirrors and then with them
+    (null when pypistats gave no with-mirrors rows)."""
 
-    def window(days: int) -> int:
-        return sum(history.daily.get((day - timedelta(days=n)).isoformat(), 0) for n in range(days))
+    def window(daily: dict[str, int], days: int) -> int:
+        return sum(daily.get((day - timedelta(days=n)).isoformat(), 0) for n in range(days))
 
-    return {
-        "downloads_last_day": history.daily.get(day.isoformat(), 0),
-        "downloads_last_week": window(WEEK_DAYS),
-        "downloads_last_month": window(MONTH_DAYS),
+    row: dict[str, int | None] = {
+        "downloads_last_day": window(history.daily, 1),
+        "downloads_last_week": window(history.daily, WEEK_DAYS),
+        "downloads_last_month": window(history.daily, MONTH_DAYS),
     }
+    mirrored = history.mirrored
+    for field, days in (("day", 1), ("week", WEEK_DAYS), ("month", MONTH_DAYS)):
+        row[f"downloads_with_mirrors_last_{field}"] = None if mirrored is None else window(mirrored, days)
+    return row
 
 
 def _day(value: Any) -> date | None:
@@ -216,7 +223,8 @@ def _day(value: Any) -> date | None:
 
 
 def _history(answer: Any) -> History:
-    """The history as the script reads it: every day with a date, and each day's downloads without mirrors.
+    """The history as the script reads it: every day with a date, and each day's downloads without mirrors
+    (and with them, where given).
 
     Raises UnusableError for an answer it can't use: not an object, `data` not a list of objects, a
     date that isn't one, a count that isn't one, or no days at all.
@@ -225,6 +233,7 @@ def _history(answer: Any) -> History:
     if not isinstance(data, list) or not all(isinstance(item, dict) for item in data):
         raise unexpected("overall")
     daily: dict[str, int] = {}
+    mirrored: dict[str, int] = {}
     dates: list[str] = []
     for item in data:
         day, downloads = item.get("date"), item.get("downloads")
@@ -236,9 +245,11 @@ def _history(answer: Any) -> History:
             if not (day and is_count(downloads)):
                 raise unexpected("overall")
             daily[day] = downloads
+        elif item.get("category") == "with_mirrors" and day and is_count(downloads):
+            mirrored[day] = downloads  # optional: a row it can't use is left out, as it always was
     if not dates:
         raise UnusableError("pypistats returned no history")
-    return History(daily, max(dates), min(dates))
+    return History(daily, mirrored or None, max(dates), min(dates))
 
 
 def _metadata(answer: Any) -> Metadata:

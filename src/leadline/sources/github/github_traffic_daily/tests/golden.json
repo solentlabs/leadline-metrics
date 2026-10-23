@@ -12,7 +12,7 @@
     }
   },
   "writes_nothing_when_current": {
-    "case_sha256": "5e9aa6409baff800ce8100d55e1e4cdbd1f3069503c10b22ce66105b17349953",
+    "case_sha256": "2b8fc24d0477319265927fffd1919322386d944d09c2992a966d7a9cb634e25b",
     "rows": {
       "github-traffic-daily.jsonl": "{\"date\": \"2026-09-19\", \"views\": 1, \"views_unique\": 1, \"clones\": 0, \"clones_unique\": 0}\n{\"date\": \"2026-09-20\", \"views\": 2, \"views_unique\": 1, \"clones\": 0, \"clones_unique\": 0}\n{\"date\": \"2026-09-21\", \"views\": 3, \"views_unique\": 1, \"clones\": 0, \"clones_unique\": 0}\n"
     }

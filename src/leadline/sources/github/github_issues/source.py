@@ -132,6 +132,16 @@ def _totals(ctx: Context, issues_ever: list[dict[str, Any]], through: date | Non
     }
 
 
+def _closed_not_planned(issues_ever: list[dict[str, Any]]) -> int:
+    """The issues closed as not planned, ever (an issue reopened is open, whatever it was closed as)."""
+    return sum(1 for i in issues_ever if i.get("state") == "closed" and i.get("state_reason") == "not_planned")
+
+
+def _merged(prs_ever: list[dict[str, Any]]) -> int:
+    """The pull requests merged, ever: those whose `pull_request` says when."""
+    return sum(1 for i in prs_ever if isinstance(i["pull_request"], dict) and i["pull_request"].get("merged_at"))
+
+
 def _kind(kinds: list[dict[str, str]], item: dict[str, Any]) -> str:
     """The first kind in `kinds` whose label `item` carries, else OTHER_KIND."""
     labels = _labels(item)
@@ -471,12 +481,14 @@ def _snapshot(
             "open_prs": len(prs),
             "opened_total": opened_total,
             "closed_total": closed_total,
+            "closed_not_planned_total": _closed_not_planned(issues_ever),
             "since_prev": _flow(previous, day, opened_total, closed_total),
         },
         "contribution": {
             "issues": _authors(issues_ever, maintainer),
             "prs": _authors(prs_ever, maintainer),
             "prs_total": len(prs_ever),
+            "prs_merged_total": _merged(prs_ever),
         },
         "age": {
             "avg_days": round(statistics.mean(ages)) if ages else 0,

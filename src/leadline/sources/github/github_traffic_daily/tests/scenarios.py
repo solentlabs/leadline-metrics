@@ -2,10 +2,10 @@
 
 The script's collect_github_traffic_daily reads the 14-day views and clones and writes a row per day
 into github-traffic-daily.jsonl: every day of the window the file is missing, and yesterday again,
-never today, since today's counts are still growing. The rows follow the views: a clones day the
-views lack writes no row. A failed views or clones fetch, or a body that doesn't parse, writes
-nothing, and so does a window with no days or a day without a timestamp. The window as one snapshot
-is github_traffic.
+never today, since today's counts are still growing. The script's rows follow the views: a clones day
+the views lack writes no row (leadline writes one, with no views). A failed views or clones fetch, or
+a body that doesn't parse, writes nothing, and so does a window with no days or a day without a
+timestamp. The window as one snapshot is github_traffic.
 
 leadline's rows match the script's on every scenario. Where the script writes nothing for a failed
 fetch or an answer it can't use, leadline writes a failure row (`fetch_failed` or `parse_failed`) for
@@ -61,6 +61,11 @@ del UNSTAMPED["views"][-1]["timestamp"]
 
 SEEDED = {FILE: row("2026-09-21", 5) + row("2026-09-22", 6)}
 
+# The scenarios where leadline's rows differ from the script's by a decision, and the decision.
+DIVERGENCES = {
+    "ignores_clones_days_views_lack": "a day with clones is a day: its views are zero, not a row never written",
+}
+
 SCENARIOS = [
     Scenario(
         "backfills_missing_days_and_refreshes_yesterday",
@@ -85,7 +90,7 @@ SCENARIOS = [
     Scenario(
         "writes_nothing_when_current",
         CALLS,
-        responses(within(VIEWS_BY_DAY, WINDOW[9:12])),
+        responses(within(VIEWS_BY_DAY, WINDOW[9:12]), within(CLONES_BY_DAY, WINDOW[9:12])),
         config=CONFIG,
         seed={FILE: row("2026-09-19", 1) + row("2026-09-20", 2) + row("2026-09-21", 3)},
     ),

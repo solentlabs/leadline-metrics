@@ -16,7 +16,9 @@ A 200 body that doesn't parse, from pypistats or PyPI, writes no row at all, and
 line that parses but isn't an object, or a seed `date` that isn't a string: the script reads the
 file before it writes.
 
-leadline differs by decision on the scenarios in DIVERGENCES, asserted in test_pypi.py: an
+leadline differs by decision on the scenarios in DIVERGENCES, asserted in test_pypi.py: the rows
+also hold the downloads with mirrors, which the script drops (more data is captured than the
+script did; the scenarios that write a row are in DIVERGENCES for it); an
 error waiting can't fix is never retried; a failure never replaces a good row; failed or
 unusable metadata is null in a partial row; an unusable history is a `parse_failed` row; and a seed
 line that isn't a row is kept.
@@ -225,12 +227,20 @@ SCENARIOS = [
     ),
 ]
 
+MORE_DATA = "more data is captured than the script did"
 FAILURE = "ADR: a failure is recorded as a failure"
 PARTIAL = "ADR: a partly failed row keeps its good parts"
 UNFIXABLE = "ADR: one failed night recovers (an error waiting can't fix is never retried, and is critical at once)"
 
 # The scenarios where leadline's rows or requests differ from the script's by a decision, and the decision.
 DIVERGENCES = {
+    # leadline also keeps the with-mirrors downloads, which the script's rows lack.
+    "downloads_for_the_day_week_and_month": MORE_DATA,
+    "backfills_missing_and_failed_days": MORE_DATA,
+    "backfill_starts_where_a_months_window_is_whole": MORE_DATA,
+    "the_run_date_not_published_yet": MORE_DATA,
+    "the_retry_pass_asks_again_for_failed_packages": MORE_DATA,
+    "a_null_requires_python_is_kept": MORE_DATA,
     "a_package_not_found_is_asked_again_in_the_retry_pass": UNFIXABLE,
     "a_failure_row_keeps_the_last_status": UNFIXABLE,  # the same rows, from one request fewer
     "a_failure_replaces_a_good_row_for_the_run_date": "ADR: a failure never replaces good data",

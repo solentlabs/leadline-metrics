@@ -74,6 +74,7 @@ _DATA = {
     "every",
     "aggregate",
     "count",
+    "days",
     "item",
     "sort",
     "match",
@@ -88,6 +89,7 @@ _PIECE = _DATA | _VIEW | {"label"}
 # A piece's options that only some aggregates take, and the options some aggregates need.
 _ONLY = {
     "count": ("sum", *ITEM_AGGREGATES),
+    "days": ("counts",),
     "item": ITEM_AGGREGATES,
     "sort": ("items",),
     "match": ITEM_AGGREGATES,
@@ -400,7 +402,7 @@ def _option_value_problems(key: str, value: Any) -> list[str]:
         return [
             f".{field}: must be a regular expression" for field, pattern in value.items() if not _pattern_ok(pattern)
         ]
-    least = {"count": 1, "trail": 1, "skip": 0}.get(key)
+    least = {"count": 1, "days": 1, "trail": 1, "skip": 0}.get(key)
     if least is not None:
         return [] if _whole(value, least) else [f": must be a whole number, {least} or more"]
     if key == "pick":
@@ -943,11 +945,23 @@ def _release_downloads(rows: Sequence[Row], piece: Mapping[str, Any], _outer: Fi
 def _counts(rows: Sequence[Row], piece: Mapping[str, Any], _outer: Fields, _style: _Style) -> _Found | None:
     """An object of counts in the newest row (`{"os": 40}`), as items, the largest first: each its `key`, `count`
     and `share` (its percent of all the counts, rounded); `total`, of those matched, and `rest`, of those past
-    `count`."""
-    counts = store.value(rows[-1], piece["field"])
-    if not isinstance(counts, dict):
-        return None
-    numbers = {key: n for key, n in counts.items() if _number(n)}
+    `count`. With `days`, the objects of the rows in that many days to the newest's, added up by key."""
+    if "days" in piece:
+        first = _day(rows[-1]) - timedelta(days=piece["days"] - 1)
+        found = [store.value(row, piece["field"]) for row in rows if _day(row) >= first]
+        objects = [counts for counts in found if isinstance(counts, dict)]
+        if not objects:
+            return None
+        numbers: dict[str, Any] = {}
+        for counts in objects:
+            for key, n in counts.items():
+                if _number(n):
+                    numbers[key] = numbers.get(key, 0) + n
+    else:
+        counts = store.value(rows[-1], piece["field"])
+        if not isinstance(counts, dict):
+            return None
+        numbers = {key: n for key, n in counts.items() if _number(n)}
     everything = sum(numbers.values())
     items = [
         {"key": key, "count": n, "share": round(100 * n / everything) if everything else None}

@@ -27,12 +27,14 @@ def files(cfg: Any) -> dict[str, str]:
     return config.entry_files(cfg, file_name)
 
 
-# The fields the default summary shows of each entry's file. The rank shows as the share of the tracked
-# integrations ranked below it, 100 less its percentile, which climbs as the integration rises.
+CHART = "Rank in the HA feed"  # the chart the rank and the feed's size share
+# The fields the default summary shows of each entry's file. The rank is a position in the feed, so it is read
+# beside the feed's size: HA's feed changes what it lists, and a rank alone then moves with no change in installs.
 SHOWN = (
     config.Shown("total", "Installs", into="versions"),
     config.Shown("versions", "Installs by version", "breakdown"),
-    config.Shown("percentile", "Percentile rank (HA custom integrations)", format=".1f", complement=True),
+    config.Shown("rank", "Rank in the HA feed (lower is better)", chart=CHART),
+    config.Shown("tracked_integrations", "Integrations in the HA feed", chart=CHART),
 )
 
 

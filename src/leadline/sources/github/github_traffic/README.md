@@ -1,14 +1,15 @@
 # github_traffic
 
-- **Reads:** a repo's 14-day views, clones and top referrers, as one snapshot.
-- **Requests:** the repo's traffic views, clones and popular referrers, one call
-  each. Traffic needs push access to the repo.
+- **Reads:** a repo's 14-day views, clones, top referrers and top paths, as one snapshot.
+- **Requests:** the repo's traffic views, clones, popular referrers and popular
+  paths, one call each. Traffic needs push access to the repo.
 - **Credentials:** `GITHUB_TOKEN`; the source is skipped while it is unset. The
   token needs push access to the repo, for its traffic.
 - **Writes:** one row a day per entry, to its default file unless the entry sets
   `file`: the views' and clones' totals and unique visitors, `window_end`, and
-  the top five referrers. Referrers that fail leave that field null in a
-  `partial` row.
+  the top five referrers, and `top_paths`, the ten most viewed paths, each
+  `{path, title, count, uniques}`. Referrers or paths that fail leave their
+  field null in a `partial` row.
 - **Config entry:** `sources.github_traffic` is a list; each entry has `repo`
   (`owner/name`).
 

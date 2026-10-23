@@ -20,6 +20,9 @@ scenario of leadline's own, with reviewed rows, proves. REGIONS also reads issue
 doesn't and no script scenario's issue has: `queue_regions_from_issue_forms` has reviewed rows (ADR: an
 answer in an issue form is the strongest region signal). A `kinds` setting, which the script doesn't have, gives
 `opened_by_kind_is_filled_for_every_past_day` its reviewed rows (ADR: the issues rows count what was opened by kind).
+The rows also hold `closed_not_planned_total` (issues) and `prs_merged_total` (contribution), which the script
+drops: the scenarios that write a row from the script's are in DIVERGENCES for them (more data is captured than the
+script did), and the reviewed rows of leadline's own scenarios hold them.
 """
 
 from __future__ import annotations
@@ -95,8 +98,18 @@ def leadline_config(scenario: Scenario) -> list[dict[str, Any]]:
     return [entry]
 
 
+MORE_DATA = "more data is captured than the script did"
+
 # The scenarios where leadline's rows differ from the script's by a decision, and the decision.
 DIVERGENCES = {
+    # leadline's rows also hold `closed_not_planned_total` and `prs_merged_total`, which the script's lack.
+    "snapshot_with_modem_pipeline": MORE_DATA,
+    "pages_through_link_headers_without_a_pipeline": MORE_DATA,
+    "the_previous_snapshot_is_the_last_earlier_row_in_the_file": MORE_DATA,
+    "an_undated_row_is_a_snapshot_a_day_back": MORE_DATA,
+    "empty_repository": MORE_DATA,
+    "null_user_and_body": MORE_DATA,
+    "without_a_maintainer_everyone_is_community": MORE_DATA,
     "repo_not_found_writes_nothing": "ADR: a failure is recorded as a failure",
     "failed_open_page_writes_nothing": "ADR: a failure is recorded as a failure",
     "failed_later_page_writes_nothing": "ADR: a failure is recorded as a failure",
@@ -281,9 +294,11 @@ FILLED = (
 # SMALL's row for the run date, a day after a snapshot with its totals filled: no flow since.
 SMALL_TODAY = (
     '{"date": "2026-09-23", "repo": {"stars": 12, "forks": 3, "watchers": 4}, "issues": {"open": 1, "open_prs": 0, '
-    '"opened_total": 3, "closed_total": 2, "since_prev": {"days": 1, "opened": 0, "closed": 0}}, "contribution": '
+    '"opened_total": 3, "closed_total": 2, "closed_not_planned_total": 0, "since_prev": {"days": 1, '
+    '"opened": 0, "closed": 0}}, "contribution": '
     '{"issues": {"maintainer": 1, "community": 2, "bot": 0, "community_authors": 2}, "prs": {"maintainer": 0, '
-    '"community": 0, "bot": 0, "community_authors": 0}, "prs_total": 0}, "age": {"avg_days": 5, "median_days": 5, '
+    '"community": 0, "bot": 0, "community_authors": 0}, "prs_total": 0, "prs_merged_total": 0}, '
+    '"age": {"avg_days": 5, "median_days": 5, '
     '"oldest_days": 5, "newest_days": 5}, "engagement": {"total_comments": 2, "avg_comments": 2.0, '
     '"high_engagement": 0, "top_issues": [{"number": 1, "title": "An example issue", "comments": 2}]}, "labels": {}, '
     '"triage": {"assigned": 0, "unassigned": 1, "labeled": 0, "unlabeled": 1, "milestoned": 0}, '
@@ -322,9 +337,11 @@ FORMS = [
 ]
 FORMS_TODAY = (
     '{"date": "2026-09-23", "repo": {"stars": 12, "forks": 3, "watchers": 4}, "issues": {"open": 3, "open_prs": 0, '
-    '"opened_total": 3, "closed_total": 0, "since_prev": {"days": 0, "opened": 0, "closed": 0}}, "contribution": '
+    '"opened_total": 3, "closed_total": 0, "closed_not_planned_total": 0, "since_prev": {"days": 0, '
+    '"opened": 0, "closed": 0}}, "contribution": '
     '{"issues": {"maintainer": 0, "community": 3, "bot": 0, "community_authors": 3}, "prs": {"maintainer": 0, '
-    '"community": 0, "bot": 0, "community_authors": 0}, "prs_total": 0}, "age": {"avg_days": 4, "median_days": 4, '
+    '"community": 0, "bot": 0, "community_authors": 0}, "prs_total": 0, "prs_merged_total": 0}, '
+    '"age": {"avg_days": 4, "median_days": 4, '
     '"oldest_days": 5, "newest_days": 3}, "engagement": {"total_comments": 0, "avg_comments": 0.0, '
     '"high_engagement": 0, "top_issues": [{"number": 1, "title": "Example X1 modem on Comcast", "comments": 0}, '
     '{"number": 2, "title": "Example X2 modem", "comments": 0}, {"number": 3, "title": "Example X3 modem", '
@@ -383,11 +400,13 @@ KIND_ROWS = (
 # snapshot is the 21st's (3 opened, 1 closed), so two days of flow with one issue closed.
 KIND_TODAY = (
     '{"date": "2026-09-23", "repo": {"stars": 12, "forks": 3, "watchers": 4}, "issues": {"open": 1, "open_prs": 1, '
-    '"opened_total": 3, "closed_total": 2, "since_prev": {"days": 2, "opened": 0, "closed": 1}, '
+    '"opened_total": 3, "closed_total": 2, "closed_not_planned_total": 0, "since_prev": {"days": 2, '
+    '"opened": 0, "closed": 1}, '
     '"opened_by_kind": {"new_modem": 1, "defect": 1, "other": 1}, "open_by_kind": {"new_modem": 0, "defect": 1, '
     '"other": 0}}, "contribution": '
     '{"issues": {"maintainer": 1, "community": 2, "bot": 0, "community_authors": 2}, "prs": {"maintainer": 0, '
-    '"community": 1, "bot": 0, "community_authors": 1}, "prs_total": 1}, "age": {"avg_days": 5, "median_days": 5, '
+    '"community": 1, "bot": 0, "community_authors": 1}, "prs_total": 1, "prs_merged_total": 0}, '
+    '"age": {"avg_days": 5, "median_days": 5, '
     '"oldest_days": 5, "newest_days": 5}, "engagement": {"total_comments": 0, "avg_comments": 0.0, '
     '"high_engagement": 0, "top_issues": [{"number": 1, "title": "An example issue", "comments": 0}]}, '
     '"labels": {"bug": {"open": 1, "opened_total": 2, "closed_total": 1}, "docs": {"open": 1, "opened_total": 2, '

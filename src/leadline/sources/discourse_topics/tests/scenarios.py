@@ -10,7 +10,9 @@ posts_count too) is skipped; the others are still written.
 
 leadline differs by decision on the scenarios in DIVERGENCES, asserted in test_discourse_topics.py:
 a thread that fails to fetch or parse writes its failure row instead of being skipped, and a topic without
-its views or likes is a `parse_failed` row naming them, not zeros.
+its views or likes is a `parse_failed` row naming them, not zeros. The rows also hold the topic's
+`participants`, `closed`, `solved` and `tags`, which the script drops: the scenarios that write a row from the
+forum's answer are in DIVERGENCES for them (more data is captured than the script did).
 """
 
 from __future__ import annotations
@@ -81,7 +83,7 @@ REBUILT = "".join(
 )
 TODAY = (
     '{"date": "2026-09-23", "topic_id": 1001, "label": "main", "views": 500, "replies": 4, "likes": 7, '
-    '"last_post": "2026-09-22", ' + STAMP
+    '"last_post": "2026-09-22", "participants": 3, "closed": false, "solved": false, "tags": ["example"], ' + STAMP
 )
 
 SCENARIOS = [
@@ -133,7 +135,11 @@ SCENARIOS = [
     ),
 ]
 
+MORE_DATA = "more data is captured than the script did"
 DIVERGENCES = {
+    # leadline also keeps each topic's participants, closed, solved and tags, which the script's rows lack.
+    "two_threads": MORE_DATA,
+    "a_rerun_replaces_only_the_same_thread_and_day": MORE_DATA,
     "failed_or_unparseable_threads_are_skipped": "ADR: a failure is recorded as a failure",
     "missing_counts_read_as_zero": "ADR: a failure is recorded as a failure",
 }

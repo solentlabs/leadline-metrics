@@ -9,6 +9,8 @@ countries and how many report. A failed fetch, a body that doesn't parse, or a n
 Where leadline differs by a decision, the scenario is in DIVERGENCES, and test_ha_platform.py
 asserts leadline's side: each of those answers writes a failure row (`fetch_failed` or `parse_failed`)
 for the run's date, where the script writes nothing or zeros (ADR: a failure is recorded as a failure).
+The rows also hold `ha_versions`, `os_boards` and `supervisor_arch`, which the script drops: the scenarios
+that write a row are in DIVERGENCES for them (more data is captured than the script did).
 """
 
 from __future__ import annotations
@@ -27,8 +29,16 @@ EARLIER = '{"date": "2026-09-22", "active_installations": 1000, "reports_integra
 # leadline's config for these scenarios: the default file is the script's.
 LEADLINE_CONFIG: dict[str, str] = {}
 
+MORE_DATA = "more data is captured than the script did"
+
 # The scenarios where leadline's rows differ from the script's by a decision, and the decision.
 DIVERGENCES = {
+    # leadline also keeps the core versions, the OS boards and the supervisor architectures (null where the
+    # answer lacks them), which the script's rows lack.
+    "totals_and_the_top_fifteen_countries": MORE_DATA,
+    "missing_totals_and_no_installations": MORE_DATA,
+    "tied_countries_keep_the_feeds_order": MORE_DATA,
+    "null_reports_integrations_count_as_zero": MORE_DATA,
     "failed_fetch_writes_nothing": "ADR: a failure is recorded as a failure",
     "unparseable_body_writes_nothing": "ADR: a failure is recorded as a failure",
     "a_null_country_count_writes_nothing": "ADR: a failure is recorded as a failure",

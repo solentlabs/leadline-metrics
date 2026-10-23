@@ -30,7 +30,27 @@ REPO = grs.REPO
 EARLIER = grs.EARLIER[FILE]
 NOW = "2026-09-23T23:31:05+00:00"  # the scenarios' clock as captured_at gives it
 REPOSITORY, VIEWS, CLONES = grs.REPOSITORY, *grs.TRAFFIC
-STATS = {"stars": 41, "forks": 6, "watchers": 5, "open_issues": 3}
+# The repository's fields in the row: the script's four counts, then the three leadline adds (more data is
+# captured than the script did), which the builder's repository gives as network_count = forks, size 1000.
+STATS = {
+    "stars": 41,
+    "forks": 6,
+    "watchers": 5,
+    "open_issues": 3,
+    "network_count": 6,
+    "size_kb": 1000,
+    "pushed_at": "2026-09-23T00:00:00Z",
+}
+SCRIPTS = [
+    "stars",
+    "forks",
+    "watchers",
+    "open_issues",
+    "views_14d",
+    "views_unique_14d",
+    "clones_14d",
+    "clones_unique_14d",
+]
 TRAFFIC = {"views_14d": 217, "views_unique_14d": 42, "clones_14d": 28, "clones_unique_14d": 14}
 NO_VIEWS = {"views_14d": None, "views_unique_14d": None}
 NO_CLONES = {"clones_14d": None, "clones_unique_14d": None}
@@ -124,11 +144,73 @@ def test_rows_match_the_scripts(scenario: Any, tmp_path: Path) -> None:
     assert (done.status, done.ctx.critical) == (0, [])
 
 
+def added(name: str, folder: Path) -> list[str]:
+    """How the rows differ from the script's but for the fields leadline adds (more data is captured than the
+    script did)."""
+    fields = ("network_count", "size_kb", "pushed_at")
+    return [
+        d
+        for d in port.golden_differences(NAME, name, folder)
+        if not d.endswith(tuple(f"{f}: only in B" for f in fields))
+    ]
+
+
+def test_the_row_is_the_scripts_with_the_repositorys_network_size_and_last_push_added(tmp_path: Path) -> None:
+    repository = exchange(
+        grs.REPO_URL,
+        {**github_repo(REPO, stars=41, forks=6, watchers=5, open_issues=3), "network_count": 31, "size": 2048,
+         "pushed_at": "2026-09-22T18:30:00Z"},
+    )  # fmt: skip
+
+    done = run(tmp_path, repository, VIEWS, CLONES)
+
+    written = json.loads(done.rows[FILE].splitlines()[-1])
+    assert (written["network_count"], written["size_kb"], written["pushed_at"]) == (31, 2048, "2026-09-22T18:30:00Z")
+    assert list(written)[:9] == ["date", "repo", *SCRIPTS[:4], "network_count", "size_kb", "pushed_at"]
+    assert list(written)[9:] == [*SCRIPTS[4:], "captured_at"]  # the script's fields keep their order
+
+
+def test_every_script_row_is_the_same_with_the_added_fields(tmp_path: Path) -> None:
+    done = port.run(source, CONFIG, port.scenario(NAME, "repository_and_its_traffic"), tmp_path)
+
+    assert added("repository_and_its_traffic", tmp_path) == []
+    assert json.loads(done.rows[FILE].splitlines()[-1])["pushed_at"] == STATS["pushed_at"]
+
+
+def test_a_repository_never_pushed_to_has_a_null_pushed_at(tmp_path: Path) -> None:
+    empty = exchange(
+        grs.REPO_URL, {**github_repo(REPO, stars=41, forks=6, watchers=5, open_issues=3), "pushed_at": None}
+    )
+
+    done = run(tmp_path, empty, VIEWS, CLONES)
+
+    assert json.loads(done.rows[FILE].splitlines()[-1])["pushed_at"] is None
+    assert "status" not in json.loads(done.rows[FILE].splitlines()[-1])
+
+
+@pytest.mark.parametrize(
+    ("change", "reason"),
+    [
+        ({"network_count": "31"}, "repository response had an unexpected shape"),
+        ({"size": True}, "repository response had an unexpected shape"),
+        ({"pushed_at": 5}, "repository response had an unexpected shape"),
+    ],
+    ids=["a network count not a number", "a size a boolean", "a last push not a string"],
+)
+def test_added_fields_it_cant_use_are_a_parse_failed_row(tmp_path: Path, change: dict[str, Any], reason: str) -> None:
+    broken = exchange(grs.REPO_URL, {**github_repo(REPO, stars=41, forks=6, watchers=5, open_issues=3), **change})
+
+    done = run(tmp_path, broken, VIEWS, CLONES)
+
+    assert done.rows == {FILE: EARLIER + failure_row("parse_failed", reason)}
+
+
 def test_the_divergences_are_the_decided_ones() -> None:
     assert sorted(port.divergences(NAME)) == [
         "an_escaped_quote_in_the_repository_writes_nothing",
         "failed_repository_writes_nothing",
         "failed_traffic_counts_as_zero",
+        "repository_and_its_traffic",
         "triple_quotes_in_the_repository_write_nothing",
         "unparseable_repository_writes_nothing",
         "unparseable_traffic_writes_nothing",
@@ -141,7 +223,10 @@ def test_missing_counts_are_a_parse_failed_row_naming_them_not_zeros(tmp_path: P
 
     done = run(tmp_path, bare, exchange(grs.VIEWS, {"views": []}), CLONES)
 
-    reason = "repository response is missing stargazers_count, forks_count, subscribers_count, open_issues_count"
+    reason = (
+        "repository response is missing stargazers_count, forks_count, subscribers_count, open_issues_count, "
+        "network_count, size"
+    )
     failure = f'"status": "parse_failed", "reason": "{reason}", "captured_at": "{NOW}"'
     assert done.rows[FILE] == EARLIER + f'{{"date": "2026-09-23", "repo": "{REPO}", {failure}}}\n'
 
@@ -155,7 +240,19 @@ def test_missing_counts_are_a_parse_failed_row_naming_them_not_zeros(tmp_path: P
 def test_a_repository_the_script_cant_paste_writes_the_real_row(tmp_path: Path, name: str) -> None:
     done = port.run(source, CONFIG, port.scenario(NAME, name), tmp_path)
 
-    assert done.rows == {FILE: EARLIER + row(stars=41, forks=0, watchers=0, open_issues=0, **TRAFFIC)}
+    assert done.rows == {
+        FILE: EARLIER
+        + row(
+            stars=41,
+            forks=0,
+            watchers=0,
+            open_issues=0,
+            network_count=0,
+            size_kb=1000,
+            pushed_at="2026-09-23T00:00:00Z",
+            **TRAFFIC,
+        )
+    }
     assert (done.status, done.ctx.critical) == (0, [])
 
 
@@ -323,7 +420,7 @@ def test_a_good_row_replaces_a_partial_row(tmp_path: Path) -> None:
 
     done = port.run(source, CONFIG, scenario, tmp_path)
 
-    assert port.golden_differences(NAME, "repository_and_its_traffic", tmp_path) == []
+    assert added("repository_and_its_traffic", tmp_path) == []
     assert done.ctx.corrections == []
 
 

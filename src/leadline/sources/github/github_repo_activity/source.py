@@ -19,12 +19,12 @@ LAGGING = False
 WEEK = timedelta(days=7)
 # The row's repository counts, and the field each is read from, in the script's order.
 STATS = {"stars": "stargazers_count", "forks": "forks_count", "open_issues": "open_issues_count"}
-# The optional lists, and the row field each one fills.
+# The optional lists, and the row fields each one fills.
 LISTS = {
-    "issues": "issues_7d",
-    "contributors": "contributors",
-    "releases": "latest_release",
-    "languages": "codebase_bytes",
+    "issues": ["issues_7d"],
+    "contributors": ["contributors"],
+    "releases": ["latest_release"],
+    "languages": ["codebase_bytes", "languages"],
 }
 
 
@@ -116,10 +116,11 @@ def _latest_release(answer: Any) -> dict[str, str]:
     return {"tag": tag, "date": published[:10]}
 
 
-def _codebase_bytes(answer: Any) -> int:
+def _languages(answer: Any) -> dict[str, int]:
+    """The bytes of code in each language."""
     if not isinstance(answer, dict) or not all(is_count(n) for n in answer.values()):
         raise unexpected("languages")
-    return sum(answer.values())
+    return answer
 
 
 def _read(kind: str, answer: Response | str, read: Callable[[Any], Any]) -> tuple[Any, str | None]:
@@ -195,19 +196,20 @@ def _collect(ctx: Context, entry: Any) -> None:
         "issues": lambda answer: _issues(answer, owner),
         "contributors": _contributors,
         "releases": _latest_release,
-        "languages": _codebase_bytes,
+        "languages": _languages,
     }
     values: dict[str, Any] = {}
     failed: dict[str, list[str]] = {}  # each failure, as the reason names it, and the field it left null
     for kind, answer in answers.items():
         values[kind], reason = _read(kind, answer, readers[kind])
         if reason is not None:
-            failed[reason] = [LISTS[kind]]
+            failed[reason] = LISTS[kind]
     row = {
         "date": day,
         "label": label,
         **fields,
-        "codebase_bytes": values["languages"],
+        "codebase_bytes": None if values["languages"] is None else sum(values["languages"].values()),
+        "languages": values["languages"],
         "velocity_7d": _velocity(messages, authors, entry),
         "issues_7d": values["issues"],
         "contributors": values["contributors"],

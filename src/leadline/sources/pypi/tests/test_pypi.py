@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +22,7 @@ from leadline.context import Critical, Finding
 from leadline.http import SavedResponses
 from leadline.sources import pypi as source
 from leadline.sources.pypi.tests import scenarios as sc
+from leadline.sources.pypi.tests.builders import pypistats_overall
 
 NAME = "pypi"
 PACKAGE, OTHER = sc.PACKAGE, sc.OTHER
@@ -54,8 +55,35 @@ def failure(package: str, status: str, reason: str, http_code: str | None = None
     return row(package=package, status=status, **code, reason=reason)
 
 
-# The good row for the run's date on the RECENT history, as the script writes it.
-GOOD = golden_lines("downloads_for_the_day_week_and_month")[-1]
+MIRRORS = ("downloads_with_mirrors_last_day", "downloads_with_mirrors_last_week", "downloads_with_mirrors_last_month")
+
+
+def with_mirrors(line: str, *values: int | None) -> str:
+    """The script's row `line` with the three with-mirrors fields leadline adds, after the month's downloads."""
+    fields = json.loads(line)
+    out: dict[str, Any] = {}
+    for key, value in fields.items():
+        out[key] = value
+        if key == "downloads_last_month":
+            out.update(zip(MIRRORS, values))
+    return json.dumps(out) + "\n"
+
+
+def mirrors_on(history: dict[date, int | None], day: date, days: int, per_day: int = 3) -> int:
+    """The with-mirrors downloads of the `days` ending on `day`: the builder gives each day its count plus
+    `per_day` (a day without downloads has only the mirrors')."""
+    return sum(
+        (history.get(day - timedelta(days=n)) or 0) + per_day for n in range(days) if day - timedelta(days=n) in history
+    )
+
+
+# The good row for the run's date on the RECENT history, as the script writes it, with leadline's added fields.
+GOOD = with_mirrors(
+    golden_lines("downloads_for_the_day_week_and_month")[-1],
+    mirrors_on(sc.RECENT, sc.RUN, 1),
+    mirrors_on(sc.RECENT, sc.RUN, 7),
+    mirrors_on(sc.RECENT, sc.RUN, 30),
+)
 
 
 def partial(good: str, reason: str) -> str:
@@ -149,15 +177,126 @@ def test_rows_match_the_scripts(scenario: Any, tmp_path: Path) -> None:
     assert (done.status, done.ctx.critical) == (0, [])
 
 
+def bare(text: str) -> str:
+    """Row `text` without the with-mirrors fields leadline adds."""
+    return "".join(
+        json.dumps({k: v for k, v in json.loads(line).items() if k not in MIRRORS}) + "\n" for line in text.splitlines()
+    )
+
+
+def without_added(folder: Path) -> None:
+    """Take the with-mirrors fields leadline adds (more data is captured than the script did) out of the rows in
+    `folder`, so the script's own can be compared; each is asserted on its own below."""
+    for file in folder.glob("*.jsonl"):
+        lines = []
+        for line in file.read_text(encoding="utf-8").splitlines():
+            try:
+                fields = json.loads(line)
+            except ValueError:  # a seed line that isn't a row stays as it is
+                fields = None
+            if isinstance(fields, dict):
+                lines.append(json.dumps({k: v for k, v in fields.items() if k not in MIRRORS}) + "\n")
+            else:
+                lines.append(line + "\n")
+        file.write_text("".join(lines), encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    [s for s in scenarios.scenarios(NAME) if port.divergences(NAME).get(s.name) == sc.MORE_DATA],
+    ids=lambda s: s.name,
+)
+def test_rows_are_the_scripts_with_the_added_mirror_downloads(scenario: Any, tmp_path: Path) -> None:
+    """More data is captured than the script did: but for the with-mirrors fields, the rows are the script's."""
+    done = port.run(source, config(scenario), scenario, tmp_path)
+
+    assert any(MIRRORS[0] in text for text in done.rows.values())
+    without_added(tmp_path)
+    assert port.golden_differences(NAME, scenario.name, tmp_path) == []
+    assert (done.status, done.ctx.critical) == (0, [])
+
+
+def test_the_row_adds_the_downloads_with_mirrors_after_those_without(tmp_path: Path) -> None:
+    done = run_scenario("downloads_for_the_day_week_and_month", tmp_path)
+
+    written = json.loads(done.rows[FILE].splitlines()[-1])
+    assert (written[MIRRORS[0]], written[MIRRORS[1]], written[MIRRORS[2]]) == (
+        mirrors_on(sc.RECENT, sc.RUN, 1),
+        mirrors_on(sc.RECENT, sc.RUN, 7),
+        mirrors_on(sc.RECENT, sc.RUN, 30),
+    )
+    assert written[MIRRORS[0]] > written["downloads_last_day"]  # with mirrors, not without
+    assert list(written)[:9] == [
+        "date",
+        "package",
+        "status",
+        "downloads_last_day",
+        "downloads_last_week",
+        "downloads_last_month",
+        *MIRRORS,
+    ]
+    assert list(written)[9:] == ["latest_version", "requires_python", "captured_at"]
+    assert done.rows[FILE].splitlines(keepends=True)[-1] == GOOD
+
+
+def test_a_backfilled_day_has_its_downloads_with_mirrors(tmp_path: Path) -> None:
+    done = run_scenario("backfills_missing_and_failed_days", tmp_path)
+
+    backfilled = [json.loads(line) for line in done.rows[FILE].splitlines() if '"backfilled"' in line]
+    assert backfilled
+    for fields in backfilled:
+        day = date.fromisoformat(fields["date"])
+        assert fields[MIRRORS[0]] == mirrors_on(sc.RECENT, day, 1)
+        assert fields[MIRRORS[1]] == mirrors_on(sc.RECENT, day, 7)
+        assert fields[MIRRORS[2]] == mirrors_on(sc.RECENT, day, 30)
+
+
+def test_a_history_without_with_mirrors_rows_leaves_the_fields_null_not_zero(tmp_path: Path) -> None:
+    body = pypistats_overall(PACKAGE, sc.RECENT)
+    body["data"] = [d for d in body["data"] if d["category"] != "with_mirrors"]
+
+    done = run_scenario(
+        "downloads_for_the_day_week_and_month",
+        tmp_path,
+        responses=[exchange(sc.overall_url(PACKAGE), body), sc.project(PACKAGE, "2026-05-01")],
+    )
+
+    written = json.loads(done.rows[FILE].splitlines()[-1])
+    assert [written[k] for k in MIRRORS] == [None, None, None]
+    assert written["status"] == "ok"
+    assert written["downloads_last_week"] == json.loads(GOOD)["downloads_last_week"]  # the row is otherwise as today
+
+
+def test_a_with_mirrors_row_it_cant_use_is_left_out_not_a_failure(tmp_path: Path) -> None:
+    body = pypistats_overall(PACKAGE, sc.RECENT)
+    body["data"].append({"category": "with_mirrors", "date": "2026-09-23", "downloads": None})
+
+    done = run_scenario(
+        "downloads_for_the_day_week_and_month",
+        tmp_path,
+        responses=[exchange(sc.overall_url(PACKAGE), body), sc.project(PACKAGE, "2026-05-01")],
+    )
+
+    written = json.loads(done.rows[FILE].splitlines()[-1])
+    assert written["status"] == "ok"
+    assert written[MIRRORS[0]] == mirrors_on(sc.RECENT, sc.RUN, 1)  # the day's usable row stands
+
+
 def test_the_divergences_are_the_decided_ones() -> None:
     assert sorted(port.divergences(NAME)) == [
         "a_body_that_is_not_json_writes_no_row",
         "a_failure_replaces_a_good_row_for_the_run_date",
         "a_failure_row_keeps_the_last_status",
+        "a_null_requires_python_is_kept",
         "a_package_not_found_is_asked_again_in_the_retry_pass",
         "a_seed_date_that_is_not_a_string_writes_nothing",
         "a_seed_line_not_an_object_writes_nothing",
         "an_empty_history_writes_nothing",
+        "backfill_starts_where_a_months_window_is_whole",
+        "backfills_missing_and_failed_days",
+        "downloads_for_the_day_week_and_month",
+        "the_retry_pass_asks_again_for_failed_packages",
+        "the_run_date_not_published_yet",
         "without_metadata_the_version_is_blank_and_backfill_starts_a_month_in",
     ]
 
@@ -251,7 +390,7 @@ def test_the_run_date_not_published_keeps_a_good_row_and_still_backfills(tmp_pat
     done = run_scenario(scenario.name, tmp_path, seed=seed)
 
     script = golden_lines(scenario.name)  # the seed's row, the not-published row, two backfilled days
-    assert done.rows == {FILE: seed[FILE] + "".join(script[2:])}
+    assert bare(done.rows[FILE]) == seed[FILE] + "".join(script[2:])
     assert "WARN: kept the good row for 2026-09-23 in " + FILE + "; fetch_failed not recorded" in done.log
 
 
@@ -358,7 +497,7 @@ def test_without_metadata_the_version_is_null_in_a_partial_row_and_the_backfill_
 
     script = golden_lines(scenario.name)
     reason = "metadata request failed (HTTP 404)"
-    assert done.rows == {FILE: "".join(script[:2]) + partial(script[2], reason) + "".join(script[3:])}
+    assert bare(done.rows[FILE]) == "".join(script[:2]) + partial(script[2], reason) + "".join(script[3:])
     assert done.ctx.critical == [Critical(NAME, FILE, f"{PACKAGE}: HTTP 404 from PyPI")]
     assert done.status == 1
 

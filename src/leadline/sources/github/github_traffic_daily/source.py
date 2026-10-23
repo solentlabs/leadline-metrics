@@ -65,7 +65,7 @@ def _collect(ctx: Context, entry: Any) -> None:
     try:
         for kind in ("views", "clones"):
             answers[kind] = ctx.http.request(f"{github.API}/repos/{repo}/traffic/{kind}", headers=github.headers())
-        views = _days("views", read_json("views", answers["views"]))
+        views = {day: (count, unique) for day, count, unique in _days("views", read_json("views", answers["views"]))}
         clones = {
             day: (count, unique) for day, count, unique in _days("clones", read_json("clones", answers["clones"]))
         }
@@ -88,22 +88,24 @@ def _yesterday(ctx: Context) -> str:
 
 
 def _write(
-    ctx: Context, path: Path, repo: str, views: list[tuple[str, int, int]], clones: dict[str, tuple[int, int]]
+    ctx: Context, path: Path, repo: str, views: dict[str, tuple[int, int]], clones: dict[str, tuple[int, int]]
 ) -> None:
-    """A row for each day the file has no good row for, and for yesterday again; never today."""
-    if not views:
+    """A row for each day of the window the file has no good row for, and for yesterday again; never today.
+
+    A day is in the window if GitHub counted views or clones for it; a day with only one has zero of the other.
+    """
+    if not views and not clones:
         ctx.log.info("GitHub daily traffic: no days in the window for %s", repo)
         return
     today, yesterday = ctx.date.isoformat(), _yesterday(ctx)
     good = {day for day, row in store.rows_by_date(path).items() if store.is_good(row)}
-    due = [
-        (day, count, unique) for day, count, unique in views if day < today and (day not in good or day == yesterday)
-    ]
+    due = [day for day in sorted(views.keys() | clones.keys()) if day < today and (day not in good or day == yesterday)]
     if not due:
         ctx.log.info("GitHub daily traffic: already current")
-    for day, count, unique in due:
+    for day in due:
         if day not in good:
             ctx.log.info("GitHub daily traffic backfill: %s", day)
+        count, unique = views.get(day, (0, 0))
         clone_count, clone_unique = clones.get(day, (0, 0))
         row = {
             "date": day,

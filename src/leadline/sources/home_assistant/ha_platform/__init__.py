@@ -6,6 +6,10 @@ the share whose integrations are visible; installation types; average integratio
 countries (ties in the feed's order, at the cut too) and how many report. A null or missing
 installation or reporting count reads as 0, as in the script. Where leadline differs, by decision:
 
+- Its rows end with `ha_versions` (`current.versions`, installations by core version), `os_boards`
+  (`current.operating_system.boards`) and `supervisor_arch` (`current.supervisor.arch`): more data is
+  captured than the script did. Each is null where the answer lacks it or gives it as something but an
+  object, and the row is otherwise unchanged.
 - A failed fetch is a `fetch_failed` row, and an answer it can't use (not JSON, no `current` object, a
   count it divides by or sorts on that isn't a number) is a `parse_failed` row, where the script
   writes nothing, or zeros for a body without `current` (ADR: a failure is recorded as a failure).

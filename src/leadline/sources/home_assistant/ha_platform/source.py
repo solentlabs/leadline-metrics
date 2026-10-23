@@ -80,8 +80,19 @@ def _number(value: Any) -> Any:
     return value
 
 
+def _counts(value: Any) -> Any:
+    """`value` when it is an object (a map of name to count), else None: absent, or not the map it should be."""
+    return value if isinstance(value, dict) else None
+
+
+def _section(current: dict[str, Any], key: str) -> dict[str, Any]:
+    """`current[key]` when it is an object, else an empty one."""
+    return _counts(current.get(key)) or {}
+
+
 def _row(data: Any, day: str) -> dict[str, Any]:
-    """The script's row: the totals, the share reporting integrations, and the top countries.
+    """The script's row: the totals, the share reporting integrations, and the top countries; then the core
+    versions, OS boards and supervisor architectures, null where the answer lacks them.
 
     Tied countries keep the feed's order, at the cut too, as the script's stable sort does.
     """
@@ -108,4 +119,8 @@ def _row(data: Any, day: str) -> dict[str, Any]:
         "avg_integrations": current.get("avg_integrations"),
         "top_countries": dict(top),
         "countries_tracked": len(countries),
+        # Not in the script's row: the core versions, the OS boards and the supervisor architectures.
+        "ha_versions": _counts(current.get("versions")),
+        "os_boards": _counts(_section(current, "operating_system").get("boards")),
+        "supervisor_arch": _counts(_section(current, "supervisor").get("arch")),
     }

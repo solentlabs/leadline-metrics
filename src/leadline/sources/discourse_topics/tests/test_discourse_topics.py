@@ -6,6 +6,7 @@ a decision are listed in scenarios.py (DIVERGENCES) and asserted here instead.
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -27,10 +28,43 @@ BASE = dt.BASE_URL
 NOW = "2026-09-23T23:31:05+00:00"  # the scenarios' clock as captured_at gives it
 ONE = {"FORUM_THREADS": ["1001:main"]}
 MAIN = [{"id": 1001, "label": "main"}]
-GOOD = (
+ADDED = ("participants", "closed", "solved", "tags")  # the fields leadline adds (not in the script's rows)
+BUILT = {"participants": 3, "closed": False, "solved": False, "tags": ["example"]}  # what the builder's topic gives
+
+
+def with_added(text: str, **changes: Any) -> str:
+    """The script's rows in `text` with the four added fields after `last_post`, as the builder's topic gives
+    them unless `changes` say otherwise."""
+    out = []
+    for line in text.splitlines():
+        row = json.loads(line)
+        if "last_post" in row:
+            row = {k: v for key, value in row.items() for k, v in [(key, value), *_after(key)]}
+            row.update(changes)
+        out.append(json.dumps(row) + "\n")
+    return "".join(out)
+
+
+def _after(key: str) -> list[tuple[str, Any]]:
+    return list(BUILT.items()) if key == "last_post" else []
+
+
+def without_added(text: str) -> str:
+    """The rows in `text` without the added fields; a line that isn't a row stays as it is."""
+    out = []
+    for line in text.splitlines():
+        try:
+            row = json.loads(line)
+        except ValueError:
+            row = None
+        out.append(json.dumps({k: v for k, v in row.items() if k not in ADDED}) if isinstance(row, dict) else line)
+    return "".join(f"{line}\n" for line in out)
+
+
+GOOD = with_added(
     '{"date": "2026-09-23", "topic_id": 1001, "label": "main", "views": 5400, "replies": 60, "likes": 88, '
     f'"last_post": "2026-09-20", "captured_at": "{NOW}"}}\n'
-)  # topic 1001 of two_threads, as the script writes it
+)  # topic 1001 of two_threads, as the script writes it, with leadline's added fields
 
 
 def config(topics: list[dict[str, Any]] = MAIN, **entry: Any) -> list[dict[str, Any]]:
@@ -148,6 +182,7 @@ def test_it_needs_no_credentials(tmp_path: Path) -> None:
 
     done = port.run(source, dt.leadline_config(scenario), scenario, tmp_path)
 
+    (tmp_path / FILE).write_text(without_added(done.rows[FILE]), encoding="utf-8")
     assert port.golden_differences(NAME, "two_threads", tmp_path) == []
     assert not any(line.startswith("SKIP:") for line in done.log)
 
@@ -169,10 +204,118 @@ def test_rows_match_the_scripts(scenario: Any, tmp_path: Path) -> None:
     assert (done.status, done.ctx.critical) == (0, [])
 
 
+@pytest.mark.parametrize(
+    "scenario",
+    [s for s in scenarios.scenarios(NAME) if port.divergences(NAME).get(s.name) == dt.MORE_DATA],
+    ids=lambda s: s.name,
+)
+def test_rows_are_the_scripts_with_the_added_fields(scenario: Any, tmp_path: Path) -> None:
+    """More data is captured than the script did: but for the four fields, the rows are the script's."""
+    done = port.run(source, dt.leadline_config(scenario), scenario, tmp_path)
+
+    assert all(key in json.loads(done.rows[FILE].splitlines()[-1]) for key in ADDED)
+    (tmp_path / FILE).write_text(without_added(done.rows[FILE]), encoding="utf-8")
+    assert port.golden_differences(NAME, scenario.name, tmp_path) == []
+    assert (done.status, done.ctx.critical) == (0, [])
+
+
+def written(tmp_path: Path, **changes: Any) -> dict[str, Any]:
+    """The row topic 1001 gets from an answer: the builder's topic with `changes` (None removes a key)."""
+    answer = {**discourse_topic(1001, views=5400, posts_count=61, like_count=88), **changes}
+    answer = {k: v for k, v in answer.items() if not (k in changes and changes[k] is _ABSENT)}
+    row: dict[str, Any] = json.loads(run(tmp_path, exchange(dt.topic_url(1001), answer)).rows[FILE].splitlines()[-1])
+    return row
+
+
+_ABSENT = object()
+
+
+def test_the_row_adds_the_participants_closed_solved_and_tags_after_the_last_post(tmp_path: Path) -> None:
+    row = written(tmp_path, participant_count=7, closed=True, has_accepted_answer=True, tags=["a", "b"])
+
+    assert (row["participants"], row["closed"], row["solved"], row["tags"]) == (7, True, True, ["a", "b"])
+    assert list(row)[:3] == ["date", "topic_id", "label"]
+    assert list(row)[3:] == ["views", "replies", "likes", "last_post", *ADDED, "captured_at"]
+
+
+def test_the_builders_topic_is_open_unsolved_with_its_tag(tmp_path: Path) -> None:
+    row = written(tmp_path)
+
+    assert {k: row[k] for k in ADDED} == BUILT
+
+
+@pytest.mark.parametrize(
+    ("changes", "solved"),
+    [
+        ({"has_accepted_answer": True}, True),
+        ({"has_accepted_answer": False}, False),
+        ({"has_accepted_answer": _ABSENT, "accepted_answer": {"post_number": 3}}, True),
+        ({"has_accepted_answer": _ABSENT, "accepted_answer": None}, False),
+        ({"has_accepted_answer": False, "accepted_answer": {"post_number": 3}}, True),
+        ({"has_accepted_answer": _ABSENT}, None),
+    ],
+    ids=["has it", "has not", "an accepted answer", "a null accepted answer", "either", "neither key"],
+)
+def test_solved_is_true_for_an_accepted_answer_and_null_when_the_topic_cannot_say(
+    tmp_path: Path, changes: Any, solved: bool | None
+) -> None:
+    assert written(tmp_path, **changes)["solved"] is solved
+
+
+@pytest.mark.parametrize(
+    ("changes", "expected"),
+    [
+        ({"tags": [{"id": 1, "name": "x", "slug": "x"}, "y"]}, {"tags": ["x", "y"]}),
+        ({"tags": []}, {"tags": []}),
+        ({"tags": [{"id": 1}, 5, None, "z"]}, {"tags": ["z"]}),
+        ({"tags": _ABSENT}, {"tags": None}),
+        ({"tags": "x"}, {"tags": None}),
+        ({"participant_count": _ABSENT}, {"participants": None}),
+        ({"participant_count": "3"}, {"participants": None}),
+        ({"participant_count": True}, {"participants": None}),
+        ({"closed": _ABSENT}, {"closed": None}),
+        ({"closed": "yes"}, {"closed": None}),
+    ],
+    ids=[
+        "tags as objects and strings",
+        "no tags",
+        "tags it cannot name are left out",
+        "tags absent",
+        "tags not a list",
+        "no participant count",
+        "a participant count a string",
+        "a participant count a boolean",
+        "closed absent",
+        "closed not a boolean",
+    ],
+)
+def test_an_optional_key_it_cant_use_is_null_and_the_row_stays_good(
+    tmp_path: Path, changes: Any, expected: dict[str, Any]
+) -> None:
+    row = written(tmp_path, **changes)
+
+    assert {k: row[k] for k in expected} == expected
+    assert "status" not in row
+    assert row["views"] == 5400
+
+
+def test_rows_rebuilt_for_past_days_are_not_given_the_added_fields(tmp_path: Path) -> None:
+    """Only a night's own answer has them: the past days' posts can't tell who took part, or what was solved."""
+    scenario = port.scenario(NAME, LATE_SCENARIO)
+
+    done = port.run(source, dt.leadline_config(scenario), scenario, tmp_path)
+
+    rebuilt = [json.loads(line) for line in done.rows[FILE].splitlines() if '"backfilled"' in line]
+    assert len(rebuilt) == 3
+    assert not any(key in row for row in rebuilt for key in ADDED)
+
+
 def test_the_divergences_are_the_decided_ones() -> None:
     assert sorted(port.divergences(NAME)) == [
+        "a_rerun_replaces_only_the_same_thread_and_day",
         "failed_or_unparseable_threads_are_skipped",
         "missing_counts_read_as_zero",
+        "two_threads",
     ]
 
 
@@ -198,7 +341,7 @@ def test_a_topic_without_its_counts_is_a_parse_failed_row_naming_them_not_zeros(
 
     done = port.run(source, dt.leadline_config(scenario), scenario, tmp_path)
 
-    good = scenarios.load_golden(NAME)[scenario.name]["rows"][FILE].splitlines(keepends=True)[-1]
+    good = with_added(scenarios.load_golden(NAME)[scenario.name]["rows"][FILE].splitlines(keepends=True)[-1])
     assert done.rows == {
         FILE: failure_row(1001, "main", "parse_failed", "topic response is missing views, like_count, posts_count")
         + good
@@ -211,7 +354,7 @@ def test_each_topic_that_fails_writes_its_own_failure_row(tmp_path: Path) -> Non
 
     done = port.run(source, dt.leadline_config(scenario), scenario, tmp_path)
 
-    good = scenarios.load_golden(NAME)[scenario.name]["rows"][FILE]
+    good = with_added(scenarios.load_golden(NAME)[scenario.name]["rows"][FILE])
     assert done.rows == {
         FILE: failure_row(1001, "main", "fetch_failed", "topic request failed", "000")
         + failure_row(1002, "other-thread", "parse_failed", "topic response was not JSON")

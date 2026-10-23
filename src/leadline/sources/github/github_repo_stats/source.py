@@ -7,18 +7,20 @@ from typing import Any
 
 from leadline import store
 from leadline.context import Context, Finding
-from leadline.http import HttpError, UnusableError, counts, read_json
+from leadline.http import HttpError, UnusableError, counts, read_json, unexpected
 from leadline.sources.github import api as github
 from leadline.sources.github.github_repo_stats import spec
 
 ENV: tuple[str, ...] = (github.CREDENTIAL,)
 LAGGING = False
-# The row's repository counts, and the field each is read from, in the script's order.
+# The row's repository counts, and the field each is read from: the script's four, then the two it doesn't keep.
 STATS = {
     "stars": "stargazers_count",
     "forks": "forks_count",
     "watchers": "subscribers_count",
     "open_issues": "open_issues_count",
+    "network_count": "network_count",
+    "size_kb": "size",
 }
 TRAFFIC = ("views", "clones")
 
@@ -77,7 +79,12 @@ def _collect(ctx: Context, entry: Any) -> None:
         if reason is not None:
             failed[reason] = list(fields)
     try:
-        row.update(counts("repository", read_json("repository", repository), STATS))
+        body = read_json("repository", repository)
+        found: dict[str, Any] = dict(counts("repository", body, STATS))
+        found["pushed_at"] = body.get("pushed_at")  # null for a repository nothing was pushed to
+        if not (found["pushed_at"] is None or isinstance(found["pushed_at"], str)):
+            raise unexpected("repository")
+        row.update(found)
     except UnusableError as e:
         ctx.log.info("ERROR: Failed to parse the repository %s: %s", repo, e)
         store.write_failure(path, {**row, "status": "parse_failed", "reason": str(e)}, ctx.now)

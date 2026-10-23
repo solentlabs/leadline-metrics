@@ -39,7 +39,7 @@ largest first, with the name deciding a tie, and an item with no name is
 | `requests`, `cached_requests`, `bytes`, `cached_bytes`, `encrypted_requests`, `encrypted_bytes`, `page_views`, `threats`, `uniques` | the daily dataset | the day's totals; `uniques` is unique visitors |
 | `countries`, `country_bytes`, `country_threats` | the daily dataset | requests, bytes and threats by country name |
 | `status_codes`, `browser_page_views`, `content_types`, `content_type_bytes`, `http_versions`, `ssl_protocols`, `ip_classes`, `threat_paths` | the daily dataset | requests (page views for `browser_page_views`, bytes for `content_type_bytes`) by status code, browser family, content type, HTTP version, SSL protocol, class of address (`clean`, `botnet`, and so on) and kind of threat |
-| `visits`, `origin_response_ms` | the per-request dataset | the day's visits, and the origin's mean (`avg`) and 50th, 95th and 99th percentile (`p50`, `p95`, `p99`) response time in milliseconds |
+| `visits`, `origin_response_ms` | the per-request dataset | the day's visits, and the origin's mean (`avg`) and 50th, 95th and 99th percentile (`p50`, `p95`, `p99`) response time in milliseconds; a mean of `-1`, which Cloudflare gives a day with no origin responses, is no mean |
 | `paths`, `hosts`, `user_agents`, `browsers`, `operating_systems`, `device_types`, `data_centers`, `cache_statuses`, `methods`, `bot_categories`, `security_actions`, `security_sources`, `request_sources` | the per-request dataset | the top `top` values by request count |
 
 The daily dataset gives exact totals for a whole day. The per-request dataset

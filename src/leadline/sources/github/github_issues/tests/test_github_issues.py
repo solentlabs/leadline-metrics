@@ -83,6 +83,23 @@ def last_row(done: port.PortRun) -> dict[str, Any]:
     return row
 
 
+ADDED = (("issues", "closed_not_planned_total"), ("contribution", "prs_merged_total"))  # not in the script's rows
+
+
+def without_added(folder: Path) -> None:
+    """Take the keys leadline adds (more data is captured than the script did) out of the rows in `folder`, so the
+    script's own can be compared; each is asserted on its own below."""
+    for file in folder.glob("*.jsonl"):
+        lines = []
+        for line in file.read_text(encoding="utf-8").splitlines():
+            row = json.loads(line)
+            for section, key in ADDED:
+                if isinstance(row.get(section), dict):
+                    row[section].pop(key, None)
+            lines.append(json.dumps(row) + "\n")
+        file.write_text("".join(lines), encoding="utf-8")
+
+
 # --- the contract ---
 
 
@@ -243,15 +260,90 @@ def test_rows_match_the_scripts(scenario: Any, tmp_path: Path) -> None:
     assert (done.status, done.ctx.critical) == (0, [])
 
 
+@pytest.mark.parametrize(
+    "scenario",
+    [s for s in scenarios.scenarios(NAME) if port.divergences(NAME).get(s.name) == gi.MORE_DATA],
+    ids=lambda s: s.name,
+)
+def test_rows_are_the_scripts_with_the_added_totals(scenario: Any, tmp_path: Path) -> None:
+    """More data is captured than the script did: but for the two totals, the rows are the script's."""
+    done = port.run(source, gi.leadline_config(scenario), scenario, tmp_path)
+
+    assert all(key in json.loads(line)[section] for line in done.rows[FILE].splitlines()[-1:] for section, key in ADDED)
+    without_added(tmp_path)
+    assert port.golden_differences(NAME, scenario.name, tmp_path) == []
+    assert (done.status, done.ctx.critical) == (0, [])
+
+
+MIXED = [
+    gi.issue(1, created_at="2026-09-01T10:00:00Z"),
+    gi.issue(2, created_at="2026-09-01T10:00:00Z", closed_at="2026-09-05T10:00:00Z"),  # completed
+    gi.issue(3, created_at="2026-09-01T10:00:00Z", closed_at="2026-09-06T10:00:00Z", not_planned=True),
+    gi.issue(4, created_at="2026-09-02T10:00:00Z", closed_at="2026-09-07T10:00:00Z", not_planned=True),
+    gi.issue(5, created_at="2026-09-03T10:00:00Z", pull_request=True, closed_at="2026-09-08T10:00:00Z"),  # merged
+    gi.issue(6, created_at="2026-09-03T10:00:00Z", pull_request=True, closed_at="2026-09-09T10:00:00Z", merged=False),
+    gi.issue(7, created_at="2026-09-04T10:00:00Z", pull_request=True),  # open
+    gi.issue(8, created_at="2026-09-04T10:00:00Z", pull_request=True, closed_at="2026-09-10T10:00:00Z"),  # merged
+]
+
+
+def test_the_row_counts_the_pull_requests_merged_and_the_issues_closed_as_not_planned(tmp_path: Path) -> None:
+    """More data is captured than the script did: from the issues list already read."""
+    done = run(tmp_path, gi.responses(MIXED), cfg=[{"repo": REPO}], seed="")
+
+    row = last_row(done)
+    assert row["issues"]["closed_not_planned_total"] == 2  # the two closed not planned, of three closed issues
+    assert row["issues"]["closed_total"] == 3
+    assert row["contribution"]["prs_merged_total"] == 2  # two merged, of three closed pull requests
+    assert row["contribution"]["prs_total"] == 4
+    assert list(row["issues"]) == [
+        "open",
+        "open_prs",
+        "opened_total",
+        "closed_total",
+        "closed_not_planned_total",
+        "since_prev",
+    ]
+    assert list(row["contribution"]) == ["issues", "prs", "prs_total", "prs_merged_total"]
+
+
+def test_an_open_issue_is_not_closed_as_not_planned_and_a_closed_pull_request_not_merged(tmp_path: Path) -> None:
+    reopened = {**gi.issue(9, created_at="2026-09-01T10:00:00Z"), "state_reason": "not_planned"}
+    odd = {**gi.issue(10, created_at="2026-09-01T10:00:00Z", pull_request=True), "pull_request": {"merged_at": ""}}
+    bare = {**gi.issue(11, created_at="2026-09-01T10:00:00Z", pull_request=True), "pull_request": None}
+
+    done = run(tmp_path, gi.responses([reopened, odd, bare]), cfg=[{"repo": REPO}], seed="")
+
+    assert last_row(done)["issues"]["closed_not_planned_total"] == 0
+    assert last_row(done)["contribution"]["prs_merged_total"] == 0
+
+
+def test_past_rows_are_not_given_the_added_totals(tmp_path: Path) -> None:
+    """Only a day's own snapshot has them: the rebuild of earlier days still fills the totals it always did."""
+    eve = '{"date": "2026-09-22", "issues": {}}\n'
+
+    done = run(tmp_path, gi.responses(MIXED), cfg=[{"repo": REPO}], seed=eve)
+
+    eves = [json.loads(line) for line in done.rows[FILE].splitlines() if '"2026-09-22"' in line]
+    assert eves[0]["issues"] == {"opened_total": 4, "closed_total": 3}
+
+
 def test_the_divergences_are_the_decided_ones() -> None:
     assert sorted(port.divergences(NAME)) == [
         "a_page_not_a_list_writes_nothing",
         "an_earlier_row_without_totals_gives_no_flow",
+        "an_undated_row_is_a_snapshot_a_day_back",
+        "empty_repository",
         "failed_later_page_writes_nothing",
         "failed_open_page_writes_nothing",
         "flow_since_the_previous_snapshot",
+        "null_user_and_body",
+        "pages_through_link_headers_without_a_pipeline",
         "repo_not_found_writes_nothing",
+        "snapshot_with_modem_pipeline",
+        "the_previous_snapshot_is_the_last_earlier_row_in_the_file",
         "unparseable_repository_writes_nothing",
+        "without_a_maintainer_everyone_is_community",
     ]
 
 
@@ -260,6 +352,7 @@ def test_an_absent_maintainer_is_none_as_an_empty_one_is(tmp_path: Path) -> None
 
     port.run(source, [{"repo": REPO}], scenario, tmp_path)
 
+    without_added(tmp_path)
     assert port.golden_differences(NAME, scenario.name, tmp_path) == []
 
 
