@@ -3,7 +3,7 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions
 follow [SemVer](https://semver.org/).
 
-## Unreleased
+## 0.8.4 - 2026-10-23
 
 - `ha_integration`: one chart replaces the rank and percentile charts: the
   feed's size and the integrations we outrank (its size less our rank) on one
