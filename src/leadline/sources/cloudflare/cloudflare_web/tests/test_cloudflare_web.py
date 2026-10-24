@@ -54,15 +54,11 @@ def filled(when: date, pageviews: int, visits: int) -> str:
 
 
 def listed(line: str) -> str:
-    """The script's row for yesterday with the top countries and devices leadline adds, before `captured_at`."""
+    """The script's row for yesterday with the top countries, devices and paths leadline adds, before `captured_at`."""
     row = json.loads(line)
     captured_at = row.pop("captured_at")
-    return (
-        json.dumps(
-            {**row, "top_countries": cf.TOP_COUNTRIES, "top_devices": cf.TOP_DEVICES, "captured_at": captured_at}
-        )
-        + "\n"
-    )
+    added = {"top_countries": cf.TOP_COUNTRIES, "top_devices": cf.TOP_DEVICES, "top_paths": cf.TOP_PATHS}
+    return json.dumps({**row, **added, "captured_at": captured_at}) + "\n"
 
 
 def corrected(stored: str, pageviews: int, visits: int) -> str:
@@ -78,6 +74,7 @@ YESTERDAY_ROW = (
     '{"ref": "github.com", "count": 20}, {"ref": "community.home-assistant.io", "count": 5}], '
     '"top_countries": [{"name": "US", "count": 30}, {"name": "DE", "count": 12}, {"name": "(unknown)", "count": 3}], '
     '"top_devices": [{"name": "desktop", "count": 25}, {"name": "mobile", "count": 20}], '
+    '"top_paths": [{"name": "/", "count": 40}, {"name": "/terms", "count": 5}], '
     '"captured_at": "' + NOW + '"}\n'
 )
 
@@ -451,12 +448,12 @@ def test_an_error_answer_changes_no_past_day_and_is_recoverable(tmp_path: Path) 
     assert (done.status, done.ctx.critical, done.ctx.corrections) == (0, [], [])
 
 
-# --- more data is captured than the script did: the week's top countries and devices ---
+# --- more data is captured than the script did: the week's top countries, devices and paths ---
 
 
 def differences(name: str, folder: Path) -> list[str]:
-    """How the rows differ from the script's, but for the `top_countries` and `top_devices` leadline adds."""
-    added = ("top_countries: only in B", "top_devices: only in B")
+    """How the rows differ from the script's, but for the lists leadline adds (`top_countries` and the like)."""
+    added = ("top_countries: only in B", "top_devices: only in B", "top_paths: only in B")
     return [d for d in port.golden_differences(NAME, name, folder) if not d.endswith(added)]
 
 
@@ -466,8 +463,12 @@ def test_every_row_the_script_writes_is_the_same_with_the_lists_added(tmp_path: 
 
     last = json.loads(done.rows[FILE].splitlines()[-1])
     assert differences(name, tmp_path) == []
-    assert (last["top_countries"], last["top_devices"]) == (cf.TOP_COUNTRIES, cf.TOP_DEVICES)
-    assert list(last)[-4:] == ["top_referrers", "top_countries", "top_devices", "captured_at"]
+    assert (last["top_countries"], last["top_devices"], last["top_paths"]) == (
+        cf.TOP_COUNTRIES,
+        cf.TOP_DEVICES,
+        cf.TOP_PATHS,
+    )
+    assert list(last)[-5:] == ["top_referrers", "top_countries", "top_devices", "top_paths", "captured_at"]
     assert (done.status, done.ctx.critical) == (0, [])
 
 
@@ -557,7 +558,7 @@ def test_a_list_it_cant_read_is_a_partial_row_not_an_empty_list(tmp_path: Path, 
 
 def test_both_lists_failing_are_one_partial_row_with_both_reasons(tmp_path: Path) -> None:
     scenario = replace(port.scenario(NAME, "week_of_traffic"), seed={})
-    responses = [*scenario.responses, *three("countryName"), *three("deviceType", 502)]
+    responses = [*scenario.responses, *three("countryName"), *three("deviceType", 502), *cf.lists(None, None)]
 
     done = run(replace(scenario, responses=responses), tmp_path, lists=False)
 

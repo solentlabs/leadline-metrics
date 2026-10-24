@@ -8,7 +8,7 @@ a day with no row, a failed row, or a row read under another site tag is filled,
 `backfilled`. Every row read from the API carries the `site_tag` it was read under. Where leadline
 differs, by decision:
 
-- Yesterday's row also holds the week's top countries and devices (`top_countries`, `top_devices`),
+- Yesterday's row also holds the week's top countries, devices and paths (`top_countries`, `top_devices`, `top_paths`),
   each from a request of its own, which the script never makes. A list that fails or can't be read is
   null in a `partial` row, and the list an earlier run got is kept (ADR: a partly failed row keeps its
   good parts).

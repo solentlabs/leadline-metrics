@@ -3,9 +3,9 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions
 follow [SemVer](https://semver.org/).
 
-## Unreleased
+## 0.8.5 - 2026-10-24
 
-- `cloudflare_web`: yesterday's row holds `top_countries` and `top_devices`,
+- `cloudflare_web`: yesterday's row holds `top_countries`, `top_devices` and `top_paths`,
   the week's ten most frequent values (`name`, `count`) of the visitors whose
   browsers run Cloudflare's beacon, each from one more request. A list that
   fails leaves it null in a `partial` row, as the referrers do elsewhere.

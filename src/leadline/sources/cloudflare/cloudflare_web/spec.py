@@ -13,7 +13,7 @@ KEYS = ("label", "site_tag")  # the keys an entry may have, besides `file`
 
 # The week's top values of a dimension of the page loads, each read by a request of its own so that one the API
 # refuses leaves the others: the row's field, and the dimension's name in the GraphQL schema.
-LISTS = (("top_countries", "countryName"), ("top_devices", "deviceType"))
+LISTS = (("top_countries", "countryName"), ("top_devices", "deviceType"), ("top_paths", "requestPath"))
 TOP = 10  # how many values a list keeps
 
 
