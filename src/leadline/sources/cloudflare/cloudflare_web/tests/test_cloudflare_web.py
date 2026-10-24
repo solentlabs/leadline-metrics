@@ -25,6 +25,8 @@ from leadline.sources.cloudflare.tests.builders import (
     CLOUDFLARE_API,
     CLOUDFLARE_GRAPHQL,
     rum_day,
+    rum_group,
+    rum_list,
     rum_site,
     rum_sites,
     web_analytics,
@@ -36,10 +38,31 @@ FILE = cf.FILE
 NOW = "2026-09-23T23:31:05+00:00"  # the scenarios' clock as captured_at gives it
 
 
+def run(scenario: Any, folder: Path, cfg: Any = CONFIG, lists: bool | None = None) -> Any:
+    """The source on the scenario, given leadline's two list answers too where it reads the main answer, which
+    the script never asks for (`lists` says so where the scenario's responses were replaced)."""
+    if lists is None:
+        lists = scenario.name in cf.READS_LISTS
+    responses = [*scenario.responses, *cf.lists()] if lists else scenario.responses
+    return port.run(cloudflare_web, cfg, replace(scenario, responses=responses), folder)
+
+
 def filled(when: date, pageviews: int, visits: int) -> str:
     """The row a heal writes for a past day: read under the configured site tag, marked backfilled."""
     row = {"date": when.isoformat(), "site": "example", "site_tag": cf.SITE, "status": "ok"}
     return json.dumps({**row, "pageviews": pageviews, "visits": visits, "backfilled": True, "captured_at": NOW}) + "\n"
+
+
+def listed(line: str) -> str:
+    """The script's row for yesterday with the top countries and devices leadline adds, before `captured_at`."""
+    row = json.loads(line)
+    captured_at = row.pop("captured_at")
+    return (
+        json.dumps(
+            {**row, "top_countries": cf.TOP_COUNTRIES, "top_devices": cf.TOP_DEVICES, "captured_at": captured_at}
+        )
+        + "\n"
+    )
 
 
 def corrected(stored: str, pageviews: int, visits: int) -> str:
@@ -53,6 +76,8 @@ YESTERDAY_ROW = (
     '"visits": 10, "window_start": "2026-09-16", "window_end": "2026-09-22", "window_pageviews": 175, '
     '"window_visits": 49, "days_returned": 7, "top_referrers": [{"ref": "(direct)", "count": 60}, '
     '{"ref": "github.com", "count": 20}, {"ref": "community.home-assistant.io", "count": 5}], '
+    '"top_countries": [{"name": "US", "count": 30}, {"name": "DE", "count": 12}, {"name": "(unknown)", "count": 3}], '
+    '"top_devices": [{"name": "desktop", "count": 25}, {"name": "mobile", "count": 20}], '
     '"captured_at": "' + NOW + '"}\n'
 )
 
@@ -129,33 +154,41 @@ def test_files_are_the_default_or_the_template_of_each_entry() -> None:
 
 @pytest.mark.parametrize("scenario", port.golden_scenarios(NAME), ids=lambda s: s.name)
 def test_rows_match_the_scripts(scenario: Any, tmp_path: Path) -> None:
-    port.run(cloudflare_web, CONFIG, scenario, tmp_path)
+    run(scenario, tmp_path)
 
     assert port.golden_differences(NAME, scenario.name, tmp_path) == []
 
 
 def test_the_divergences_are_the_decided_ones() -> None:
-    assert sorted(port.divergences(NAME)) == [
-        "a_failure_replaces_a_good_row",
-        "a_good_row_whose_numbers_changed_is_left",
-        "a_list_body_writes_no_row",
-        "a_null_body_writes_no_row",
-        "a_null_viewer_writes_no_row",
-        "a_seed_line_not_an_object_stops_the_write",
-        "an_error_that_is_not_an_object_writes_no_row",
-        "null_data_reads_as_no_account",
-    ]
+    assert sorted(port.divergences(NAME)) == sorted(
+        [
+            *cf.MORE_DATA_SCENARIOS,
+            *DECIDED,
+        ]
+    )
+
+
+DECIDED = [
+    "a_failure_replaces_a_good_row",
+    "a_good_row_whose_numbers_changed_is_left",
+    "a_list_body_writes_no_row",
+    "a_null_body_writes_no_row",
+    "a_null_viewer_writes_no_row",
+    "a_seed_line_not_an_object_stops_the_write",
+    "an_error_that_is_not_an_object_writes_no_row",
+    "null_data_reads_as_no_account",
+]
 
 
 def test_it_is_skipped_without_its_credentials(tmp_path: Path) -> None:
-    done = port.run(cloudflare_web, CONFIG, port.scenario(NAME, "skips_without_credentials"), tmp_path)
+    done = run(port.scenario(NAME, "skips_without_credentials"), tmp_path)
 
     assert (done.status, done.rows) == (0, {})
     assert "SKIP: cloudflare_web (CLOUDFLARE_ACCOUNT_ID not set)" in done.log
 
 
 def test_retries_wait_10_then_20_seconds(tmp_path: Path) -> None:
-    done = port.run(cloudflare_web, CONFIG, port.scenario(NAME, "retries_until_the_request_succeeds"), tmp_path)
+    done = run(port.scenario(NAME, "retries_until_the_request_succeeds"), tmp_path)
 
     assert done.sleeps == [10, 20]
     assert done.status == 0
@@ -165,7 +198,7 @@ def test_retries_wait_10_then_20_seconds(tmp_path: Path) -> None:
     "name", ["three_failed_attempts_record_the_last_status", "graphql_errors_in_a_success", "account_matched_nothing"]
 )
 def test_a_failure_row_is_recoverable_so_the_run_exits_0(tmp_path: Path, name: str) -> None:
-    done = port.run(cloudflare_web, CONFIG, port.scenario(NAME, name), tmp_path)
+    done = run(port.scenario(NAME, name), tmp_path)
 
     assert '"date": "2026-09-22", "site": "example", "status": "ok"' not in done.rows[FILE]  # yesterday failed
     assert (done.status, done.ctx.critical) == (0, [])
@@ -179,7 +212,7 @@ def test_a_failure_keeps_a_good_row(tmp_path: Path) -> None:
     """ADR: a failure never replaces good data (the script replaces it: a_failure_replaces_a_good_row)."""
     scenario = port.scenario(NAME, "a_failure_replaces_a_good_row")
 
-    done = port.run(cloudflare_web, CONFIG, scenario, tmp_path)
+    done = run(scenario, tmp_path)
 
     assert done.rows == {FILE: scenario.seed[FILE]}
     assert done.status == 0
@@ -196,7 +229,7 @@ def test_a_failure_row_replaces_a_failure_row(tmp_path: Path) -> None:
         port.scenario(NAME, "three_failed_attempts_record_the_last_status"), seed={FILE: cf.fetch_failed(cf.YESTERDAY)}
     )
 
-    done = port.run(cloudflare_web, CONFIG, scenario, tmp_path)
+    done = run(scenario, tmp_path)
 
     assert done.rows[FILE] == (
         '{"date": "2026-09-22", "site": "example", "status": "fetch_failed", "http_code": "503", '
@@ -216,7 +249,7 @@ def test_a_failure_row_replaces_a_failure_row(tmp_path: Path) -> None:
 )
 def test_a_malformed_answer_is_a_parse_failed_row(tmp_path: Path, name: str) -> None:
     """ADR: a failure is recorded as a failure: never no row, never zeros, never no_account for null data."""
-    done = port.run(cloudflare_web, CONFIG, port.scenario(NAME, name), tmp_path)
+    done = run(port.scenario(NAME, name), tmp_path)
 
     assert done.rows == {FILE: parse_failed("response had an unexpected shape")}
     assert done.status == 0
@@ -259,7 +292,7 @@ DATED = {"dimensions": {"date": "2026-09-22"}}  # a daily group the script reads
 def test_any_answer_it_cant_read_is_a_parse_failed_row(tmp_path: Path, body: Any) -> None:
     scenario = replace(port.scenario(NAME, "quiet_week"), responses=[cf.answer(body)])
 
-    done = port.run(cloudflare_web, CONFIG, scenario, tmp_path)
+    done = run(scenario, tmp_path, lists=False)
 
     assert done.rows == {FILE: parse_failed("response had an unexpected shape")}
 
@@ -269,14 +302,14 @@ def test_an_error_beyond_the_first_three_is_not_read(tmp_path: Path) -> None:
     body = {"data": None, "errors": [{"message": "a"}, {"message": "b"}, {"message": "c"}, "d"]}
     scenario = replace(port.scenario(NAME, "quiet_week"), responses=[cf.answer(body)])
 
-    done = port.run(cloudflare_web, CONFIG, scenario, tmp_path)
+    done = run(scenario, tmp_path, lists=False)
 
     assert '"status": "graphql_error", "reason": "a; b; c"' in done.rows[FILE]
 
 
 def test_a_seed_line_that_is_not_an_object_is_kept_and_the_row_written(tmp_path: Path) -> None:
     """ADR: store never fails on a line it can't use (the script stops reading its rows on it and writes none)."""
-    done = port.run(cloudflare_web, CONFIG, port.scenario(NAME, "a_seed_line_not_an_object_stops_the_write"), tmp_path)
+    done = run(port.scenario(NAME, "a_seed_line_not_an_object_stops_the_write"), tmp_path)
 
     assert done.rows == {FILE: "[1]\n" + filled(cf.YESTERDAY - timedelta(days=1), 35, 9) + YESTERDAY_ROW}
     assert done.status == 0
@@ -290,13 +323,13 @@ def test_a_good_row_whose_numbers_changed_is_corrected(tmp_path: Path) -> None:
     scenario = port.scenario(NAME, "a_good_row_whose_numbers_changed_is_left")
     old = cf.stored(cf.day(cf.TENTH), 3, 1)
 
-    done = port.run(cloudflare_web, CONFIG, scenario, tmp_path)
+    done = run(scenario, tmp_path)
 
     script = scenarios.load_golden(NAME)[scenario.name]["rows"][FILE].splitlines(keepends=True)
     assert done.rows[FILE].splitlines(keepends=True) == [
         *(line for line in script[:-1] if line != old),
         corrected(old, 37, 6),  # appended, as upsert does
-        script[-1],  # yesterday
+        listed(script[-1]),  # yesterday
     ]
     assert done.ctx.corrections == [
         Correction(NAME, FILE, "2026-09-10", {"pageviews": 3, "visits": 1}, {"pageviews": 37, "visits": 6})
@@ -317,7 +350,7 @@ def test_the_30_days_are_healed_and_corrected_in_one_pass(tmp_path: Path) -> Non
     )
     scenario = replace(port.scenario(NAME, "heals_a_day_with_no_row"), seed={FILE: seed})
 
-    done = port.run(cloudflare_web, CONFIG, scenario, tmp_path)
+    done = run(scenario, tmp_path)
 
     lines = done.rows[FILE].splitlines(keepends=True)
     assert lines[:-6] == cf.stored_month(instead=dict.fromkeys(range(17, 22), "")).splitlines(keepends=True)
@@ -342,7 +375,7 @@ def test_a_day_the_answer_leaves_out_reads_as_zero_as_yesterday_does(tmp_path: P
     seed = cf.stored(cf.YESTERDAY - timedelta(days=3), 5, 2) + cf.stored(cf.YESTERDAY - timedelta(days=2), 0, 0)
     scenario = replace(port.scenario(NAME, "yesterday_not_in_the_window"), seed={FILE: seed})
 
-    done = port.run(cloudflare_web, CONFIG, scenario, tmp_path)
+    done = run(scenario, tmp_path)
 
     lines = done.rows[FILE].splitlines(keepends=True)
     assert lines[:3] == [
@@ -354,7 +387,7 @@ def test_a_day_the_answer_leaves_out_reads_as_zero_as_yesterday_does(tmp_path: P
 
 
 def test_a_new_file_gets_only_yesterdays_row(tmp_path: Path) -> None:
-    done = port.run(cloudflare_web, CONFIG, replace(port.scenario(NAME, "week_of_traffic"), seed={}), tmp_path)
+    done = run(replace(port.scenario(NAME, "week_of_traffic"), seed={}), tmp_path)
 
     assert done.rows == {FILE: YESTERDAY_ROW}
 
@@ -364,7 +397,7 @@ def test_rows_older_than_the_30_days_are_never_touched_even_when_the_answer_has_
     stray = web_analytics([rum_day(cf.day(-3), 9, 9), rum_day(cf.day(-1), 9, 9)])
     scenario = replace(port.scenario(NAME, "quiet_week"), responses=[cf.answer(stray)], seed={FILE: seed})
 
-    done = port.run(cloudflare_web, CONFIG, scenario, tmp_path)
+    done = run(scenario, tmp_path)
 
     assert done.rows[FILE].startswith(seed)
     assert done.ctx.corrections == []
@@ -380,7 +413,7 @@ def test_yesterdays_good_row_is_rewritten_and_a_change_reported(tmp_path: Path) 
     )
     scenario = replace(port.scenario(NAME, "week_of_traffic"), seed={FILE: earlier})
 
-    done = port.run(cloudflare_web, CONFIG, scenario, tmp_path)
+    done = run(scenario, tmp_path)
 
     assert done.rows == {FILE: YESTERDAY_ROW}
     assert done.ctx.corrections == [
@@ -397,7 +430,7 @@ def test_yesterdays_good_row_is_rewritten_and_a_change_reported(tmp_path: Path) 
 def test_yesterdays_row_rewritten_unchanged_is_no_correction(tmp_path: Path) -> None:
     scenario = replace(port.scenario(NAME, "week_of_traffic"), seed={FILE: YESTERDAY_ROW})
 
-    done = port.run(cloudflare_web, CONFIG, scenario, tmp_path)
+    done = run(scenario, tmp_path)
 
     assert done.rows == {FILE: YESTERDAY_ROW}
     assert done.ctx.corrections == []
@@ -409,13 +442,161 @@ def test_an_error_answer_changes_no_past_day_and_is_recoverable(tmp_path: Path) 
     refused = cf.answer({"data": None, "errors": [{"message": "the time range is too large"}]})
     scenario = replace(port.scenario(NAME, "graphql_errors_in_a_success"), responses=[refused], seed={FILE: seed})
 
-    done = port.run(cloudflare_web, CONFIG, scenario, tmp_path)
+    done = run(scenario, tmp_path)
 
     assert done.rows[FILE] == seed + (
         '{"date": "2026-09-22", "site": "example", "status": "graphql_error", '
         f'"reason": "the time range is too large", "captured_at": "{NOW}"}}\n'
     )
     assert (done.status, done.ctx.critical, done.ctx.corrections) == (0, [], [])
+
+
+# --- more data is captured than the script did: the week's top countries and devices ---
+
+
+def differences(name: str, folder: Path) -> list[str]:
+    """How the rows differ from the script's, but for the `top_countries` and `top_devices` leadline adds."""
+    added = ("top_countries: only in B", "top_devices: only in B")
+    return [d for d in port.golden_differences(NAME, name, folder) if not d.endswith(added)]
+
+
+@pytest.mark.parametrize("name", cf.MORE_DATA_SCENARIOS)
+def test_every_row_the_script_writes_is_the_same_with_the_lists_added(tmp_path: Path, name: str) -> None:
+    done = run(port.scenario(NAME, name), tmp_path)
+
+    last = json.loads(done.rows[FILE].splitlines()[-1])
+    assert differences(name, tmp_path) == []
+    assert (last["top_countries"], last["top_devices"]) == (cf.TOP_COUNTRIES, cf.TOP_DEVICES)
+    assert list(last)[-4:] == ["top_referrers", "top_countries", "top_devices", "captured_at"]
+    assert (done.status, done.ctx.critical) == (0, [])
+
+
+def fresh(tmp_path: Path, countries: Any = cf.COUNTRIES, devices: Any = cf.DEVICES) -> Any:
+    """A new file's run of the week of traffic, given these list answers."""
+    scenario = replace(port.scenario(NAME, "week_of_traffic"), seed={})
+    return run(replace(scenario, responses=[*scenario.responses, *cf.lists(countries, devices)]), tmp_path, lists=False)
+
+
+def partial(reason: str, *, countries: bool = False, devices: bool = False) -> str:
+    """The week of traffic's row with these lists null: a partial row (ADR: a partly failed row keeps good parts)."""
+    row = json.loads(YESTERDAY_ROW)
+    captured_at = row.pop("captured_at")
+    row.update({"top_countries": None} if countries else {}, **({"top_devices": None} if devices else {}))
+    return json.dumps({**row, "status": "partial", "reason": reason, "captured_at": captured_at}) + "\n"
+
+
+def three(dimension: str, status: int = 500) -> list[Any]:
+    """The list answers for `dimension` when every attempt fails."""
+    return [cf.list_answer(dimension, "", status=status)] * 3
+
+
+def test_the_lists_are_the_ten_largest_whatever_order_the_api_gives_and_a_tie_goes_to_the_name(tmp_path: Path) -> None:
+    groups = [rum_group("countryName", f"C{n:02d}", 10 + n % 3) for n in range(10)]
+
+    done = fresh(tmp_path, rum_list(groups))
+
+    top = json.loads(done.rows[FILE])["top_countries"]
+    assert top == sorted(top, key=lambda item: (-item["count"], item["name"]))
+    assert [item["name"] for item in top][:4] == ["C02", "C05", "C08", "C01"]
+
+
+def test_a_site_with_no_page_loads_has_empty_lists(tmp_path: Path) -> None:
+    done = fresh(tmp_path, rum_list([]), rum_list([]))
+
+    row = json.loads(done.rows[FILE])
+    assert (row["top_countries"], row["top_devices"]) == ([], [])
+
+
+def test_a_value_the_api_leaves_out_is_unknown(tmp_path: Path) -> None:
+    done = fresh(tmp_path, rum_list([rum_group("countryName", None, 4), rum_group("countryName", "FR", 1)]))
+
+    assert json.loads(done.rows[FILE])["top_countries"] == [
+        {"name": "(unknown)", "count": 4},
+        {"name": "FR", "count": 1},
+    ]
+
+
+def test_a_list_request_that_fails_leaves_that_list_null_in_a_partial_row(tmp_path: Path) -> None:
+    scenario = replace(port.scenario(NAME, "week_of_traffic"), seed={})
+    responses = [*scenario.responses, *three("countryName"), *cf.lists(None, cf.DEVICES)]
+
+    done = run(replace(scenario, responses=responses), tmp_path, lists=False)
+
+    assert done.rows == {FILE: partial("top_countries request failed (HTTP 500)", countries=True)}
+    assert "WARN: Cloudflare top_countries request failed (HTTP 500)" in done.log
+    assert (done.status, done.ctx.critical) == (0, [])
+
+
+def test_a_list_graphql_refuses_is_named_in_the_partial_row(tmp_path: Path) -> None:
+    refused = {"data": None, "errors": [{"message": "unknown field deviceType"}]}
+    done = fresh(tmp_path, cf.COUNTRIES, refused)
+
+    assert done.rows == {FILE: partial("top_devices query failed: unknown field deviceType", devices=True)}
+    assert (done.status, done.ctx.critical) == (0, [])
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"data": {"viewer": {"accounts": [{"list": {"count": 1}}]}}, "errors": None},
+        {
+            "data": {"viewer": {"accounts": [{"list": [{"count": "5", "dimensions": {"deviceType": "x"}}]}]}},
+            "errors": None,
+        },
+        {"data": {"viewer": {"accounts": [{"list": [{"count": 5, "dimensions": "x"}]}]}}, "errors": None},
+        {"data": {"viewer": {"accounts": [{"list": [{"count": 5, "dimensions": {"deviceType": 7}}]}]}}, "errors": None},
+        {"data": {"viewer": None}, "errors": None},
+    ],
+    ids=["not a list", "a count not a number", "dimensions not an object", "a name not text", "no viewer"],
+)
+def test_a_list_it_cant_read_is_a_partial_row_not_an_empty_list(tmp_path: Path, body: Any) -> None:
+    done = fresh(tmp_path, cf.COUNTRIES, body)
+
+    assert done.rows == {FILE: partial("top_devices answer was unreadable", devices=True)}
+
+
+def test_both_lists_failing_are_one_partial_row_with_both_reasons(tmp_path: Path) -> None:
+    scenario = replace(port.scenario(NAME, "week_of_traffic"), seed={})
+    responses = [*scenario.responses, *three("countryName"), *three("deviceType", 502)]
+
+    done = run(replace(scenario, responses=responses), tmp_path, lists=False)
+
+    row = json.loads(done.rows[FILE])
+    assert (row["status"], row["top_countries"], row["top_devices"]) == ("partial", None, None)
+    assert row["reason"] == "top_countries request failed (HTTP 500); top_devices request failed (HTTP 502)"
+
+
+def test_a_failed_list_keeps_the_list_an_earlier_run_got(tmp_path: Path) -> None:
+    """ADR: a run never erases what it didn't get."""
+    fresh(tmp_path / "first")
+    scenario = replace(port.scenario(NAME, "week_of_traffic"), seed={FILE: (tmp_path / "first" / FILE).read_text()})
+    responses = [*scenario.responses, *three("deviceType"), *cf.lists(cf.COUNTRIES, None)]
+
+    done = run(replace(scenario, responses=responses), tmp_path / "second", lists=False)
+
+    assert json.loads(done.rows[FILE])["top_devices"] == cf.TOP_DEVICES
+    assert json.loads(done.rows[FILE])["status"] == "ok"
+
+
+def test_lists_the_token_may_not_read_are_critical_and_a_rate_limit_is_not(tmp_path: Path) -> None:
+    scenario = replace(port.scenario(NAME, "week_of_traffic"), seed={})
+    denied = [cf.list_answer("countryName", '{"success": false}', status=403), *cf.lists(None, cf.DEVICES)]
+    done = run(replace(scenario, responses=[*scenario.responses, *denied]), tmp_path / "denied", lists=False)
+
+    assert done.ctx.critical == [Critical(NAME, FILE, "example: HTTP 403 from Cloudflare's GraphQL API")]
+    assert done.status == 1
+    limited = exchange(
+        CLOUDFLARE_GRAPHQL,
+        "",
+        method="POST",
+        sent=cf.list_answer("countryName", "")["request"]["body"],
+        status=403,
+        headers={"X-RateLimit-Remaining": "0"},
+    )
+    waiting = [limited] * 3 + cf.lists(None, cf.DEVICES)
+    done = run(replace(scenario, responses=[*scenario.responses, *waiting]), tmp_path / "limited", lists=False)
+
+    assert (done.status, done.ctx.critical) == (0, [])
 
 
 # --- errors waiting can't fix ---
@@ -425,7 +606,7 @@ def test_an_error_answer_changes_no_past_day_and_is_recoverable(tmp_path: Path) 
 def test_rejected_credentials_are_not_retried_and_are_critical_at_once(tmp_path: Path, code: int) -> None:
     scenario = replace(port.scenario(NAME, "quiet_week"), responses=[cf.answer('{"success": false}', status=code)])
 
-    done = port.run(cloudflare_web, CONFIG, scenario, tmp_path)
+    done = run(scenario, tmp_path, lists=False)
 
     assert done.rows[FILE] == (
         f'{{"date": "2026-09-22", "site": "example", "status": "fetch_failed", "http_code": "{code}", '
@@ -437,9 +618,7 @@ def test_rejected_credentials_are_not_retried_and_are_critical_at_once(tmp_path:
 
 
 def test_a_failure_that_waiting_can_fix_is_not_critical(tmp_path: Path) -> None:
-    done = port.run(
-        cloudflare_web, CONFIG, port.scenario(NAME, "three_failed_attempts_record_the_last_status"), tmp_path
-    )
+    done = run(port.scenario(NAME, "three_failed_attempts_record_the_last_status"), tmp_path)
 
     assert (done.status, done.ctx.critical) == (0, [])
 
@@ -451,7 +630,7 @@ def test_a_rate_limit_is_retried_like_any_recoverable_failure_and_is_not_critica
     )
     scenario = replace(port.scenario(NAME, "quiet_week"), responses=[limited, limited, limited])
 
-    done = port.run(cloudflare_web, CONFIG, scenario, tmp_path)
+    done = run(scenario, tmp_path, lists=False)
 
     assert '"status": "fetch_failed", "http_code": "403"' in done.rows[FILE]
     assert done.sleeps == [10, 20]
@@ -463,7 +642,7 @@ def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
     responses = [cf.failure(), cf.failure(), cf.failure(), cf.answer(cf.WEEK)]
     scenario = replace(port.scenario(NAME, "quiet_week"), responses=responses)
 
-    done = port.run(cloudflare_web, [*CONFIG, other], scenario, tmp_path)
+    done = run(scenario, tmp_path, [*CONFIG, other], lists=True)
 
     assert '"status": "fetch_failed"' in done.rows[FILE]
     assert (

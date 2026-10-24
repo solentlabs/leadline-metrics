@@ -17,7 +17,9 @@ that matched nothing, where leadline writes a `parse_failed` row (ADR: a failure
 failure); a seed line that parses but isn't an object stops the script's run, where leadline keeps
 the line and writes the rows (ADR: store never fails on a line it can't use); a good row in the 30
 days whose numbers changed is left as it was, where leadline corrects it (ADR: cloudflare_web re-reads
-and corrects its last 30 days).
+and corrects its last 30 days); the script never reads the week's top countries and devices, so leadline's
+rows have `top_countries` and `top_devices` besides, and the scenarios that write a row are in DIVERGENCES for
+it (more data is captured than the script did); `lists` gives leadline's two more responses.
 """
 
 from __future__ import annotations
@@ -28,7 +30,14 @@ from datetime import date, timedelta
 from scenarios import CREDENTIALS, Scenario
 from scenarios.builders.common import Exchange, exchange, failed
 
-from leadline.sources.cloudflare.tests.builders import CLOUDFLARE_GRAPHQL, rum_day, rum_referrer, web_analytics
+from leadline.sources.cloudflare.tests.builders import (
+    CLOUDFLARE_GRAPHQL,
+    rum_day,
+    rum_group,
+    rum_list,
+    rum_referrer,
+    web_analytics,
+)
 
 LABEL = "example"
 SITE = "site0tag0example"  # a made-up site tag
@@ -72,6 +81,43 @@ SENT = json.dumps({"query": QUERY % (CREDENTIALS["CLOUDFLARE_ACCOUNT_ID"], *DAYS
 
 def answer(body: object, status: int = 200) -> Exchange:
     return exchange(CLOUDFLARE_GRAPHQL, body, method="POST", sent=SENT, status=status)
+
+
+# leadline's own request, which the script never makes: the week's top values of one dimension.
+LIST_QUERY = """
+{
+  viewer {
+    accounts(filter: {accountTag: "%s"}) {
+      list: rumPageloadEventsAdaptiveGroups(
+        filter: {date_geq: "%s", date_leq: "%s", siteTag: "%s"}
+        limit: 10
+        orderBy: [count_DESC]
+      ) {
+        count
+        dimensions { %s }
+      }
+    }
+  }
+}
+"""
+COUNTRIES = rum_list(
+    [rum_group("countryName", "US", 30), rum_group("countryName", "DE", 12), rum_group("countryName", "", 3)]
+)
+DEVICES = rum_list([rum_group("deviceType", "desktop", 25), rum_group("deviceType", "mobile", 20)])
+TOP_COUNTRIES = [{"name": "US", "count": 30}, {"name": "DE", "count": 12}, {"name": "(unknown)", "count": 3}]
+TOP_DEVICES = [{"name": "desktop", "count": 25}, {"name": "mobile", "count": 20}]
+
+
+def list_answer(dimension: str, body: object, status: int = 200) -> Exchange:
+    """The answer to the list request for `dimension`."""
+    sent = json.dumps({"query": LIST_QUERY % (CREDENTIALS["CLOUDFLARE_ACCOUNT_ID"], *REFERRERS[:2], SITE, dimension)})
+    return exchange(CLOUDFLARE_GRAPHQL, body, method="POST", sent=sent, status=status)
+
+
+def lists(countries: object = COUNTRIES, devices: object = DEVICES) -> list[Exchange]:
+    """leadline's two list answers (a body of None leaves that one out)."""
+    both = (("countryName", countries), ("deviceType", devices))
+    return [list_answer(dimension, body) for dimension, body in both if body is not None]
 
 
 def failure() -> Exchange:
@@ -128,6 +174,30 @@ def stored_month(first: int = 0, instead: dict[int, str] | None = None) -> str:
 # leadline's config for these scenarios: the script's label and site tag, writing the script's file.
 LEADLINE_CONFIG = [{"label": LABEL, "site_tag": SITE, "file": "cloudflare-{label}.jsonl"}]
 
+MORE_DATA = "more data is captured than the script did"
+MORE_DATA_SCENARIOS = (
+    "week_of_traffic",
+    "quiet_week",
+    "yesterday_not_in_the_window",
+    "nulls_read_as_zero_and_an_empty_referrer_as_direct",
+    "retries_until_the_request_succeeds",
+    "retries_after_an_empty_body",
+    "a_day_given_twice_counts_once_by_its_last_reading",
+    "a_whole_month_read_as_it_is_changes_only_yesterday",
+    "heals_a_day_with_no_row",
+    "heals_a_failed_day",
+    "heals_a_day_read_under_another_tag",
+    "heals_from_the_files_first_row",
+    "heals_30_days_back_and_no_further",
+    "the_first_run_with_the_right_tag_heals_every_row_read_without_one",
+)
+# Scenarios whose answer leadline reads, so it also asks for the lists: those above, and these decided divergences.
+READS_LISTS = (
+    *MORE_DATA_SCENARIOS,
+    "a_good_row_whose_numbers_changed_is_left",
+    "a_seed_line_not_an_object_stops_the_write",
+)
+
 # The scenarios where leadline's rows differ from the script's by a decision, and the decision.
 DIVERGENCES = {
     "a_failure_replaces_a_good_row": "ADR: a failure never replaces good data",
@@ -138,6 +208,9 @@ DIVERGENCES = {
     "an_error_that_is_not_an_object_writes_no_row": "ADR: a failure is recorded as a failure",
     "a_seed_line_not_an_object_stops_the_write": "ADR: store never fails on a line it can't use",
     "a_good_row_whose_numbers_changed_is_left": "ADR: cloudflare_web re-reads and corrects its last 30 days",
+    # leadline also reads the week's top countries and devices, so each scenario whose answer is read has
+    # `top_countries` and `top_devices` in yesterday's row, which the script's rows lack.
+    **dict.fromkeys(MORE_DATA_SCENARIOS, MORE_DATA),
 }
 
 SCENARIOS = [

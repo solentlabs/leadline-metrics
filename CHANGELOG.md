@@ -3,6 +3,13 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions
 follow [SemVer](https://semver.org/).
 
+## Unreleased
+
+- `cloudflare_web`: yesterday's row holds `top_countries` and `top_devices`,
+  the week's ten most frequent values (`name`, `count`) of the visitors whose
+  browsers run Cloudflare's beacon, each from one more request. A list that
+  fails leaves it null in a `partial` row, as the referrers do elsewhere.
+
 ## 0.8.4 - 2026-10-23
 
 - `ha_integration`: one chart replaces the rank and percentile charts: the

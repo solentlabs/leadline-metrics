@@ -52,6 +52,25 @@ QUERY = """
 }
 """
 
+# leadline's own request, which the script never makes: the week's top values of one dimension of the page loads.
+LIST_QUERY = """
+{
+  viewer {
+    accounts(filter: {accountTag: "%s"}) {
+      list: rumPageloadEventsAdaptiveGroups(
+        filter: {date_geq: "%s", date_leq: "%s", siteTag: "%s"}
+        limit: 10
+        orderBy: [count_DESC]
+      ) {
+        count
+        dimensions { %s }
+      }
+    }
+  }
+}
+"""
+UNKNOWN = "(unknown)"  # the name of a count whose page loads have no value for the dimension
+
 
 class _FailureRowError(Exception):
     """The answer is a failure: `fields` are its row's status and reason, as the script writes them."""
@@ -145,6 +164,7 @@ def _collect(ctx: Context, entry: Any) -> None:
     ctx.log.info("Collecting Cloudflare Web Analytics for %s...", label)
     try:
         days, row = _read(_post(ctx, query).body, label, tag, week_ago, yesterday)
+        found, failed = _read_lists(ctx, label, path.name, account, tag, week_ago, yesterday)
     except HttpError as e:
         ctx.log.info("ERROR: Cloudflare %s failed (HTTP %s)", label, e.http_code)
         ctx.record_unfixable(spec.NAME, path.name, e, f"{label}: HTTP {e.http_code} from Cloudflare's GraphQL API")
@@ -156,7 +176,7 @@ def _collect(ctx: Context, entry: Any) -> None:
         return
     past = [(heal_start + timedelta(days=n)).isoformat() for n in range(HEAL_DAYS - 1)]  # oldest first
     _heal(ctx, path, label, tag, past, days)
-    _write_yesterday(ctx, path, row)
+    _write_yesterday(ctx, path, {**row, **found}, failed)
 
 
 def _post(ctx: Context, query: str) -> Response:
@@ -272,6 +292,57 @@ def _result(data: Any, label: str, tag: str, week_ago: str, yesterday: str) -> t
     return days, row
 
 
+def _read_lists(
+    ctx: Context, label: str, file: str, account: str, tag: str, week_ago: str, yesterday: str
+) -> tuple[dict[str, Any], dict[str, list[str]]]:
+    """The week's lists, each by a request of its own: the row's fields (null where a list could not be read) and
+    what failed, the reason of each mapped to its field (ADR: a partly failed row keeps its good parts)."""
+    found: dict[str, Any] = {}
+    failed: dict[str, list[str]] = {}
+    unfixable: HttpError | None = None
+    for field, dimension in spec.LISTS:
+        query = LIST_QUERY % (account, week_ago, yesterday, tag, dimension)
+        try:
+            found[field] = _top(_account(_json(_post(ctx, query).body)), dimension)
+        except HttpError as e:
+            ctx.log.info("WARN: Cloudflare %s request failed (HTTP %s)", field, e.http_code)
+            failed[f"{field} request failed (HTTP {e.http_code})"] = [field]
+            if e.unfixable and unfixable is None:
+                unfixable = e
+        except _FailureRowError as e:
+            failed[f"{field} query failed: {e.fields['reason']}"] = [field]
+        except _UnreadableError:
+            failed[f"{field} answer was unreadable"] = [field]
+        if field not in found:
+            found[field] = None
+    if unfixable is not None:
+        ctx.record_unfixable(
+            spec.NAME, file, unfixable, f"{label}: HTTP {unfixable.http_code} from Cloudflare's GraphQL API"
+        )
+    return found, failed
+
+
+def _json(body: bytes) -> Any:
+    try:
+        return json.loads(body.decode("utf-8", "surrogateescape"))
+    except ValueError:
+        raise _UnreadableError from None
+
+
+def _top(account: dict[str, Any], dimension: str) -> list[dict[str, Any]]:
+    """The `spec.TOP` values of the dimension with the most page loads, the name deciding a tie."""
+    totals: dict[str, Any] = {}
+    for group in _list(account.get("list")):
+        name = _object(group.get("dimensions")).get(dimension)
+        if name is None or name == "":
+            name = UNKNOWN
+        elif not isinstance(name, str):
+            raise _UnreadableError
+        totals[name] = totals.get(name, 0) + _number(group.get("count"))
+    ranked = sorted(totals.items(), key=lambda item: (-item[1], item[0]))[: spec.TOP]
+    return [{"name": name, "count": count} for name, count in ranked]
+
+
 def _numbers(row: dict[str, Any]) -> dict[str, Any]:
     return {key: row.get(key) for key in NUMBERS}
 
@@ -302,10 +373,14 @@ def _heal(ctx: Context, path: Path, label: str, tag: str, past: list[str], days:
             store.write_good(path, {**kept, **new}, ctx, spec.NAME)
 
 
-def _write_yesterday(ctx: Context, path: Path, row: dict[str, Any]) -> None:
-    """Yesterday's row, always rewritten as the script does; store records a correction of a good one."""
+def _write_yesterday(ctx: Context, path: Path, row: dict[str, Any], failed: dict[str, list[str]]) -> None:
+    """Yesterday's row, always rewritten as the script does; store records a correction of a good one. A list that
+    could not be read is null in it, and it goes through write_partial, which keeps the list an earlier run got."""
     ctx.log.info("Cloudflare %s result: %s", row["site"], json.dumps(row))
-    store.write_good(path, row, ctx, spec.NAME)
+    if failed:
+        store.write_partial(path, row, failed, ctx, spec.NAME)
+    else:
+        store.write_good(path, row, ctx, spec.NAME)
 
 
 def _write_failure(ctx: Context, path: Path, row: dict[str, Any]) -> None:
