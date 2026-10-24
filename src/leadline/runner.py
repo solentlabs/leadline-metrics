@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import platform
 from dataclasses import asdict
 from typing import Any, Callable, ContextManager, Mapping, Sequence, TypeVar
 
@@ -44,6 +45,7 @@ def run(
         log = ctx.log
         log.info("=== leadline run ===")
         log.info("leadline %s", __version__)
+        log.info("Python %s", platform.python_version())
         log.info("Date: %s", ctx.date)
         log.info("Output: %s", ctx.out_dir)
         log.info("Sources: %s", ", ".join(names) or "none")

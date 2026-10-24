@@ -341,8 +341,8 @@ differ.
   `ERROR:` in the message, as the script's do.
 - Lines go to stdout and to `leadline.log` in the output folder, which each
   run rewrites (`report` logs to stdout only).
-- The log opens with the version, the run date, the output folder, the
-  sources.
+- The log opens with the version, the Python it ran on, the run date, the
+  output folder, the sources.
 
 ## Sources
 

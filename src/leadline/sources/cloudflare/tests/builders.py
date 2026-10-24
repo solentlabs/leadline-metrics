@@ -40,7 +40,12 @@ def rum_group(dimension: str, value: str | None, count: int) -> Json:
 
 
 def rum_list(groups: Sequence[Json]) -> Json:
-    """The result of a list query (one dimension, over the week) for one account."""
+    """The result of a list query (one dimension, over the week) for one account.
+
+    The script never asks for these, so the capture holds no example and the shape test cannot hold this to one.
+    The dimension names (`countryName`, `deviceType`, `requestPath`) were checked against the account's GraphQL
+    schema by introspection (2026-10-24), and the group is the same type as the `referrers` group.
+    """
     return {"data": {"viewer": {"accounts": [{"list": list(groups)}]}}, "errors": None}
 
 

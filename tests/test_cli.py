@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import platform
 import shutil
 import subprocess
 import sys
@@ -29,7 +30,9 @@ def test_run_with_zero_sources(tmp_path: Path, capsys: pytest.CaptureFixture[str
 
     assert cli.main(["run", "--config", str(path)]) == 0
 
-    assert "=== leadline run ===" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "=== leadline run ===" in out
+    assert f"Python {platform.python_version()}" in out  # which interpreter a night ran on
     assert (tmp_path / "metrics" / LOG_FILE).exists()
 
 

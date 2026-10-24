@@ -3,6 +3,11 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions
 follow [SemVer](https://semver.org/).
 
+## 0.8.6 - 2026-10-24
+
+- A run's log names the Python it ran on, after the version, so a night on
+  a host's own interpreter (a NAS's) can be read from `leadline.log`.
+
 ## 0.8.5 - 2026-10-24
 
 - `cloudflare_web`: yesterday's row holds `top_countries`, `top_devices` and `top_paths`,
