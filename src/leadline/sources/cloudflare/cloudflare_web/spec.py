@@ -36,7 +36,26 @@ LABEL = "Web analytics"  # what trends heads its sections with
 
 
 def summary(cfg: Any) -> list[config.Section]:
-    return config.entry_summary(NAME, cfg, "label", file_name, SHOWN, LABEL)
+    return [_section(entry) for entry in cfg]
+
+
+def _section(entry: Any) -> config.Section:
+    """The entry's section: `SHOWN`, and the week's top countries, devices and paths of the newest row."""
+    file = file_name(entry)
+    lists = [
+        {
+            "from": file,
+            "field": field,
+            "aggregate": "items",
+            "sort": "count",
+            "item": "{name} {count}",
+            "join": " · ",
+            "as_of": "",
+            "text": f"- Top {name} (week): {{items}}",
+        }
+        for field, name in (("top_countries", "countries"), ("top_devices", "devices"), ("top_paths", "paths"))
+    ]
+    return config.Section(NAME, entry["label"], file, SHOWN, LABEL, lines=lists)
 
 
 def file_name(entry: Any) -> str:

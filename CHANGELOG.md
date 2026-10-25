@@ -3,6 +3,17 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions
 follow [SemVer](https://semver.org/).
 
+## 0.8.7 - 2026-10-25
+
+- `cloudflare_zone_traffic`: the default summary adds the week's error
+  responses (4xx) as a share of its requests (`Error responses (4xx), 7d: N of
+  M`), most of them probes for files the site does not have; page views and
+  visits are the visitors.
+- `cloudflare_web`: the default summary adds the newest row's top countries,
+  devices and paths.
+- Reports: the `counts` aggregate gives `all`, the total of every count,
+  matched or not, so a line can say "N of M" over a `match`.
+
 ## 0.8.6 - 2026-10-24
 
 - A run's log names the Python it ran on, after the version, so a night on

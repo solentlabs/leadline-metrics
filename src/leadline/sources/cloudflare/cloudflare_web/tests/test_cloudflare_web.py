@@ -758,3 +758,14 @@ def test_its_summary_shows_its_fields_from_the_golden_rows(tmp_path: Path) -> No
         "- Page views: 322 in 7d (+49) · 1035 in 30d",
         "- Visits: 45 in 7d (+1) · 193 in 30d",
     ]
+
+
+def test_its_summary_shows_the_lists_of_the_newest_row(tmp_path: Path) -> None:
+    rows = {FILE: YESTERDAY_ROW}
+    lines = port.summary(cloudflare_web, CONFIG, "", tmp_path, rows)
+
+    assert lines[-3:] == [
+        "- Top countries (week): US 30 · DE 12 · (unknown) 3",
+        "- Top devices (week): desktop 25 · mobile 20",
+        "- Top paths (week): / 40 · /terms 5",
+    ]

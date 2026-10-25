@@ -83,5 +83,6 @@ The trends page draws the day's requests, page views, visits, unique visitors,
 threats, bytes, cached requests and cached bytes, and stacks of the status
 codes, countries, cache statuses, HTTP versions, browsers, operating systems,
 device types, data centers, hosts, paths and content types, and the origin's
-response time as lines. The default summary shows the day's counts and the
-status codes. The other fields are in the file for the reports that name them.
+response time as lines. The default summary shows the day's counts, the
+status codes, and the week's error responses (4xx) as a share of its requests: most are probes for files the site
+does not have, so page views and visits, above them, are the visitors. The other fields are in the file for the reports that name them.

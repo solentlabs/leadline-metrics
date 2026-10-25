@@ -563,6 +563,19 @@ def test_counts_give_each_items_share_and_the_rest_past_count(tmp_path: Path) ->
     assert rendered(tmp_path, line) == ["- Types: container 50% · os 30% · other 20 of 100"]
 
 
+def test_counts_give_all_the_counts_besides_those_matched(tmp_path: Path) -> None:
+    seed(tmp_path / "out", "t.jsonl", COUNTS)
+    line = {
+        "from": "t.jsonl",
+        "field": "types",
+        "aggregate": "counts",
+        "match": {"key": "^(os|core)$"},
+        "text": "- Types: {total} of {all}",
+    }
+
+    assert rendered(tmp_path, line) == ["- Types: 50 of 100"]
+
+
 def test_counts_show_nothing_where_the_newest_row_has_no_object(tmp_path: Path) -> None:
     seed(tmp_path / "out", "t.jsonl", [*COUNTS, {"date": "2026-09-25", "types": 7}])
     line = {"label": "Types", "from": "t.jsonl", "field": "types", "aggregate": "counts"}

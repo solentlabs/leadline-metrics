@@ -424,8 +424,14 @@ def test_check_reports_api_trouble_as_a_finding_never_a_crash(tmp_path: Path, re
 # --- the summary ---
 
 
-def test_its_summary_shows_the_days_counts_and_two_lists(tmp_path: Path) -> None:
+def test_its_summary_shows_the_days_counts_the_two_lists_and_the_week_of_error_responses(tmp_path: Path) -> None:
     lines = port.summary(cloudflare_zone_traffic, CONFIG, "first_run_fills_the_history_and_yesterday", tmp_path)
 
     # A day's counts show once 7 rows are there; the two lists show from the first, and no other list does.
-    assert lines == ["", "### cloudflare_zone_traffic: example", "", "- Status codes: 200 120 · 404 30"]
+    assert lines == [
+        "",
+        "### cloudflare_zone_traffic: example",
+        "",
+        "- Status codes: 200 120 · 404 30",
+        "- Error responses (4xx), 7d: 60 of 370",
+    ]

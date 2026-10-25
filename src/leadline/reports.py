@@ -945,7 +945,8 @@ def _release_downloads(rows: Sequence[Row], piece: Mapping[str, Any], _outer: Fi
 def _counts(rows: Sequence[Row], piece: Mapping[str, Any], _outer: Fields, _style: _Style) -> _Found | None:
     """An object of counts in the newest row (`{"os": 40}`), as items, the largest first: each its `key`, `count`
     and `share` (its percent of all the counts, rounded); `total`, of those matched, and `rest`, of those past
-    `count`. With `days`, the objects of the rows in that many days to the newest's, added up by key."""
+    `count`; `all`, of every count, matched or not. With `days`, the objects of the rows in that many days to the
+    newest's, added up by key."""
     if "days" in piece:
         first = _day(rows[-1]) - timedelta(days=piece["days"] - 1)
         found = [store.value(row, piece["field"]) for row in rows if _day(row) >= first]
@@ -969,7 +970,7 @@ def _counts(rows: Sequence[Row], piece: Mapping[str, Any], _outer: Fields, _styl
     ]
     matched, shown, rest = _selected(items, piece)
     total, rest_total = sum(item["count"] for item in matched), sum(item["count"] for item in rest)
-    return _Found({"found": len(matched), "total": total, "rest": rest_total}, shown)
+    return _Found({"found": len(matched), "total": total, "rest": rest_total, "all": everything}, shown)
 
 
 _KINDS: dict[str, Callable[[Sequence[Row], Mapping[str, Any], Fields, _Style], _Found | None]] = {

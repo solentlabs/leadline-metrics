@@ -15,6 +15,8 @@
   permissions: Account Analytics: Read, for the collection, and Account
   Settings: Read, for `check()`, which lists the account's Web Analytics sites
   (`rum/site_info/list`).
+- **Summary:** the day's page views and visits, and the newest row's three
+  top lists.
 - **Writes:** one row a day per entry, to its default file unless the entry sets
   `file`.
 - **Config entry:** `sources.cloudflare_web` is a list; each entry has `label`,

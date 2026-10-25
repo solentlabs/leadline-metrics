@@ -234,7 +234,8 @@ The items aggregates:
 - **`counts`**, of an object of counts (`{"os": 40, "core": 12}`): each
   key and its count, the largest first. Item fields `key`, `count` and
   `share` (its percent of all the counts, rounded); fields `total`, of the
-  counts matched, and `rest`, of those past `count`. Default item `{key}
+  counts matched, `rest`, of those past `count`, and `all`, of every count
+  (`match` or not). Default item `{key}
   {count}`, joined ` · `: `os 40 · core 12`.
   With `days: N` (a whole number, 1 or more), the objects of the rows in the
   N days up to the newest row's are added up by key, a row without an object

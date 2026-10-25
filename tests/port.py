@@ -163,11 +163,12 @@ def golden_differences(source: str, name: str, out_dir: Path) -> list[str]:
         return rowdiff.compare(golden, out_dir)
 
 
-def summary(source: Source, cfg: Any, name: str, out_dir: Path) -> list[str]:
-    """What the source's summary() shows in the default summary from scenario `name`'s golden rows: the lines of
-    SUMMARY.md's block after its heading, with no health row, so no health lines. The report config must be valid."""
+def summary(source: Source, cfg: Any, name: str, out_dir: Path, rows: dict[str, str] | None = None) -> list[str]:
+    """What the source's summary() shows in the default summary from scenario `name`'s golden rows, or from `rows`
+    (file to text) where given: the lines of SUMMARY.md's block after its heading, with no health row, so no health
+    lines. The report config must be valid."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    for file, text in scenarios.load_golden(source.NAME)[name]["rows"].items():
+    for file, text in (rows or scenarios.load_golden(source.NAME)[name]["rows"]).items():
         (out_dir / file).write_text(text, encoding="utf-8")
     blocks = reports.default(source.summary(cfg), "health.jsonl")
     assert reports.validate(blocks) == []

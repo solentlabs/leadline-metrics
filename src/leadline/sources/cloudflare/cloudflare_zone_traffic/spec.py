@@ -255,4 +255,19 @@ CHARTS = (
 
 
 def summary(cfg: Any) -> list[config.Section]:
-    return config.entry_summary(NAME, cfg, "label", file_name, SHOWN, LABEL, CHARTS)
+    return [_section(entry) for entry in cfg]
+
+
+def _section(entry: Any) -> config.Section:
+    """The entry's section: `SHOWN`, and the week's error responses (4xx) among all its requests, most of which are
+    probes for files the site does not have. Page views and visits, above, are the visitors."""
+    errors = {
+        "from": file_name(entry),
+        "field": "status_codes",
+        "aggregate": "counts",
+        "days": 7,
+        "match": {"key": "^4"},
+        "as_of": "",
+        "text": "- Error responses (4xx), 7d: {total} of {all}",
+    }
+    return config.Section(NAME, entry["label"], file_name(entry), SHOWN, LABEL, lines=[errors], charts=CHARTS)
