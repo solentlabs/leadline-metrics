@@ -228,7 +228,7 @@ def _referrers(ctx: Context, site: str, path: Path, pages: list[Page]) -> tuple[
             continue
         kind = f"path {page.id} referrers"
         try:
-            answer = _get(ctx, site, f"stats/hits/{page.id}", require_body=True)
+            answer = _get(ctx, site, f"stats/hits/{page.id}", attempts=ATTEMPTS, require_body=True)
         except HttpError as e:
             failure = failure or _request_failed(ctx, site, path, kind, e)
             continue

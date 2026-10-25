@@ -100,6 +100,14 @@ def stats(kind: str, body: object = None, status: int = 200) -> Exchange:
 
 
 STATS = [stats(kind) for kind in KINDS]
+
+
+def retried(responses: Sequence[Exchange]) -> list[Exchange]:
+    """`responses` with each failed referrers answer twice more: the script asks once, leadline up to three times."""
+    again = [r for r in responses if "/stats/hits/" in r["request"]["url"] and r["response"].get("status", 500) >= 400]
+    return [*responses, *again, *again]
+
+
 BEFORE_YESTERDAY = [page(1, dict.fromkeys(DAYS[:5], 2))]  # stats up to three days before the run, none since
 UNDATED = {"hourly": [0] * 24, "daily": 50}  # a stat with no day
 TWELVE = [page(n, {DAYS[-2]: n}) for n in range(1, 13)]

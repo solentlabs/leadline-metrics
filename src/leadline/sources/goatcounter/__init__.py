@@ -26,6 +26,8 @@ depends on the file system). Where leadline differs, by decision:
   can't use (not JSON, not the shape it reads) a `parse_failed` row, where the script writes nothing
   (ADR: a failure is recorded as a failure). Its date is yesterday, the day the newest row should
   have; the next good run backfills every day the week still holds.
+- Each page's referrers request is tried up to three times, like the pages' (the script asks once): GoatCounter
+  answers a readable site with a 404 at times, and a single try would cost the day its referrers.
 - The total, the referrers and the three stats are optional parts, as the script writes the row without
   them (it never asks for the stats): one that fails, or that it can't use, is null in a partial row naming
   the failure, where the script writes null for the total and leaves a page out of the referrers (ADR: a

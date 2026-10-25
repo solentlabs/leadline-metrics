@@ -94,7 +94,7 @@ def run(tmp_path: Path, *responses: Any, seed: str = BEFORE) -> port.PortRun:
 def run_scenario(scenario: Any, tmp_path: Path) -> port.PortRun:
     """The scenario's run, given the stats leadline asks for where the run reaches yesterday's row."""
     if scenario.name in gc.READS_STATS:
-        scenario = replace(scenario, responses=[*scenario.responses, *gc.STATS])
+        scenario = replace(scenario, responses=[*gc.retried(scenario.responses), *gc.STATS])
     return port.run(source, CONFIG, scenario, tmp_path)
 
 
@@ -572,6 +572,17 @@ def test_referrers_it_cant_use_are_null_in_a_partial_row(tmp_path: Path, body: A
     assert done.rows[FILE].splitlines(keepends=True)[-1] == partial(reason, top_referrers=None)
 
 
+def test_a_referrers_request_is_tried_three_times_so_a_stray_404_costs_no_day(tmp_path: Path) -> None:
+    tries = [exchange(gc.refs_url(1), "", status=404), exchange(gc.refs_url(1), "", status=500)]
+    refs = [*tries, *gc.REFERRERS]
+
+    done = run(tmp_path, *three_pages(refs=refs))
+
+    assert done.rows[FILE].splitlines(keepends=True)[-1] == yesterday()
+    assert done.sleeps == [10, 20]
+    assert (done.status, done.ctx.critical) == (0, [])
+
+
 def with_stats(kind: str, answers: Any) -> list[Any]:
     """The three pages' requests with the answer (or list of answers, one a try) for `kind`'s stats replaced."""
     replaced = answers if isinstance(answers, list) else [answers]
@@ -657,7 +668,7 @@ def test_a_rejected_optional_request_is_critical_with_its_partial_row(tmp_path: 
             partial("total request failed (HTTP 404)", window_total=None),
         ),
         (
-            three_pages(refs=[exchange(gc.refs_url(1), "", status=404), *gc.REFERRERS[1:]]),
+            three_pages(refs=[*[exchange(gc.refs_url(1), "", status=404)] * 3, *gc.REFERRERS[1:]]),
             partial("path 1 referrers request failed (HTTP 404)", top_referrers=None),
         ),
     ],

@@ -3,6 +3,12 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions
 follow [SemVer](https://semver.org/).
 
+## 0.8.9 - 2026-10-25
+
+- `goatcounter`: each page's referrers request is tried up to three times, like
+  the pages', so a stray 404 no longer leaves a day's referrers null in a
+  `partial` row that is never refilled.
+
 ## 0.8.8 - 2026-10-25
 
 - `discourse_forum`, a new source: a Discourse forum's own site statistics from
