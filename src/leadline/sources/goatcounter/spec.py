@@ -34,8 +34,30 @@ SHOWN = (config.Shown("pageviews", "Page views", "daily"),)
 LABEL = "Site visits"  # what trends heads its sections with
 
 
+LISTS = ("top_browsers", "top_systems", "top_locations")  # the row's lists of names the summary shows
+
+
 def summary(cfg: Any) -> list[config.Section]:
-    return config.entry_summary(NAME, cfg, "site", file_name, SHOWN, LABEL)
+    return [_section(entry) for entry in cfg]
+
+
+def _section(entry: Any) -> config.Section:
+    """The entry's section: `SHOWN`, and the week's top browsers, systems and locations of the newest row."""
+    file = file_name(entry)
+    lists = [
+        {
+            "from": file,
+            "field": field,
+            "aggregate": "items",
+            "sort": "count",
+            "item": "{name} {count}",
+            "join": " · ",
+            "as_of": "",
+            "text": f"- Top {field[len('top_') :]} (week): {{items}}",
+        }
+        for field in LISTS
+    ]
+    return config.Section(NAME, entry["site"], file, SHOWN, LABEL, lines=lists)
 
 
 def file_name(entry: Any) -> str:

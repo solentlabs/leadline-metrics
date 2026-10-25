@@ -8,7 +8,9 @@
 - **Writes:** one row a day, to its default file unless the entry sets `file`.
   Besides the totals it holds the installations by core version (`ha_versions`),
   by operating-system board (`os_boards`) and by supervisor architecture
-  (`supervisor_arch`); each is null where the answer lacks it.
+  (`supervisor_arch`); each is null where the answer lacks it. The feed's own
+  history rebuilds the days before the file's first night, back to 2021:
+  installations, their types and the core versions, marked `backfilled`.
 - **Config entry:** `sources.ha_platform` is one object, not a list, and has
   nothing to set but `file`.
 

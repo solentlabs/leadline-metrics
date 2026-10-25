@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from leadline import store
@@ -36,7 +38,8 @@ def collect(ctx: Context, cfg: Any) -> None:
     path, day = ctx.out_dir / spec.file_name(cfg), ctx.date.isoformat()
     ctx.log.info("Collecting Home Assistant platform totals...")
     try:
-        row = _row(ctx.http.get_json(FEED), day)
+        data = ctx.http.get_json(FEED)
+        row = _row(data, day)
     except HttpError as e:
         ctx.record_unfixable(spec.NAME, path.name, e, f"HTTP {e.http_code} from {ANALYTICS}")
         failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": "analytics request failed"}
@@ -46,6 +49,7 @@ def collect(ctx: Context, cfg: Any) -> None:
         failure = {"status": "parse_failed", "reason": UNEXPECTED}
     else:
         store.write_good(path, row, ctx, spec.NAME)
+        _rebuild(ctx, path, data)
         return
     ctx.log.info("ERROR: No Home Assistant platform totals: %s", failure["reason"])
     store.write_failure(path, {"date": day, **failure}, ctx.now)
@@ -124,3 +128,60 @@ def _row(data: Any, day: str) -> dict[str, Any]:
         "os_boards": _counts(_section(current, "operating_system").get("boards")),
         "supervisor_arch": _counts(_section(current, "supervisor").get("arch")),
     }
+
+
+def _count(value: Any) -> Any:
+    """`value` as the history gives a count, a whole float as the whole number (`1000.0` is `1000`); None for what
+    isn't a number."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return int(value) if value == int(value) else value
+
+
+def _counts_of(value: Any) -> dict[str, Any] | None:
+    """A map of name to count as the history gives it, its counts read by `_count`; None unless it is an object with
+    a count for some name (the oldest entries hold none)."""
+    if not isinstance(value, dict):
+        return None
+    found = {name: _count(n) for name, n in value.items() if _count(n) is not None}
+    return found or None
+
+
+def _history(ctx: Context, data: Any) -> dict[date, dict[str, Any]]:
+    """The feed's history by day (in the run's offset): each day's last entry, as a row's fields; the days before the
+    first entry with installations are left out, and so is an entry whose time or count can't be read."""
+    entries = data.get("history") if isinstance(data, dict) else None
+    last: dict[date, tuple[int, dict[str, Any]]] = {}
+    for found in entries if isinstance(entries, list) else []:
+        if not isinstance(found, dict):
+            continue
+        active = _count(found.get("active_installations"))
+        try:
+            millis = int(found.get("timestamp"))  # type: ignore[arg-type]
+            at = datetime.fromtimestamp(millis / 1000, timezone.utc)
+        except (TypeError, ValueError, OverflowError, OSError):
+            continue
+        if not active:
+            continue
+        day = at.astimezone(ctx.now.tzinfo).date()
+        if day not in last or millis >= last[day][0]:
+            last[day] = (
+                millis,
+                {
+                    "active_installations": active,
+                    "installation_types": _counts_of(found.get("installation_types")),
+                    "ha_versions": _counts_of(found.get("versions")),
+                },
+            )
+    return {day: fields for day, (_, fields) in last.items()}
+
+
+def _rebuild(ctx: Context, path: Path, data: Any) -> None:
+    """Write a row for each day from the feed's first entry with installations to the day before the file's first
+    night (store.rebuild_days): the installations, their types and the core versions of the day's last entry. The
+    fields it can't tell stay absent (store.fill; ADR: past values a source can rebuild are filled, never changed)."""
+    history = _history(ctx, data)
+    if not history:
+        return
+    days = store.rebuild_days(path, min(history), ctx)
+    store.fill(path, [{"date": day.isoformat(), **history[day]} for day in days if day in history], ctx)

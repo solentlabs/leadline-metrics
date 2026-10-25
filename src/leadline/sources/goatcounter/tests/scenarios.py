@@ -18,8 +18,8 @@ by the order the pages came back in (test_goatcounter.py).
 leadline differs by decision on the scenarios in DIVERGENCES, asserted in test_goatcounter.py:
 a failed or unusable pages answer is a failure row for yesterday, a failed or unusable total or
 referrers answer is null in a partial row, and a seed line that isn't an object is kept. The rows also
-hold `top_pages`, which the script drops: the scenarios that write a row are in DIVERGENCES for it (more data
-is captured than the script did).
+hold `top_pages`, `top_browsers`, `top_systems` and `top_locations`, which the script drops: the scenarios
+that write a row are in DIVERGENCES for it (more data is captured than the script did).
 """
 
 from __future__ import annotations
@@ -34,6 +34,7 @@ from leadline.sources.goatcounter.tests.builders import (
     goatcounter_hits,
     goatcounter_path,
     goatcounter_refs,
+    goatcounter_stats,
     goatcounter_total,
 )
 
@@ -81,6 +82,24 @@ REFERRERS = [
     exchange(refs_url(2), goatcounter_refs([("github.com", 5), ("forum.example", 3), ("news.example", 0)])),
     exchange(refs_url(3), goatcounter_refs([("search.example", 2), ("blog.example", 1), ("t.example", 1)])),
 ]
+KINDS = ("browsers", "systems", "locations")  # the stats leadline asks for besides, after the referrers
+STAT_ITEMS = {
+    "browsers": [("Chrome", 60), ("Firefox", 20)],
+    "systems": [("Windows", 50), ("Linux", 30)],
+    "locations": [("United States", 55), ("Germany", 25)],
+}
+
+
+def stats_url(kind: str) -> str:
+    return f"{API}/stats/{kind}?{WINDOW}"
+
+
+def stats(kind: str, body: object = None, status: int = 200) -> Exchange:
+    """The answer to the request for `kind` (its items from STAT_ITEMS unless `body` is given)."""
+    return exchange(stats_url(kind), goatcounter_stats(STAT_ITEMS[kind]) if body is None else body, status=status)
+
+
+STATS = [stats(kind) for kind in KINDS]
 BEFORE_YESTERDAY = [page(1, dict.fromkeys(DAYS[:5], 2))]  # stats up to three days before the run, none since
 UNDATED = {"hourly": [0] * 24, "daily": 50}  # a stat with no day
 TWELVE = [page(n, {DAYS[-2]: n}) for n in range(1, 13)]
@@ -194,8 +213,8 @@ MORE_DATA = "more data is captured than the script did"
 FAILURE = "ADR: a failure is recorded as a failure"
 PARTIAL = "ADR: a partly failed row keeps its good parts"
 DIVERGENCES = {
-    # leadline also keeps the top pages of the week on yesterday's row (an empty list on the other days'), which
-    # the script's rows lack.
+    # leadline also keeps the top pages, browsers, systems and locations of the week on yesterday's row (an empty
+    # list on the other days'), which the script's rows lack.
     "week_backfills_missing_days_and_refreshes_yesterday": MORE_DATA,
     "retries_the_pages_request": MORE_DATA,
     "no_stat_for_yesterday_backfills_only_earlier_days": MORE_DATA,
@@ -209,3 +228,8 @@ DIVERGENCES = {
     "unparseable_total_and_referrers_count_as_none": PARTIAL,
     "a_seed_line_not_an_object_writes_nothing": "ADR: store never fails on a line it can't use",
 }
+# Scenarios whose run reaches yesterday's row, so leadline also asks for the stats the script never does.
+READS_STATS = (
+    *(name for name, why in DIVERGENCES.items() if why in (MORE_DATA, PARTIAL)),
+    "a_seed_line_not_an_object_writes_nothing",
+)

@@ -101,13 +101,15 @@ ADDED = ("ha_versions", "os_boards", "supervisor_arch")  # not in the script's r
 
 
 def without_added(folder: Path) -> None:
-    """Take the fields leadline adds (more data is captured than the script did) out of the rows in `folder`, so
-    the script's own can be compared; each is asserted on its own below."""
+    """Take the fields leadline adds (more data is captured than the script did) out of the rows in `folder`, and
+    the days it rebuilds from the feed's history, so the script's own can be compared; each is asserted on its own
+    below."""
     for file in folder.glob("*.jsonl"):
         lines = []
         for line in file.read_text(encoding="utf-8").splitlines():
             row = json.loads(line)
-            lines.append(json.dumps({k: v for k, v in row.items() if k not in ADDED}) + "\n")
+            if not row.get("backfilled"):
+                lines.append(json.dumps({k: v for k, v in row.items() if k not in ADDED}) + "\n")
         file.write_text("".join(lines), encoding="utf-8")
 
 
@@ -178,6 +180,126 @@ def test_what_the_answer_lacks_is_null_and_the_row_is_otherwise_unchanged(
     assert row["active_installations"] == 100
     assert "status" not in row
     assert tuple(row[k] for k in ADDED) == expected
+
+
+# --- the feed's history: the days before the file's first night are rebuilt from it ---
+
+DAY = 86_400_000  # milliseconds
+MAY_28 = 1_780_000_000_000  # 2026-05-28, in the afternoon in UTC and in any zone of the Americas or Europe
+TYPES = {"os": 60, "container": 30, "core": 5, "supervised": 3, "unsupported_container": 2, "unknown": 0}
+
+
+def entry(days: float, active: Any, versions: Any = None, types: Any = TYPES) -> dict[str, Any]:
+    """A history entry `days` after the first, as the feed gives it (the time in milliseconds, as text)."""
+    return {
+        "timestamp": str(int(MAY_28 + days * DAY)),
+        "active_installations": active,
+        "installation_types": types,
+        "versions": {"2026.5.1": 9} if versions is None else versions,
+    }
+
+
+def run_history(tmp_path: Path, history: Any, seed: str = hp.EARLIER) -> list[dict[str, Any]]:
+    """Every row the file holds after a run on a feed with this history, over `seed`."""
+    scenario = replace(
+        port.scenario(NAME, "totals_and_the_top_fifteen_countries"),
+        responses=[exchange(HA_PLATFORM_URL, {"current": CURRENT, "history": history})],
+        seed={FILE: seed},
+    )
+    done = port.run(ha_platform, CONFIG, scenario, tmp_path)
+    assert (done.status, done.ctx.critical) == (0, [])
+    return [json.loads(line) for line in done.rows[FILE].splitlines()]
+
+
+def test_the_days_before_the_first_night_are_rebuilt_from_the_feeds_history(tmp_path: Path) -> None:
+    history = [entry(0, 1000), entry(1, 1100, {"2026.5.2": 8}), entry(2, 1200)]
+
+    rows = run_history(tmp_path, history)
+
+    assert [(r["date"], r["active_installations"]) for r in rows] == [
+        ("2026-05-28", 1000),
+        ("2026-05-29", 1100),
+        ("2026-05-30", 1200),
+        ("2026-09-22", 1000),  # the first night's own row, as it was
+        ("2026-09-23", 100),
+    ]
+    assert rows[1] == {
+        "date": "2026-05-29",
+        "active_installations": 1100,
+        "installation_types": TYPES,
+        "ha_versions": {"2026.5.2": 8},
+        "backfilled": True,
+        "captured_at": NOW,
+    }
+    assert rows[3]["date"] == "2026-09-22"
+    assert [r.get("backfilled") for r in rows] == [True, True, True, None, None]
+
+
+def test_a_day_with_several_entries_is_its_last(tmp_path: Path) -> None:
+    rows = run_history(tmp_path, [entry(0, 1000), entry(0.01, 1010), entry(0.02, 1020), entry(1, 1100)])
+
+    assert [(r["date"], r["active_installations"]) for r in rows[:2]] == [("2026-05-28", 1020), ("2026-05-29", 1100)]
+
+
+def test_the_history_starts_with_the_first_entry_that_has_installations(tmp_path: Path) -> None:
+    rows = run_history(tmp_path, [entry(-2, 0), entry(-1, None), entry(0, 1000)])
+
+    assert rows[0]["date"] == "2026-05-28"
+    assert [r["date"] for r in rows if r.get("backfilled")] == ["2026-05-28"]
+
+
+def test_a_whole_float_is_a_whole_number_and_no_versions_are_unknown(tmp_path: Path) -> None:
+    types = {"os": 60.0, "container": 30.5}
+
+    rows = run_history(tmp_path, [entry(0, 1000.0, {}, types)])
+
+    assert (rows[0]["active_installations"], rows[0]["installation_types"], rows[0]["ha_versions"]) == (
+        1000,
+        {"os": 60, "container": 30.5},
+        None,
+    )
+    assert type(rows[0]["active_installations"]) is int
+
+
+@pytest.mark.parametrize(
+    "history",
+    [
+        None,
+        "history",
+        [],
+        {"timestamp": "1780000000000"},
+        ["x", 5, None],
+        [{"timestamp": "soon", "active_installations": 5}, {"active_installations": 5}, {"timestamp": 1.5e300}],
+        [{"timestamp": "1780000000000", "active_installations": "many"}],
+    ],
+    ids=["none", "text", "empty", "an object", "not objects", "bad timestamps", "a count not a number"],
+)
+def test_a_history_it_cant_use_rebuilds_nothing_and_the_night_is_still_written(tmp_path: Path, history: Any) -> None:
+    rows = run_history(tmp_path, history)
+
+    assert [r["date"] for r in rows] == ["2026-09-22", "2026-09-23"]
+
+
+def test_a_new_file_gets_only_the_nights_row_until_the_next_night(tmp_path: Path) -> None:
+    rows = run_history(tmp_path, [entry(0, 1000)], seed="")
+
+    assert [r["date"] for r in rows] == ["2026-09-23"]
+
+
+def test_a_rebuild_changes_no_stored_value_and_is_not_repeated(tmp_path: Path) -> None:
+    stored = (
+        '{"date": "2026-05-29", "active_installations": 7, "backfilled": true, '
+        '"captured_at": "2026-09-01T00:00:00+00:00"}\n'
+    )
+    seed = stored + hp.EARLIER
+
+    first = run_history(tmp_path / "first", [entry(0, 1000), entry(1, 1100)], seed=seed)
+
+    assert [(r["date"], r["active_installations"]) for r in first[:2]] == [("2026-05-28", 1000), ("2026-05-29", 7)]
+    assert first[1]["installation_types"] == TYPES  # only what the row lacked was added
+    kept = "".join(json.dumps(row) + "\n" for row in first[:-1])
+    second = run_history(tmp_path / "second", [entry(0, 1000), entry(1, 1100)], seed=kept)
+    assert second == first
 
 
 def test_the_divergences_are_the_decided_ones() -> None:

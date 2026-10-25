@@ -10,6 +10,14 @@ installation or reporting count reads as 0, as in the script. Where leadline dif
   (`current.operating_system.boards`) and `supervisor_arch` (`current.supervisor.arch`): more data is
   captured than the script did. Each is null where the answer lacks it or gives it as something but an
   object, and the row is otherwise unchanged.
+- The feed also holds a `history` of its own (an entry every few hours since 2021: the installations, their
+  types and the core versions, the time in milliseconds). After tonight's row the days before the file's first
+  night, back to the first entry with installations, get a row each from the day's last entry (store.rebuild_days,
+  store.fill; ADR: past values a source can rebuild are filled, never changed): `active_installations`,
+  `installation_types` and `ha_versions` (null where the entry has none), a whole float read as a whole number,
+  marked `backfilled`. The other fields stay absent: the history cannot tell them. A history that is missing or
+  can't be read rebuilds nothing and leaves the night's row as it is. A new file gets its history the night
+  after its first row.
 - A failed fetch is a `fetch_failed` row, and an answer it can't use (not JSON, no `current` object, a
   count it divides by or sorts on that isn't a number) is a `parse_failed` row, where the script
   writes nothing, or zeros for a body without `current` (ADR: a failure is recorded as a failure).

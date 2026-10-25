@@ -20,7 +20,7 @@ from leadline.context import Correction, Critical, Finding
 from leadline.http import SavedResponses
 from leadline.sources import goatcounter as source
 from leadline.sources.goatcounter.tests import scenarios as gc
-from leadline.sources.goatcounter.tests.builders import goatcounter_refs
+from leadline.sources.goatcounter.tests.builders import goatcounter_refs, goatcounter_stats
 
 NAME = "goatcounter"
 CONFIG = gc.LEADLINE_CONFIG
@@ -48,9 +48,16 @@ def golden_lines(name: str) -> list[str]:
     return lines
 
 
+ADDED = ("top_pages", "top_browsers", "top_systems", "top_locations")  # what leadline adds to the script's rows
+TOP_STATS = {
+    f"top_{kind}": [{"name": name, "count": n} for name, n in items] for kind, items in gc.STAT_ITEMS.items()
+}  # the three stats' items, as the rows keep them
+
+
 def filled(day: str, pageviews: int) -> str:
-    """A backfilled day's row: its page views, and no referrers or top pages (the week's, on yesterday's row)."""
-    row = {"date": day, "pageviews": pageviews, "top_referrers": [], "top_pages": [], "captured_at": NOW}
+    """A backfilled day's row: its page views, and no referrers or other lists (the week's, on yesterday's row)."""
+    empty: dict[str, list[Any]] = {field: [] for field in ADDED}
+    row = {"date": day, "pageviews": pageviews, "top_referrers": [], **empty, "captured_at": NOW}
     return json.dumps(row) + "\n"
 
 
@@ -61,6 +68,7 @@ def yesterday(**fields: Any) -> str:
         "pageviews": 24,
         "top_referrers": TOP,
         "top_pages": PAGES,
+        **TOP_STATS,
         "window_sum": 105,
         "window_total": 132,
         "paths_returned": 3,
@@ -83,9 +91,16 @@ def run(tmp_path: Path, *responses: Any, seed: str = BEFORE) -> port.PortRun:
     return port.run(source, CONFIG, scenario, tmp_path)
 
 
+def run_scenario(scenario: Any, tmp_path: Path) -> port.PortRun:
+    """The scenario's run, given the stats leadline asks for where the run reaches yesterday's row."""
+    if scenario.name in gc.READS_STATS:
+        scenario = replace(scenario, responses=[*scenario.responses, *gc.STATS])
+    return port.run(source, CONFIG, scenario, tmp_path)
+
+
 def three_pages(*, total: Any = None, refs: Any = None) -> list[Any]:
     """The three pages' requests, in order, with the total's and the referrers' answers replaced where given."""
-    return [gc.hits(gc.THREE), total or gc.total(gc.THREE), *(refs or gc.REFERRERS)]
+    return [gc.hits(gc.THREE), total or gc.total(gc.THREE), *(refs or gc.REFERRERS), *gc.STATS]
 
 
 # --- the contract ---
@@ -147,7 +162,12 @@ def test_it_sends_the_token_on_every_request(tmp_path: Path) -> None:
     with port.credentials({"GOATCOUNTER_TOKEN": "t0ken"}, source.ENV):
         source.collect(ctx, CONFIG)
 
-    assert [request.full_url for request in sent] == [gc.HITS, gc.TOTAL, *(gc.refs_url(n) for n in (1, 2, 3))]
+    assert [request.full_url for request in sent] == [
+        gc.HITS,
+        gc.TOTAL,
+        *(gc.refs_url(n) for n in (1, 2, 3)),
+        *(gc.stats_url(kind) for kind in gc.KINDS),
+    ]
     assert {request.get_header("Authorization") for request in sent} == {"Bearer t0ken"}
 
 
@@ -163,7 +183,7 @@ def test_rows_match_the_scripts(scenario: Any, tmp_path: Path) -> None:
 
 
 def without_top_pages(text: str) -> str:
-    """Row `text` without the `top_pages` leadline adds (more data is captured than the script did)."""
+    """Row `text` without the lists leadline adds (`top_pages` and the stats: more data than the script captured)."""
     rows = []
     for line in text.splitlines():
         try:
@@ -172,7 +192,7 @@ def without_top_pages(text: str) -> str:
             rows.append(line + "\n")
             continue
         rows.append(
-            json.dumps({k: v for k, v in fields.items() if k != "top_pages"}) + "\n"
+            json.dumps({k: v for k, v in fields.items() if k not in ADDED}) + "\n"
             if isinstance(fields, dict)
             else line + "\n"
         )
@@ -186,7 +206,7 @@ def without_top_pages(text: str) -> str:
 )
 def test_rows_are_the_scripts_with_the_added_top_pages(scenario: Any, tmp_path: Path) -> None:
     """More data is captured than the script did: but for `top_pages`, the rows are the script's."""
-    done = port.run(source, CONFIG, scenario, tmp_path)
+    done = run_scenario(scenario, tmp_path)
 
     assert all('"top_pages"' in text for text in done.rows.values())
     for file, text in done.rows.items():
@@ -205,6 +225,9 @@ def test_yesterdays_row_has_the_top_pages_of_the_week_after_the_referrers(tmp_pa
         "pageviews",
         "top_referrers",
         "top_pages",
+        "top_browsers",
+        "top_systems",
+        "top_locations",
         "window_sum",
         "window_total",
         "paths_returned",
@@ -224,7 +247,7 @@ def test_the_top_pages_are_the_ten_with_the_most_views_in_the_answers_order_on_t
     pages = [gc.page(n, {gc.DAYS[-2]: 5 if n in (1, 2) else n}) for n in range(1, 13)]
     refs = [exchange(gc.refs_url(n), goatcounter_refs([("a.example", 1)])) for n in range(1, 11)]
 
-    done = run(tmp_path, gc.hits(pages), gc.total(pages), *refs)
+    done = run(tmp_path, gc.hits(pages), gc.total(pages), *refs, *gc.STATS)
 
     top = json.loads(done.rows[FILE].splitlines()[-1])["top_pages"]
     assert [p["path"] for p in top] == [f"/page-{n}" for n in (12, 11, 10, 9, 8, 7, 6, 1, 2, 5)]  # 1 and 2 tie at 5
@@ -243,7 +266,7 @@ def test_a_page_without_a_usable_path_or_count_is_left_out_and_a_missing_title_i
 
     hits = exchange(gc.HITS, {"hits": pages, "more": False})  # the builder sums the counts that are missing here
 
-    done = run(tmp_path, hits, gc.total(pages), *refs)
+    done = run(tmp_path, hits, gc.total(pages), *refs, *gc.STATS)
 
     written = json.loads(done.rows[FILE].splitlines()[-1])
     assert written["top_pages"] == [
@@ -271,15 +294,13 @@ def test_the_divergences_are_the_decided_ones() -> None:
 
 
 def test_the_pages_request_is_retried_after_10_then_20_seconds(tmp_path: Path) -> None:
-    done = port.run(source, CONFIG, port.scenario(NAME, "retries_the_pages_request"), tmp_path)
+    done = run_scenario(port.scenario(NAME, "retries_the_pages_request"), tmp_path)
 
     assert done.sleeps == [10, 20]
 
 
 def test_each_backfilled_day_is_logged(tmp_path: Path) -> None:
-    done = port.run(
-        source, CONFIG, port.scenario(NAME, "week_backfills_missing_days_and_refreshes_yesterday"), tmp_path
-    )
+    done = run_scenario(port.scenario(NAME, "week_backfills_missing_days_and_refreshes_yesterday"), tmp_path)
 
     backfilled = [line for line in done.log if line.startswith("GoatCounter backfill: ")]
     assert backfilled == [f"GoatCounter backfill: 2026-09-{day}" for day in (16, 17, 19, 21)]
@@ -287,14 +308,13 @@ def test_each_backfilled_day_is_logged(tmp_path: Path) -> None:
 
 def test_refreshing_yesterdays_good_row_is_the_one_correction(tmp_path: Path) -> None:
     """ADR: every correction is recorded. The seed's yesterday (3 page views) is re-read; a backfill is none."""
-    done = port.run(
-        source, CONFIG, port.scenario(NAME, "week_backfills_missing_days_and_refreshes_yesterday"), tmp_path
-    )
+    done = run_scenario(port.scenario(NAME, "week_backfills_missing_days_and_refreshes_yesterday"), tmp_path)
 
     new = {
         "pageviews": 24,
         "top_referrers": TOP,
         "top_pages": PAGES,
+        **TOP_STATS,
         "window_sum": 105,
         "window_total": 132,
         "paths_returned": 3,
@@ -313,7 +333,7 @@ def test_referrers_tied_on_count_come_in_the_order_their_pages_came_back(
     """The script's order depends on the file system; leadline's is the order of the pages in the answer."""
     pages = [gc.page(n) for n in order]
     refs = {1: goatcounter_refs([("one.example", 5)]), 2: goatcounter_refs([("two.example", 5)])}
-    answers = [gc.hits(pages), gc.total(pages), *(exchange(gc.refs_url(n), refs[n]) for n in order)]
+    answers = [gc.hits(pages), gc.total(pages), *(exchange(gc.refs_url(n), refs[n]) for n in order), *gc.STATS]
 
     done = run(tmp_path, *answers)
 
@@ -324,7 +344,7 @@ def test_referrers_tied_on_count_come_in_the_order_their_pages_came_back(
 def test_referrers_come_from_the_first_ten_pages_with_an_id(tmp_path: Path) -> None:
     answers = [exchange(gc.refs_url(n), goatcounter_refs([(f"site-{n}.example", n)])) for n in range(1, 11)]
 
-    done = run(tmp_path, gc.hits(gc.TWELVE), gc.total(gc.TWELVE), *answers)
+    done = run(tmp_path, gc.hits(gc.TWELVE), gc.total(gc.TWELVE), *answers, *gc.STATS)
 
     top = json.loads(done.rows[FILE].splitlines()[-1])["top_referrers"]
     assert top == [{"ref": f"site-{n}.example", "count": n} for n in (10, 9, 8, 7, 6)]
@@ -335,7 +355,8 @@ def test_an_unreadable_referrers_answer_counts_toward_the_ten_pages(tmp_path: Pa
     answers = [exchange(gc.refs_url(n), goatcounter_refs([(f"site-{n}.example", n)])) for n in range(1, 11)]
     answers[1] = exchange(gc.refs_url(2), "<html>maintenance</html>")
 
-    done = run(tmp_path, gc.hits(gc.TWELVE), gc.total(gc.TWELVE), *answers)  # a request past them fails the run
+    # A request past the ten pages fails the run (there is no answer left for it).
+    done = run(tmp_path, gc.hits(gc.TWELVE), gc.total(gc.TWELVE), *answers, *gc.STATS)
 
     assert json.loads(done.rows[FILE].splitlines()[-1])["top_referrers"] is None
     assert "GoatCounter: fetched referrers for 10 paths" in done.log
@@ -480,7 +501,7 @@ def test_a_seed_line_that_is_not_an_object_is_kept_and_the_rows_written(tmp_path
     """ADR: store never fails on a line it can't use (the script stops reading its rows on it and writes none)."""
     scenario = port.scenario(NAME, "a_seed_line_not_an_object_writes_nothing")
 
-    done = port.run(source, CONFIG, scenario, tmp_path)
+    done = run_scenario(scenario, tmp_path)
 
     backfilled = [filled(f"2026-09-{day}", 6 + 3 * (day - 16)) for day in range(16, 21)]
     assert done.rows == {FILE: scenario.seed[FILE] + "".join(backfilled) + yesterday()}
@@ -497,7 +518,7 @@ def test_a_failed_total_and_referrers_are_null_in_a_partial_row(tmp_path: Path) 
     """
     scenario = port.scenario(NAME, "referrers_of_ten_pages_and_no_window_total")
 
-    done = port.run(source, CONFIG, scenario, tmp_path)
+    done = run_scenario(scenario, tmp_path)
 
     script = golden_lines(scenario.name)
     reason = "total request failed (HTTP 500); path 2 referrers request failed (HTTP 500)"
@@ -511,7 +532,7 @@ def test_a_failed_total_and_referrers_are_null_in_a_partial_row(tmp_path: Path) 
 
 def test_an_unparseable_total_and_referrers_are_null_in_a_partial_row(tmp_path: Path) -> None:
     """The script counts the unparseable referrers toward the ten pages, and so does leadline."""
-    done = port.run(source, CONFIG, port.scenario(NAME, "unparseable_total_and_referrers_count_as_none"), tmp_path)
+    done = run_scenario(port.scenario(NAME, "unparseable_total_and_referrers_count_as_none"), tmp_path)
 
     reason = "total response was not JSON; path 2 referrers response was not JSON"
     lines = done.rows[FILE].splitlines(keepends=True)
@@ -549,6 +570,73 @@ def test_referrers_it_cant_use_are_null_in_a_partial_row(tmp_path: Path, body: A
 
     reason = "path 1 referrers response had an unexpected shape"
     assert done.rows[FILE].splitlines(keepends=True)[-1] == partial(reason, top_referrers=None)
+
+
+def with_stats(kind: str, answers: Any) -> list[Any]:
+    """The three pages' requests with the answer (or list of answers, one a try) for `kind`'s stats replaced."""
+    replaced = answers if isinstance(answers, list) else [answers]
+    return [*three_pages()[:-3], *[a for k in gc.KINDS for a in (replaced if k == kind else [gc.stats(k)])]]
+
+
+@pytest.mark.parametrize("status", [500, 404], ids=["server error", "not found"])
+@pytest.mark.parametrize("kind", gc.KINDS)
+def test_a_failed_stats_request_is_null_in_a_partial_row_and_recoverable(
+    tmp_path: Path, kind: str, status: int
+) -> None:
+    done = run(tmp_path, *with_stats(kind, [gc.stats(kind, "", status)] * 3))
+
+    reason = f"{kind} request failed (HTTP {status})"
+    assert done.rows[FILE].splitlines(keepends=True)[-1] == partial(reason, **{f"top_{kind}": None})
+    assert (done.status, done.ctx.critical) == (0, [])
+
+
+@pytest.mark.parametrize(
+    ("body", "reason"),
+    [
+        ([], "systems response had an unexpected shape"),
+        ({"more": False}, "systems response is missing stats"),
+        ({"stats": {}}, "systems response had an unexpected shape"),
+        ({"stats": ["Linux"]}, "systems response had an unexpected shape"),
+        ({"stats": [{"name": None, "count": 1}]}, "systems response had an unexpected shape"),
+        ({"stats": [{"name": "Linux", "count": "1"}]}, "systems response had an unexpected shape"),
+        ({"stats": [{"name": "Linux"}]}, "systems response is missing count in an item"),
+    ],
+    ids=["a list", "no stats", "stats an object", "an item not an object", "a null name", "a count text", "no count"],
+)
+def test_stats_it_cant_use_are_null_in_a_partial_row(tmp_path: Path, body: Any, reason: str) -> None:
+    done = run(tmp_path, *with_stats("systems", gc.stats("systems", body)))
+
+    assert done.rows[FILE].splitlines(keepends=True)[-1] == partial(reason, top_systems=None)
+
+
+@pytest.mark.parametrize("kind", gc.KINDS)
+def test_a_stats_request_is_tried_three_times_so_a_stray_404_costs_no_day(tmp_path: Path, kind: str) -> None:
+    done = run(tmp_path, *with_stats(kind, [gc.stats(kind, "", 404), gc.stats(kind, "", 500), gc.stats(kind)]))
+
+    assert done.rows[FILE].splitlines(keepends=True)[-1] == yesterday()
+    assert done.sleeps == [10, 20]
+    assert (done.status, done.ctx.critical) == (0, [])
+
+
+def test_the_stats_are_the_ten_with_the_most_visitors_whatever_order_the_api_gives(tmp_path: Path) -> None:
+    items = [(f"B{n:02d}", 1 + n % 4) for n in range(14)] + [("Zero", 0)]
+
+    done = run(tmp_path, *with_stats("browsers", gc.stats("browsers", goatcounter_stats(items))))
+
+    top = json.loads(done.rows[FILE].splitlines()[-1])["top_browsers"]
+    assert [item["name"] for item in top] == ["B03", "B07", "B11", "B02", "B06", "B10", "B01", "B05", "B09", "B13"]
+    assert all(item["count"] for item in top)
+
+
+@pytest.mark.parametrize("code", [401, 403])
+def test_a_rejected_stats_request_is_critical_with_its_partial_row(tmp_path: Path, code: int) -> None:
+    done = run(tmp_path, *with_stats("locations", gc.stats("locations", "", code)))  # not retried
+
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{SITE}: HTTP {code} from GoatCounter's API")]
+    assert done.rows[FILE].splitlines(keepends=True)[-1] == partial(
+        f"locations request failed (HTTP {code})", top_locations=None
+    )
+    assert done.status == 1
 
 
 @pytest.mark.parametrize("code", [401, 403])
@@ -679,4 +767,14 @@ def test_its_summary_shows_its_fields_from_the_golden_rows(tmp_path: Path) -> No
         "### goatcounter: example",
         "",
         "- Page views: 78 in 7d",
+    ]
+
+
+def test_its_summary_shows_the_newest_rows_top_browsers_systems_and_locations(tmp_path: Path) -> None:
+    lines = port.summary(source, CONFIG, "", tmp_path, {FILE: yesterday()})
+
+    assert lines[-3:] == [
+        "- Top browsers (week): Chrome 60 · Firefox 20",
+        "- Top systems (week): Windows 50 · Linux 30",
+        "- Top locations (week): United States 55 · Germany 25",
     ]

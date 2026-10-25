@@ -3,6 +3,21 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions
 follow [SemVer](https://semver.org/).
 
+## 0.8.8 - 2026-10-25
+
+- `discourse_forum`, a new source: a Discourse forum's own site statistics from
+  `<base_url>/about.json`, a row a day (topics, posts, members, active
+  members, likes: each count under Discourse's name).
+- `cloudflare_web`: yesterday's row also holds the week's `top_browsers`,
+  `top_systems` and `top_bots`, each from a request of its own, with the
+  default summary showing all six top lists.
+- `goatcounter`: yesterday's row also holds `top_browsers`, `top_systems` and
+  `top_locations` (the ten names with the most visitors in the week), each
+  tried up to three times so a stray 404 does not cost a day.
+- `ha_platform`: the days before the file's first night are rebuilt from the
+  feed's own history, back to 2021: installations, installation types and core
+  versions, marked `backfilled`.
+
 ## 0.8.7 - 2026-10-25
 
 - `cloudflare_zone_traffic`: the default summary adds the week's error

@@ -13,7 +13,14 @@ KEYS = ("label", "site_tag")  # the keys an entry may have, besides `file`
 
 # The week's top values of a dimension of the page loads, each read by a request of its own so that one the API
 # refuses leaves the others: the row's field, and the dimension's name in the GraphQL schema.
-LISTS = (("top_countries", "countryName"), ("top_devices", "deviceType"), ("top_paths", "requestPath"))
+LISTS = (
+    ("top_countries", "countryName"),
+    ("top_devices", "deviceType"),
+    ("top_paths", "requestPath"),
+    ("top_browsers", "userAgentBrowser"),
+    ("top_systems", "userAgentOS"),
+    ("top_bots", "bot"),
+)
 TOP = 10  # how many values a list keeps
 
 
@@ -40,7 +47,7 @@ def summary(cfg: Any) -> list[config.Section]:
 
 
 def _section(entry: Any) -> config.Section:
-    """The entry's section: `SHOWN`, and the week's top countries, devices and paths of the newest row."""
+    """The entry's section: `SHOWN`, and the week's top lists of the newest row."""
     file = file_name(entry)
     lists = [
         {
@@ -53,7 +60,7 @@ def _section(entry: Any) -> config.Section:
             "as_of": "",
             "text": f"- Top {name} (week): {{items}}",
         }
-        for field, name in (("top_countries", "countries"), ("top_devices", "devices"), ("top_paths", "paths"))
+        for field, name in ((field, field[len("top_") :]) for field, _ in LISTS)
     ]
     return config.Section(NAME, entry["label"], file, SHOWN, LABEL, lines=lists)
 

@@ -17,10 +17,10 @@ that matched nothing, where leadline writes a `parse_failed` row (ADR: a failure
 failure); a seed line that parses but isn't an object stops the script's run, where leadline keeps
 the line and writes the rows (ADR: store never fails on a line it can't use); a good row in the 30
 days whose numbers changed is left as it was, where leadline corrects it (ADR: cloudflare_web re-reads
-and corrects its last 30 days); the script never reads the week's top countries, devices and paths, so
-leadline's rows have `top_countries`, `top_devices` and `top_paths` besides, and the scenarios that write a
-row are in DIVERGENCES for it (more data is captured than the script did); `lists` gives leadline's three
-more responses.
+and corrects its last 30 days); the script never reads the week's top lists, so leadline's rows have
+`top_countries`, `top_devices`, `top_paths`, `top_browsers`, `top_systems` and `top_bots` besides, and the
+scenarios that write a row are in DIVERGENCES for it (more data is captured than the script did); `lists`
+gives leadline's six more responses.
 """
 
 from __future__ import annotations
@@ -106,9 +106,15 @@ COUNTRIES = rum_list(
 )
 DEVICES = rum_list([rum_group("deviceType", "desktop", 25), rum_group("deviceType", "mobile", 20)])
 PATHS = rum_list([rum_group("requestPath", "/", 40), rum_group("requestPath", "/terms", 5)])
+BROWSERS = rum_list([rum_group("userAgentBrowser", "Chrome", 28), rum_group("userAgentBrowser", "Safari", 17)])
+SYSTEMS = rum_list([rum_group("userAgentOS", "Windows", 26), rum_group("userAgentOS", "iOS", 19)])
+BOTS = rum_list([rum_group("bot", "No", 44), rum_group("bot", "Yes", 1)])
 TOP_COUNTRIES = [{"name": "US", "count": 30}, {"name": "DE", "count": 12}, {"name": "(unknown)", "count": 3}]
 TOP_DEVICES = [{"name": "desktop", "count": 25}, {"name": "mobile", "count": 20}]
 TOP_PATHS = [{"name": "/", "count": 40}, {"name": "/terms", "count": 5}]
+TOP_BROWSERS = [{"name": "Chrome", "count": 28}, {"name": "Safari", "count": 17}]
+TOP_SYSTEMS = [{"name": "Windows", "count": 26}, {"name": "iOS", "count": 19}]
+TOP_BOTS = [{"name": "No", "count": 44}, {"name": "Yes", "count": 1}]
 
 
 def list_answer(dimension: str, body: object, status: int = 200) -> Exchange:
@@ -117,9 +123,23 @@ def list_answer(dimension: str, body: object, status: int = 200) -> Exchange:
     return exchange(CLOUDFLARE_GRAPHQL, body, method="POST", sent=sent, status=status)
 
 
-def lists(countries: object = COUNTRIES, devices: object = DEVICES, paths: object = PATHS) -> list[Exchange]:
-    """leadline's three list answers (a body of None leaves that one out)."""
-    every = (("countryName", countries), ("deviceType", devices), ("requestPath", paths))
+def lists(
+    countries: object = COUNTRIES,
+    devices: object = DEVICES,
+    paths: object = PATHS,
+    browsers: object = BROWSERS,
+    systems: object = SYSTEMS,
+    bots: object = BOTS,
+) -> list[Exchange]:
+    """leadline's six list answers, in the order it asks (a body of None leaves that one out)."""
+    every = (
+        ("countryName", countries),
+        ("deviceType", devices),
+        ("requestPath", paths),
+        ("userAgentBrowser", browsers),
+        ("userAgentOS", systems),
+        ("bot", bots),
+    )
     return [list_answer(dimension, body) for dimension, body in every if body is not None]
 
 
@@ -212,7 +232,7 @@ DIVERGENCES = {
     "a_seed_line_not_an_object_stops_the_write": "ADR: store never fails on a line it can't use",
     "a_good_row_whose_numbers_changed_is_left": "ADR: cloudflare_web re-reads and corrects its last 30 days",
     # leadline also reads the week's top countries and devices, so each scenario whose answer is read has
-    # `top_countries` and `top_devices` in yesterday's row, which the script's rows lack.
+    # its lists (`top_countries` and the rest) in yesterday's row, which the script's rows lack.
     **dict.fromkeys(MORE_DATA_SCENARIOS, MORE_DATA),
 }
 

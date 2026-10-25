@@ -17,14 +17,20 @@ depends on the file system). Where leadline differs, by decision:
   count}`. Yesterday's row has them; the other days' rows hold an empty list, as they hold no referrers. A
   page without a text path or a count is left out, a title that isn't text is null: more data is captured
   than the script did.
+- Its rows also hold `top_browsers`, `top_systems` and `top_locations` after `top_pages`: the ten names with
+  the most visitors in the week (`stats/browsers`, `stats/systems` and `stats/locations`, a request each, asked
+  for after the referrers; each is tried up to three times, like the pages, so a stray 404 costs no day), as
+  `{name, count}`, most first (ties in the answer's order; a name with no visitors is left out). Yesterday's
+  row has them; the other days' rows hold empty lists.
 - The pages are the row's required part: a failed request is a `fetch_failed` row, and an answer it
   can't use (not JSON, not the shape it reads) a `parse_failed` row, where the script writes nothing
   (ADR: a failure is recorded as a failure). Its date is yesterday, the day the newest row should
   have; the next good run backfills every day the week still holds.
-- The total and the referrers are optional parts, as the script writes the row without them: one
-  that fails, or that it can't use, is null in a partial row naming the failure, where the script
-  writes null for the total and leaves a page out of the referrers (ADR: a partly failed row keeps
-  its good parts). The referrers are one part, read whole: one page's failure leaves them null.
+- The total, the referrers and the three stats are optional parts, as the script writes the row without
+  them (it never asks for the stats): one that fails, or that it can't use, is null in a partial row naming
+  the failure, where the script writes null for the total and leaves a page out of the referrers (ADR: a
+  partly failed row keeps its good parts). The referrers are one part, read whole: one page's failure leaves
+  them null; a stat's failure leaves only its own list null.
 - A failure never replaces a good or partial row, a part a run fails to get keeps the value an
   earlier run of the day got (ADR: a run never erases what it didn't get), and a day with only a
   failure row is backfilled.

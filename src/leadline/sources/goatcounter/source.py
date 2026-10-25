@@ -25,6 +25,8 @@ PAGE_LIMIT = 200  # well past the site's pages: the API's default of 20 would mi
 REFERRER_PAGES = 10  # the pages whose referrers are fetched
 TOP_REFERRERS = 5
 TOP_PAGES = 10
+STATS = ("browsers", "systems", "locations")  # the stats asked for besides, each kept as the row's `top_<name>`
+TOP_STATS = 10
 _DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
 # A 404 collection gets is recoverable: GoatCounter answers one for a readable site at times (ADR: one
 # failed night recovers; consecutive failures are critical). check() asks without it.
@@ -129,7 +131,8 @@ def _collect(ctx: Context, entry: Any) -> None:
     referrers, reason = _referrers(ctx, site, path, pages)
     if reason is not None:
         failed[reason] = ["top_referrers"]
-    _write(ctx, path, pages, total, referrers, failed)
+    lists = {f"top_{kind}": _stats(ctx, site, path, kind, failed) if pages else [] for kind in STATS}
+    _write(ctx, path, pages, total, referrers, lists, failed)
 
 
 def _request_failed(ctx: Context, site: str, path: Path, kind: str, error: HttpError) -> str:
@@ -242,8 +245,44 @@ def _referrers(ctx: Context, site: str, path: Path, pages: list[Page]) -> tuple[
     return [{"ref": name, "count": count} for name, count in counted.most_common(TOP_REFERRERS)], None
 
 
+def _top_stats(kind: str, answer: Any) -> list[dict[str, Any]]:
+    """The TOP_STATS names with the most visitors in a `stats/<kind>` answer, most first; ties keep the order they
+    came back in, and a name with no visitors is left out."""
+    if not isinstance(answer, dict):
+        raise unexpected(kind)
+    _require(kind, answer, ["stats"])
+    found = []
+    for item in _objects(kind, answer["stats"]):
+        _require(kind, item, ["name", "count"], " in an item")
+        name, count = item["name"], item["count"]
+        if not (isinstance(name, str) and is_count(count)):
+            raise unexpected(kind)
+        if count:
+            found.append({"name": name, "count": count})
+    return sorted(found, key=lambda item: -item["count"])[:TOP_STATS]
+
+
+def _stats(ctx: Context, site: str, path: Path, kind: str, failed: dict[str, list[str]]) -> list[dict[str, Any]] | None:
+    """The week's top names of a stat (browsers, systems, locations); None, and its reason in `failed`, where the
+    request fails or its answer can't be used."""
+    try:
+        return _top_stats(kind, read_json(kind, _get(ctx, site, f"stats/{kind}", attempts=ATTEMPTS, require_body=True)))
+    except HttpError as e:
+        failed[_request_failed(ctx, site, path, kind, e)] = [f"top_{kind}"]
+    except UnusableError as e:
+        ctx.log.info("WARN: Failed to parse GoatCounter %s: %s", kind, e)
+        failed[str(e)] = [f"top_{kind}"]
+    return None
+
+
 def _write(
-    ctx: Context, path: Path, pages: list[Page], total: int | None, referrers: Any, failed: dict[str, list[str]]
+    ctx: Context,
+    path: Path,
+    pages: list[Page],
+    total: int | None,
+    referrers: Any,
+    lists: Mapping[str, Any],
+    failed: dict[str, list[str]],
 ) -> None:
     """A row for each day the file has no good or partial row for, and for yesterday again; never today."""
     yesterday = (ctx.date - timedelta(days=1)).isoformat()
@@ -261,12 +300,14 @@ def _write(
             "pageviews": sum(daily for stat_day, daily in stats if stat_day == day),
             "top_referrers": [],
             "top_pages": [],
+            **{field: [] for field in lists},
         }
         if day != yesterday:
             store.write_good(path, row, ctx, spec.NAME)
             continue
         row["top_referrers"] = referrers
         row["top_pages"] = _top_pages(pages)
+        row.update(lists)
         row["window_sum"] = sum(daily for stat_day, daily in stats if stat_day <= yesterday)
         row["window_total"] = total
         row["paths_returned"] = len(pages)

@@ -20,6 +20,7 @@ from scenarios.builders.common import exchange, failed
 from leadline.context import Correction, Critical, Finding
 from leadline.http import SavedResponses
 from leadline.sources.cloudflare import cloudflare_web
+from leadline.sources.cloudflare.cloudflare_web.spec import LISTS
 from leadline.sources.cloudflare.cloudflare_web.tests import scenarios as cf
 from leadline.sources.cloudflare.tests.builders import (
     CLOUDFLARE_API,
@@ -57,7 +58,14 @@ def listed(line: str) -> str:
     """The script's row for yesterday with the top countries, devices and paths leadline adds, before `captured_at`."""
     row = json.loads(line)
     captured_at = row.pop("captured_at")
-    added = {"top_countries": cf.TOP_COUNTRIES, "top_devices": cf.TOP_DEVICES, "top_paths": cf.TOP_PATHS}
+    added = {
+        "top_countries": cf.TOP_COUNTRIES,
+        "top_devices": cf.TOP_DEVICES,
+        "top_paths": cf.TOP_PATHS,
+        "top_browsers": cf.TOP_BROWSERS,
+        "top_systems": cf.TOP_SYSTEMS,
+        "top_bots": cf.TOP_BOTS,
+    }
     return json.dumps({**row, **added, "captured_at": captured_at}) + "\n"
 
 
@@ -75,6 +83,9 @@ YESTERDAY_ROW = (
     '"top_countries": [{"name": "US", "count": 30}, {"name": "DE", "count": 12}, {"name": "(unknown)", "count": 3}], '
     '"top_devices": [{"name": "desktop", "count": 25}, {"name": "mobile", "count": 20}], '
     '"top_paths": [{"name": "/", "count": 40}, {"name": "/terms", "count": 5}], '
+    '"top_browsers": [{"name": "Chrome", "count": 28}, {"name": "Safari", "count": 17}], '
+    '"top_systems": [{"name": "Windows", "count": 26}, {"name": "iOS", "count": 19}], '
+    '"top_bots": [{"name": "No", "count": 44}, {"name": "Yes", "count": 1}], '
     '"captured_at": "' + NOW + '"}\n'
 )
 
@@ -448,12 +459,12 @@ def test_an_error_answer_changes_no_past_day_and_is_recoverable(tmp_path: Path) 
     assert (done.status, done.ctx.critical, done.ctx.corrections) == (0, [], [])
 
 
-# --- more data is captured than the script did: the week's top countries, devices and paths ---
+# --- more data is captured than the script did: the week's six top lists ---
 
 
 def differences(name: str, folder: Path) -> list[str]:
     """How the rows differ from the script's, but for the lists leadline adds (`top_countries` and the like)."""
-    added = ("top_countries: only in B", "top_devices: only in B", "top_paths: only in B")
+    added = tuple(f"{field}: only in B" for field, _ in LISTS)
     return [d for d in port.golden_differences(NAME, name, folder) if not d.endswith(added)]
 
 
@@ -463,12 +474,15 @@ def test_every_row_the_script_writes_is_the_same_with_the_lists_added(tmp_path: 
 
     last = json.loads(done.rows[FILE].splitlines()[-1])
     assert differences(name, tmp_path) == []
-    assert (last["top_countries"], last["top_devices"], last["top_paths"]) == (
+    assert [last[field] for field, _ in LISTS] == [
         cf.TOP_COUNTRIES,
         cf.TOP_DEVICES,
         cf.TOP_PATHS,
-    )
-    assert list(last)[-5:] == ["top_referrers", "top_countries", "top_devices", "top_paths", "captured_at"]
+        cf.TOP_BROWSERS,
+        cf.TOP_SYSTEMS,
+        cf.TOP_BOTS,
+    ]
+    assert list(last)[-8:] == ["top_referrers", *(field for field, _ in LISTS), "captured_at"]
     assert (done.status, done.ctx.critical) == (0, [])
 
 
@@ -764,8 +778,11 @@ def test_its_summary_shows_the_lists_of_the_newest_row(tmp_path: Path) -> None:
     rows = {FILE: YESTERDAY_ROW}
     lines = port.summary(cloudflare_web, CONFIG, "", tmp_path, rows)
 
-    assert lines[-3:] == [
+    assert lines[-6:] == [
         "- Top countries (week): US 30 · DE 12 · (unknown) 3",
         "- Top devices (week): desktop 25 · mobile 20",
         "- Top paths (week): / 40 · /terms 5",
+        "- Top browsers (week): Chrome 28 · Safari 17",
+        "- Top systems (week): Windows 26 · iOS 19",
+        "- Top bots (week): No 44 · Yes 1",
     ]

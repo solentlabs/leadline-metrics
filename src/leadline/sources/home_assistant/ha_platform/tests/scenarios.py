@@ -10,7 +10,8 @@ Where leadline differs by a decision, the scenario is in DIVERGENCES, and test_h
 asserts leadline's side: each of those answers writes a failure row (`fetch_failed` or `parse_failed`)
 for the run's date, where the script writes nothing or zeros (ADR: a failure is recorded as a failure).
 The rows also hold `ha_versions`, `os_boards` and `supervisor_arch`, which the script drops: the scenarios
-that write a row are in DIVERGENCES for them (more data is captured than the script did).
+that write a row are in DIVERGENCES for them (more data is captured than the script did), and so do the days a
+row file with a first night rebuilds from the feed's history (`backfilled` rows, which the script never writes).
 """
 
 from __future__ import annotations

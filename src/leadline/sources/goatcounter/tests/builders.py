@@ -50,3 +50,13 @@ def goatcounter_total(days: Mapping[date, int]) -> Json:
 def goatcounter_refs(refs: Sequence[tuple[str, int]], *, more: bool = False) -> Json:
     """`stats/hits/PATH_ID`: a page's referrers and their visits; "" is direct visits."""
     return {"refs": [{"name": name, "count": n, "ref_scheme": "h" if name else "o"} for name, n in refs], "more": more}
+
+
+def goatcounter_stats(items: Sequence[tuple[str, int]], *, more: bool = False) -> Json:
+    """`stats/browsers` and the like (`systems`, `locations`): each name and its visitors.
+
+    From GoatCounter's API reference (https://www.goatcounter.com/api.json, `GET /api/v0/stats/{page}`: a `stats`
+    list of `HitStat` objects with `id`, `name` and `count`, and `more`): the script never asks for these, so the
+    capture holds no example and the shape test cannot hold this to one.
+    """
+    return {"stats": [{"id": name, "name": name, "count": n} for name, n in items], "more": more}
