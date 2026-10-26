@@ -336,6 +336,8 @@ def _top(account: dict[str, Any], dimension: str) -> list[dict[str, Any]]:
         name = _object(group.get("dimensions")).get(dimension)
         if name is None or name == "":
             name = UNKNOWN
+        elif isinstance(name, (bool, int, float)):
+            name = json.dumps(name)  # a flag such as `bot` may come as true/false or 0/1
         elif not isinstance(name, str):
             raise _UnreadableError
         totals[name] = totals.get(name, 0) + _number(group.get("count"))

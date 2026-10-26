@@ -34,7 +34,7 @@ def web_analytics(daily: Sequence[Json] = (), referrers: Sequence[Json] = ()) ->
     return {"data": {"viewer": {"accounts": [{"daily": list(daily), "referrers": list(referrers)}]}}, "errors": None}
 
 
-def rum_group(dimension: str, value: str | None, count: int) -> Json:
+def rum_group(dimension: str, value: str | bool | int | None, count: int) -> Json:
     """A `list` group: page loads for one value of a dimension (`countryName="US"`)."""
     return {"count": count, "dimensions": {dimension: value}}
 

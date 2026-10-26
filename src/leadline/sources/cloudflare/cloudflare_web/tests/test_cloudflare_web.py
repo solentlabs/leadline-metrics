@@ -559,15 +559,33 @@ def test_a_list_graphql_refuses_is_named_in_the_partial_row(tmp_path: Path) -> N
             "errors": None,
         },
         {"data": {"viewer": {"accounts": [{"list": [{"count": 5, "dimensions": "x"}]}]}}, "errors": None},
-        {"data": {"viewer": {"accounts": [{"list": [{"count": 5, "dimensions": {"deviceType": 7}}]}]}}, "errors": None},
+        {
+            "data": {"viewer": {"accounts": [{"list": [{"count": 5, "dimensions": {"deviceType": ["x"]}}]}]}},
+            "errors": None,
+        },
         {"data": {"viewer": None}, "errors": None},
     ],
-    ids=["not a list", "a count not a number", "dimensions not an object", "a name not text", "no viewer"],
+    ids=["not a list", "a count not a number", "dimensions not an object", "a name not a scalar", "no viewer"],
 )
 def test_a_list_it_cant_read_is_a_partial_row_not_an_empty_list(tmp_path: Path, body: Any) -> None:
     done = fresh(tmp_path, cf.COUNTRIES, body)
 
     assert done.rows == {FILE: partial("top_devices answer was unreadable", devices=True)}
+
+
+def test_a_name_the_api_gives_as_a_boolean_or_number_is_its_text(tmp_path: Path) -> None:
+    groups = [rum_group("bot", False, 44), rum_group("bot", True, 3), rum_group("bot", 1, 2)]
+
+    scenario = replace(port.scenario(NAME, "week_of_traffic"), seed={})
+    responses = [*scenario.responses, *cf.lists(bots=rum_list(groups))]
+
+    done = run(replace(scenario, responses=responses), tmp_path, lists=False)
+
+    assert json.loads(done.rows[FILE])["top_bots"] == [
+        {"name": "false", "count": 44},
+        {"name": "true", "count": 3},
+        {"name": "1", "count": 2},
+    ]
 
 
 def test_both_lists_failing_are_one_partial_row_with_both_reasons(tmp_path: Path) -> None:

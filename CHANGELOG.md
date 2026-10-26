@@ -3,6 +3,12 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions
 follow [SemVer](https://semver.org/).
 
+## 0.8.10 - 2026-10-26
+
+- `cloudflare_web`: a list whose value Cloudflare gives as a boolean or a
+  number (`bot`) is read as its text (`true`, `false`, `1`) instead of making
+  the row `partial`.
+
 ## 0.8.9 - 2026-10-25
 
 - `goatcounter`: each page's referrers request is tried up to three times, like
