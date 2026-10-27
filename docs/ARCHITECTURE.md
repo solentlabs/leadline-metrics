@@ -539,6 +539,65 @@ The lagging sources are `cloudflare_analytics_engine`, `cloudflare_web`,
 `cloudflare_zone_traffic`, `github_traffic_daily` and `goatcounter`.
 <!-- END GENERATED lagging-sources -->
 
+## Storage
+
+Row files are kept by a backend (ADR: storage is a backend behind one
+contract). `store` holds every rule about what a run writes and reaches a
+file only through the backend, so every backend gives the same rows for the
+same run. Everything else a run writes (reports, pages, the log) is a plain
+file in `out_dir`.
+
+### Contract
+
+A **file** is a source entry's row file, named as the config names it
+(`github-releases-example.jsonl`). A backend keeps files and offers three
+operations (`leadline.storage.Backend`):
+
+| Operation | Meaning |
+| --------- | ------- |
+| `read_lines(file)` | the file's lines in order, each as written, line end included; none for a file never written |
+| `write_lines(file, lines)` | replaces the file with `lines`, atomically: a write that fails leaves the file as it was |
+| `files()` | the names of the files that exist, in order |
+
+The unit is the line, because `store` keeps the lines it does not change
+exactly as they are. A name is a plain `*.jsonl` file name. A source holds a
+`File` (a backend and a name), which the context opens with
+`ctx.file(name)`. `tests/test_storage.py` is the suite every backend passes.
+
+The context opens the JSONL backend, the only one that ships.
+
+### JSONL
+
+The default. A file is a flat file of that name in `out_dir`, one row a
+line, as the script wrote them. It reads as the script does (a CRLF line end
+reads as LF, blank lines are skipped, a byte that is not UTF-8 is kept) and
+writes through a temporary file renamed over the file.
+
+### Database backends
+
+No database backend ships yet. This is the layout the first, SQLite, makes
+and Cloudflare D1 shares: the files in normalized tables.
+
+| Table | Columns | Holds |
+| ----- | ------- | ----- |
+| `schema_version` | `version` | the version of the structure the backend made or migrated to |
+| `file` | `id`, `name` (unique) | a reference table: one row for each file, made when it is first written |
+| `field` | `id`, `path` (unique) | a reference table: one row for each distinct field path (`issues.open`, `top_referrers[].ref`), made when it is first seen |
+| `line` | `file_id`, `seq`, `date`, `second_key` | one row of a file, in file order |
+| `value` | `file_id`, `seq`, `field_id`, `parent`, `ord`, `kind`, `num`, `text` | one JSON value of a row; `parent` and `ord` give its place and so the nesting and the order of keys, and `kind` (`int`, `float`, `bool`, `null`, `text`, `object`, `list`) gives its exact form |
+| `raw_line` | `file_id`, `seq`, `text` | a line not in the form leadline writes (a line the script wrote with other spacing, one that is not an object), kept exactly as it came |
+
+A line in the form leadline writes (`json.dumps` of an object, a line end)
+is split into `line` and `value` and rebuilt by the same serializer into the
+same line; every other line is a `raw_line`. A new source or any config
+leadline accepts adds `file` and `field` rows and needs no migration, and a
+viewer can query one metric as `value` joined to `field`.
+
+A backend makes its tables on first access when its credentials allow it,
+and migrates an older `schema_version`. Where they do not allow it, the run
+stops with a message that names what is missing. A backend's credentials come
+from environment variables, never from the config or the log.
+
 ## Health
 
 What `health.jsonl` records each run, and how. `health.py` writes one row
