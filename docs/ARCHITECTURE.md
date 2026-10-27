@@ -630,7 +630,11 @@ from environment variables, never from the config or the log.
 
 What `health.jsonl` records each run, and how. `health.py` writes one row
 for the run date, after the checks, through `store.upsert`, so a rerun
-replaces the day's row, as the script's does.
+replaces the day's row, as the script's does. The file keeps the last 14
+days of rows (`health.KEEP_DAYS`): the run drops the rows before them after it
+writes its own (`store.drop_before`), because the file exists to show what
+happened and to help fix it, and every metric the row files keep is kept in full
+(ADR: health.jsonl is a log of the last 14 days).
 
 The row keeps every field the script's `check_freshness` writes, in its
 order, then adds `checks`, `critical` and `corrections`:

@@ -389,6 +389,24 @@ def replace_window(file: File, rows: Iterable[Row], now: datetime) -> dict[str, 
     return {day: before[day] for day in window if day in before}
 
 
+def drop_before(file: File, day: date) -> int:
+    """Drop the rows of the file dated before `day`; returns how many. A file kept to a window of days (health.jsonl)
+    is trimmed here. A line that is not a row, or has no real date, is kept; nothing is written when nothing drops."""
+    kept: list[str] = []
+    dropped = 0
+    for line in file.read_lines():
+        row = _object(line)
+        when = parse_date(row.get("date")) if row is not None else None
+        if when is not None and when < day:
+            dropped += 1
+        else:
+            kept.append(line if line.endswith("\n") else line + "\n")
+    if dropped:
+        file.write_lines(kept)
+        log.info("Dropped %d row(s) before %s from %s", dropped, day.isoformat(), file.name)
+    return dropped
+
+
 def write_good(file: File, row: Row, ctx: Context, source: str, second_key: str | None = None) -> None:
     """Upsert the good row `row` for `source`, recording on `ctx` the correction it makes, if any.
 

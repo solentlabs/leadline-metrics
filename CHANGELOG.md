@@ -5,6 +5,8 @@ follow [SemVer](https://semver.org/).
 
 ## Unreleased
 
+- `health.jsonl` keeps the last 14 days of rows. The first run after the update drops
+  the older ones; the other row files keep everything.
 - A row whose values are unchanged is no longer rewritten: a same-day rerun, and each
   night's rewrite of a 14- or 28-day window (`cloudflare_zone_traffic`,
   `cloudflare_analytics_engine`), leave the stored rows alone, so an unchanged row

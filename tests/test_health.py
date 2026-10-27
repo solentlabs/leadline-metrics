@@ -300,3 +300,26 @@ def test_the_row_of_a_rerun_replaces_the_days(tmp_path: Path) -> None:
     written = [json.loads(line) for line in (tmp_path / FILE).read_text(encoding="utf-8").splitlines()]
     assert [(row["date"], row["checked"]) for row in written[1:]] == [(TODAY, 0)]
     assert written[0] == {"date": "2026-09-22"}
+
+
+def test_the_file_keeps_only_the_last_fourteen_days_of_rows(tmp_path: Path) -> None:
+    old = "".join(
+        json.dumps({"date": f"2026-09-{day:02d}", "checked": 1}) + "\n" for day in range(1, 23)
+    )  # the 1st to the 22nd
+    ctx = seeded(tmp_path, {FILE: old})
+
+    write(ctx)
+
+    kept = [json.loads(line)["date"] for line in (tmp_path / FILE).read_text(encoding="utf-8").splitlines()]
+    assert kept[0] == "2026-09-10"  # the run's day and the thirteen before it
+    assert kept[-1] == TODAY
+    assert len(kept) == 14
+
+
+def test_a_rerun_the_same_day_leaves_the_window_as_it_is(tmp_path: Path) -> None:
+    ctx = seeded(tmp_path, {})
+    write(ctx)
+
+    write(ctx)
+
+    assert len((tmp_path / FILE).read_text(encoding="utf-8").splitlines()) == 1

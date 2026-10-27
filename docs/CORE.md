@@ -262,6 +262,13 @@ folder: two overlapping runs can still lose one run's row.
 Neither write path reads the clock: each takes `now`, the run's `ctx.now`,
 and refuses one without a UTC offset.
 
+### Dropping rows before a day
+
+`store.drop_before(file, day)` removes the rows dated before `day` and returns
+how many; a line that is not a row, or has no real date, is kept, and nothing is
+written when nothing drops. `health` is its one caller: it keeps `health.jsonl`
+to a window of days.
+
 ### Upsert
 
 `store.upsert(file, row, now, second_key=None)`: the script's write path

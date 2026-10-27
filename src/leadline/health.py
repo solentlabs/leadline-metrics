@@ -27,6 +27,7 @@ FILE = config.HEALTH_FILE
 STALE_AFTER_DAYS = 1  # how far a file's newest row may be behind its expected date before it is stale
 GAP_WINDOW_DAYS = 14  # the trailing days a gap is looked for in
 LISTED = 10  # a gap lists this many of its missing days, and of its empty ones
+KEEP_DAYS = 14  # health.jsonl keeps the run's day and the days before it, this many in all
 CRITICAL_NIGHTS = 2  # consecutive expected dates with no good row that make a source critical
 
 
@@ -62,6 +63,7 @@ def write(
         "corrections": [asdict(correction) for correction in ctx.corrections],
     }
     store.upsert(ctx.file(FILE), row, ctx.now)
+    store.drop_before(ctx.file(FILE), today - timedelta(days=KEEP_DAYS - 1))
     _log(ctx, row)
 
 

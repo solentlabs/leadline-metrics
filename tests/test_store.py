@@ -311,6 +311,33 @@ def test_a_window_with_nothing_changed_writes_nothing(tmp_path: Path, monkeypatc
     assert writes == []
 
 
+# --- drop_before: a file kept to a window of days ---
+
+
+def test_drop_before_removes_the_rows_dated_before_a_day_and_keeps_the_rest(tmp_path: Path, logged: Logged) -> None:
+    path = tmp_path / "m.jsonl"
+    keep = ['{"date": "2026-09-22", "n": 2}', "not json", '{"date": "2026-09-23", "n": 3}', "[1, 2]", '{"n": 5}']
+    path.write_text(
+        "\n".join(['{"date": "2026-09-20", "n": 0}', '{"date": "2026-09-21", "n": 1}', *keep]) + "\n", encoding="utf-8"
+    )
+
+    dropped = store.drop_before(file_at(path), date(2026, 9, 22))
+
+    assert dropped == 2
+    assert path.read_text(encoding="utf-8").splitlines() == keep  # rows from the day on, and lines that are not rows
+    assert logged.messages == ["Dropped 2 row(s) before 2026-09-22 from m.jsonl"]
+
+
+def test_drop_before_with_nothing_to_drop_writes_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = tmp_path / "m.jsonl"
+    path.write_text('{"date": "2026-09-22", "n": 2}\n', encoding="utf-8")
+    writes: list[Path] = []
+    monkeypatch.setattr(jsonl, "write_text", lambda p, text: writes.append(p))
+
+    assert store.drop_before(file_at(path), date(2026, 9, 22)) == 0
+    assert writes == []
+
+
 # The usage writer, driven through its own fetch code with canned SQL replies.
 RUN_DATE = date(2026, 9, 23)
 REFETCH_DAYS = 3

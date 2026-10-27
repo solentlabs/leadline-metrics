@@ -1579,3 +1579,20 @@ hosted database to the rows that changed, where a free plan counts every row
 written. The script stamps every row of a window each night, so this is a
 decided divergence from it, and the tests that compare with its output
 (`tests/test_store.py`) cover only writes that change a value.
+
+## health.jsonl is a log of the last 14 days
+
+**Decision:** `health.jsonl` keeps the rows of the run's day and the thirteen
+days before it, and each run drops the older ones after writing its own.
+Every other row file keeps all its rows. The corrections of a night are kept
+as long as that night's row is.
+
+**Rationale:** The row files are the data leadline exists to capture, so they
+are kept whole. `health.jsonl` is not data about a project. It records what a
+run checked, what was late and what it corrected, to show what happened and to
+help fix it, and the reports read only its newest row. Fourteen days is the
+span in which a problem is noticed and looked into, and it matches the window
+health looks for gaps in. Unbounded, the file grew to 7.5 MB in 90 nights,
+nearly all of it in the nights a release rebuilt history and recorded hundreds
+of corrections, and a hosted database counts every row it stores. A fix that
+has to be remembered longer belongs in the journal, with its reason.
