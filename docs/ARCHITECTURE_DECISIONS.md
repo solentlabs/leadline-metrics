@@ -1489,3 +1489,38 @@ account cannot read fails its part of the query every night, and the row is
 `partial` for good. Page views already record referrers through
 `cloudflare_web`, so the data is not lost. If the plan changes, adding the
 dimension is one entry in the source's list of dimensions.
+
+## Storage is a backend behind one contract
+
+**Decision:** Where rows are kept is a backend, chosen by the optional
+`storage` section of the config. Without it, the backend is JSONL: one flat
+file per stream in `out_dir`, as before. A stream is a row file, named as it
+is today (`cloudflare-web-example.jsonl`). The backends and their contract
+live in `leadline/storage/`, the one place that knows how rows are kept.
+`store` keeps every rule (upsert, a failure never replacing good data,
+merges, windows, backfills) and reaches rows only through the contract:
+`read_rows(stream)` returns the stream's rows in order, `write_rows(stream,
+rows)` replaces them atomically, and `streams()` names the streams that
+exist. A backend returns what was written, with the same keys, order and
+types, and keeps a line that is not an object as it came. One conformance
+suite, which every backend passes, tests that round trip on the goldens.
+
+A database backend normalizes: reference tables for streams and for field
+paths, created the first time a stream or a field is written, and tables for
+the rows and their values. A new source or any config leadline accepts needs
+no migration. A backend creates and migrates its own structure on first
+access when its credentials allow it, records a schema version, and stops
+with a message that names what is missing when it cannot. A backend's
+credentials come from environment variables, never from the config or the
+log.
+
+**Rationale:** A flat file per stream suits one box and stays readable by any
+tool, so it remains the default. A shared or hosted store, such as SQLite or
+Cloudflare D1, needs the data in tables, and normalized tables let a viewer
+query a metric without the program. Keeping the rules in `store` means a
+backend cannot change what a run writes: the same run gives the same rows on
+every backend. A contract of whole streams keeps a backend small, and a
+stream is a row a day, so a database backend writes only the rows that
+changed. SQLite (`sqlite3`) and an HTTPS API (`urllib`) are in the standard
+library, so the runtime stays stdlib-only. A backend that needs a driver is
+an optional extra, decided when it is proposed.
