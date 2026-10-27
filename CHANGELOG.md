@@ -8,7 +8,8 @@ follow [SemVer](https://semver.org/).
 - `storage` setting: the row files can be kept in a SQLite database, in
   normalized tables, instead of `*.jsonl` files (`{"backend": "sqlite",
   "path": "leadline.db"}`). Without the setting nothing changes.
-  `leadline import` copies existing files into the database.
+  `leadline import` copies existing files into an empty database, and
+  refuses, copying nothing, when it already holds one of them.
 
 ## 0.8.10 - 2026-10-26
 

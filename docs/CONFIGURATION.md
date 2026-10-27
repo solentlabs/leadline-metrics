@@ -103,9 +103,13 @@ cannot be, the run stops with exit status 2. Python's `sqlite3` module must
 exist, which a `jsonl` run does not need.
 
 `leadline import --config P [--from DIR]` copies the `*.jsonl` row files in
-`DIR` (default `out_dir`) into the configured database, replacing the files
-of those names there, and checks each reads back as it was. It is how
-existing files move to a database; the files themselves are left as they are.
+`DIR` (default `out_dir`) into the configured database and checks each reads
+back as it was. It is how existing files move to a database; the files
+themselves are left as they are. It is for a database with none of those
+files yet: if the database holds a file of one of those names, the command
+copies nothing and exits with status 2, because replacing it would erase the
+nights the database has collected since. Import once, then switch `storage`
+over; keep the old folder as a backup.
 
 ## History on first use
 

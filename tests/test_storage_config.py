@@ -126,3 +126,32 @@ def test_import_stops_when_the_folder_is_not_one(tmp_path: Path, capsys: pytest.
     assert cli.main(["import", "--config", str(path), "--from", str(tmp_path / "missing")]) == 2
 
     assert "not a folder" in capsys.readouterr().err
+
+
+def test_import_refuses_a_file_the_database_already_holds_and_copies_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    newer = '{"date": "2026-09-22", "n": 2}\n'
+    folder = tmp_path / "old"
+    Jsonl(folder).write_lines("a.jsonl", [ROW])
+    Jsonl(folder).write_lines("b.jsonl", [ROW])
+    database = Sqlite(tmp_path / "leadline.db")
+    database.write_lines("b.jsonl", [ROW, newer])  # a night the folder lacks
+    path = write_config(tmp_path, storage={"backend": "sqlite", "path": "../leadline.db"})
+
+    assert cli.main(["import", "--config", str(path), "--from", str(folder)]) == 2
+
+    assert "b.jsonl" in capsys.readouterr().err
+    assert database.files() == ["b.jsonl"]  # a.jsonl was not copied either
+    assert database.read_lines("b.jsonl") == [ROW, newer]
+
+
+def test_import_run_twice_stops_the_second_time(tmp_path: Path) -> None:
+    Jsonl(tmp_path / "out").write_lines("a.jsonl", [ROW])
+    path = write_config(tmp_path, storage={"backend": "sqlite", "path": "../leadline.db"})
+    assert cli.main(["import", "--config", str(path)]) == 0
+    Sqlite(tmp_path / "leadline.db").write_lines("a.jsonl", [ROW, '{"date": "2026-09-22", "n": 2}\n'])
+
+    assert cli.main(["import", "--config", str(path)]) == 2
+
+    assert len(Sqlite(tmp_path / "leadline.db").read_lines("a.jsonl")) == 2

@@ -16,10 +16,10 @@
   paste into the config and change; exit status 2 when the config is
   unusable.
 - `leadline import --config P [--from DIR]`: copy the `*.jsonl` row files in
-  DIR (default: the output folder) into the config's `storage` database,
-  replacing the files of those names there, and check each reads back as it
-  was; exit status 2 when the storage is jsonl, DIR is not a folder, or the
-  config is unusable.
+  DIR (default: the output folder) into the config's `storage` database, and
+  check each reads back as it was; exit status 2, copying nothing, when the
+  database already holds a file of one of those names, and when the storage is
+  jsonl, DIR is not a folder, or the config is unusable.
 - `leadline diff A B`: compare the row files in two folders, ignoring
   `captured_at`: one line per difference, then a count of them by file;
   exit status 0 when they match, 1 when they differ, 2 when either is not
@@ -116,7 +116,11 @@ def _import(config: Config, folder: Path | None) -> int:
     if not folder.is_dir():
         raise ConfigError(f"not a folder: {folder}")
     try:
-        files, lines = storage.copy_files(Jsonl(folder), storage.open_backend(config.storage, config.out_dir))
+        source, target = Jsonl(folder), storage.open_backend(config.storage, config.out_dir)
+        held = sorted(set(source.files()) & set(target.files()))
+        if held:  # an import replaces a file, so it would erase the nights the database has collected since
+            raise ConfigError(f"the database already holds {', '.join(held)}; import into an empty database")
+        files, lines = storage.copy_files(source, target)
     except StorageError as e:
         raise ConfigError(f"storage: {e}") from e
     print(f"Imported {files} file(s), {lines} line(s) from {folder} into {config.storage.path}")
