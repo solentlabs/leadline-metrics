@@ -10,7 +10,7 @@ from __future__ import annotations
 import itertools
 from typing import Any, Iterable, List, Sequence, Tuple
 
-from leadline.storage import check_name, tables
+from leadline.storage import StorageError, check_name, tables
 
 Statement = Tuple[str, Sequence[Any]]  # SQL and its bound values
 Rows = List[Tuple[Any, ...]]
@@ -162,6 +162,32 @@ class SqlBackend:
                 )
                 statements.append((sql, params))
         return statements
+
+
+def schema_statements(names: Iterable[str], version: int | None, where: str) -> list[Statement]:
+    """The statements that bring a database to `tables.VERSION`: all the tables in an empty one, the migrations from an
+    older version; none when it is current. Raises StorageError for a database leadline did not make or a newer one.
+
+    `names` are the tables it has, `version` the one in its `schema_version` (None without), `where` how an error
+    names it. A database's own tables (`sqlite_*`, D1's `_cf_*`) do not count.
+    """
+    own = {name for name in names if not name.startswith(("sqlite_", "_cf_"))}
+    if not own:
+        return [(statement, ()) for statement in tables.DDL] + [
+            ("INSERT INTO schema_version (version) VALUES (?)", (tables.VERSION,))
+        ]
+    if "schema_version" not in own or version is None:
+        raise StorageError(f"{where} is a database that leadline did not make")
+    if version > tables.VERSION:
+        raise StorageError(
+            f"{where} was made by a newer leadline (its structure is version {version}, this one reads "
+            f"{tables.VERSION}); update leadline"
+        )
+    statements: list[Statement] = []
+    for step in range(version, tables.VERSION):
+        statements += [(statement, ()) for statement in tables.MIGRATIONS[step]]
+        statements.append(("UPDATE schema_version SET version = ?", (step + 1,)))
+    return statements
 
 
 def _chunks(items: Sequence[Any], size: int) -> Iterable[Sequence[Any]]:

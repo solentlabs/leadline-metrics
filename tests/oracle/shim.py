@@ -243,7 +243,7 @@ def heredoc_main(args: list[str]) -> None:
         return io.BytesIO(reply["body"].encode("utf-8"))
 
     urllib.request.urlopen = fake_urlopen  # type: ignore[assignment]
-    os.environ["CLOUDFLARE_API_TOKEN"] = os.environ["CLOUDFLARE_ACCOUNT_ID"] = "placeholder"  # noqa: S105
+    os.environ["CLOUDFLARE_API_TOKEN"] = os.environ["CLOUDFLARE_ACCOUNT_ID"] = "placeholder"
 
     code = compile(Path(heredoc).read_text(encoding="utf-8"), heredoc, "exec")
     sys.argv = ["-", *args[3:]]

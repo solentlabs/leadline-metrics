@@ -64,15 +64,18 @@ class ConfigError(Exception):
     """The config (file, flags or source names) is unusable; the run doesn't start."""
 
 
-STORAGE_BACKENDS = ("jsonl", "sqlite")
+STORAGE_BACKENDS = ("jsonl", "sqlite", "d1")
+_STORAGE_KEYS = {"jsonl": (), "sqlite": ("path",), "d1": ("account_id", "database_id")}
 
 
 class Storage(NamedTuple):
-    """Where the row files are kept: the backend, and for a database its path (None for jsonl, which keeps them in
-    `out_dir`)."""
+    """Where the row files are kept: the backend; for sqlite the database's path; for d1 the account and database ids
+    (None where a backend has no such key; jsonl keeps its files in `out_dir`)."""
 
     backend: str = "jsonl"
     path: Path | None = None
+    account_id: str | None = None
+    database_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -145,29 +148,41 @@ def load(path: Path, flags: Mapping[str, str | None]) -> Config:
 
 
 def _storage(value: Any, folder: Path) -> Storage:
-    """The `storage` setting: `{"backend": "jsonl"}`, or `{"backend": "sqlite", "path": ...}` with the database's path
-    relative to the config file; none at all is jsonl."""
+    """The `storage` setting: `{"backend": "jsonl"}`; `{"backend": "sqlite", "path": ...}` with the database's path
+    relative to the config file; or `{"backend": "d1", "account_id": ..., "database_id": ...}`. None at all is jsonl."""
     if value is None:
         return Storage()
     if not isinstance(value, dict):
         raise ConfigError("storage must be a JSON object")
-    unknown = sorted(set(value) - {"backend", "path"})
-    if unknown:
-        raise ConfigError(f"storage.{unknown[0]}: unknown key (the keys are backend, path)")
     backend = value.get("backend")
     if backend is None:
         raise ConfigError(f"storage.backend is required (one of {', '.join(STORAGE_BACKENDS)})")
     if backend not in STORAGE_BACKENDS:
         raise ConfigError(f"storage.backend: {backend!r} is not one of {', '.join(STORAGE_BACKENDS)}")
-    if backend == "jsonl":
-        if "path" in value:
-            raise ConfigError("storage.path: jsonl keeps its files in out_dir")
-        return Storage("jsonl")
-    if "path" not in value:
-        raise ConfigError(f"storage.path is required for {backend}")
-    if not isinstance(value["path"], str) or not value["path"]:
-        raise ConfigError("storage.path must be a non-empty string")
-    return Storage(backend, folder / value["path"])
+    _check_storage_keys(value, backend)
+    if backend == "sqlite":
+        return Storage("sqlite", folder / value["path"])
+    if backend == "d1":
+        return Storage("d1", None, value["account_id"], value["database_id"])
+    return Storage("jsonl")
+
+
+def _check_storage_keys(value: dict[str, Any], backend: str) -> None:
+    """The keys `backend` takes are all there, and nothing else is."""
+    keys = _STORAGE_KEYS[backend]
+    for key in value:
+        if key == "backend" or key in keys:
+            continue
+        if key == "path":
+            raise ConfigError(f"storage.path: {backend} keeps its files in {'out_dir' if backend == 'jsonl' else 'D1'}")
+        if key in _STORAGE_KEYS["d1"]:
+            raise ConfigError(f"storage.{key}: only d1 takes it")
+        raise ConfigError(f"storage.{key}: unknown key (the keys are backend{''.join(', ' + k for k in keys)})")
+    for key in keys:
+        if key not in value:
+            raise ConfigError(f"storage.{key} is required for {backend}")
+        if not isinstance(value[key], str) or not value[key]:
+            raise ConfigError(f"storage.{key} must be a non-empty string")
 
 
 def _no_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:

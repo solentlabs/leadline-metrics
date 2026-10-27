@@ -20,6 +20,11 @@
   check each reads back as it was; exit status 2, copying nothing, when the
   database already holds a file of one of those names, and when the storage is
   jsonl, DIR is not a folder, or the config is unusable.
+- `leadline export --config P --to DIR`: copy the config's `storage` database
+  into `*.jsonl` row files in DIR (made when missing), and check each reads
+  back as it was; exit status 2, copying nothing, when DIR already holds a
+  file of one of those names, and when the storage is jsonl or the config is
+  unusable.
 - `leadline diff A B`: compare the row files in two folders, ignoring
   `captured_at`: one line per difference, then a count of them by file;
   exit status 0 when they match, 1 when they differ, 2 when either is not
@@ -37,7 +42,7 @@ from typing import Sequence
 from leadline import __version__, rowdiff, runner, storage
 from leadline.config import SETTINGS, Config, ConfigError, load
 from leadline.sources import Registry, Source, Spec, default_reports, discover
-from leadline.storage import StorageError
+from leadline.storage import Backend, StorageError
 from leadline.storage.jsonl import Jsonl
 
 
@@ -81,6 +86,9 @@ def main(argv: Sequence[str] | None = None, registry: Registry[Source] | None = 
     copy = commands.add_parser("import", help="copy the jsonl row files of a folder into the configured database")
     copy.add_argument("--config", required=True, type=Path, help="the JSON config file")
     copy.add_argument("--from", dest="from_dir", type=Path, help="the folder of row files (default: out_dir)")
+    export = commands.add_parser("export", help="copy the configured database into jsonl row files in a folder")
+    export.add_argument("--config", required=True, type=Path, help="the JSON config file")
+    export.add_argument("--to", dest="to_dir", required=True, type=Path, help="the folder to write the row files in")
     diff = commands.add_parser("diff", help="compare the row files in two folders, ignoring captured_at")
     diff.add_argument("a", type=Path, help="the reference folder, e.g. the script's")
     diff.add_argument("b", type=Path, help="the folder to check against it, e.g. leadline's")
@@ -91,6 +99,8 @@ def main(argv: Sequence[str] | None = None, registry: Registry[Source] | None = 
     try:
         if args.command == "default-reports":
             return _default_reports(load(args.config, {}), registry)
+        if args.command == "export":
+            return _export(load(args.config, {}), args.to_dir)
         if args.command == "import":
             return _import(load(args.config, {}), args.from_dir)
         if args.command == "report":
@@ -117,14 +127,32 @@ def _import(config: Config, folder: Path | None) -> int:
         raise ConfigError(f"not a folder: {folder}")
     try:
         source, target = Jsonl(folder), storage.open_backend(config.storage, config.out_dir)
-        held = sorted(set(source.files()) & set(target.files()))
-        if held:  # an import replaces a file, so it would erase the nights the database has collected since
-            raise ConfigError(f"the database already holds {', '.join(held)}; import into an empty database")
+        _refuse_held(source, target, "database")
         files, lines = storage.copy_files(source, target)
     except StorageError as e:
         raise ConfigError(f"storage: {e}") from e
     print(f"Imported {files} file(s), {lines} line(s) from {folder} into {config.storage.path}")
     return 0
+
+
+def _export(config: Config, folder: Path) -> int:
+    if config.storage.backend == "jsonl":
+        raise ConfigError("storage is jsonl: its row files are already jsonl files in out_dir")
+    try:
+        source, target = storage.open_backend(config.storage, config.out_dir), Jsonl(folder)
+        _refuse_held(source, target, "folder")
+        files, lines = storage.copy_files(source, target)
+    except StorageError as e:
+        raise ConfigError(f"storage: {e}") from e
+    print(f"Exported {files} file(s), {lines} line(s) from the {config.storage.backend} database into {folder}")
+    return 0
+
+
+def _refuse_held(source: Backend, target: Backend, where: str) -> None:
+    """Stop when `target` holds a file `source` has: copying replaces it, which would erase the nights it has since."""
+    held = sorted(set(source.files()) & set(target.files()))
+    if held:
+        raise ConfigError(f"the {where} already holds {', '.join(held)}; copy into an empty {where}")
 
 
 def _diff(a: Path, b: Path) -> int:

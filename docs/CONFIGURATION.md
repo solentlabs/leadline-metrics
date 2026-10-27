@@ -90,17 +90,38 @@ the log are files in `out_dir` either way.
 
 | Key | Meaning |
 | --- | ------- |
-| `backend` | required: `jsonl` or `sqlite` |
-| `path` | the database file, required for `sqlite` and not allowed for `jsonl`; relative to the file's folder, like `out_dir`; its folder is made when it is missing |
+| `backend` | required: `jsonl`, `sqlite` or `d1` |
+| `path` | `sqlite` only, required: the database file, relative to the file's folder, like `out_dir`; its folder is made when it is missing |
+| `account_id`, `database_id` | `d1` only, required: the Cloudflare account and the D1 database (identifiers, not secrets) |
 
 Keep the database out of a folder a sync service (OneDrive, Dropbox)
 watches: it can copy the file while a run is writing it, and a database
 copied half-written is damaged. The config and the output folder can stay
 synced.
 
+`d1` keeps the files in a Cloudflare D1 database
+([Cloudflare D1](ARCHITECTURE.md#cloudflare-d1)):
+
+```json
+"storage": {"backend": "d1", "account_id": "<account id>", "database_id": "<database id>"}
+```
+
+Its token is read from `CLOUDFLARE_D1_TOKEN`, as a credential: set it in the
+scheduler's task or the workflow's secrets, never in the file. Make it a token of
+its own, with edit access to that one D1 database and nothing else, apart from
+the `CLOUDFLARE_API_TOKEN` that reads analytics. Nothing else is needed: a run
+makes the tables on first use.
+
 A database is opened, and its tables made, before the run starts; where it
 cannot be, the run stops with exit status 2. Python's `sqlite3` module must
 exist, which a `jsonl` run does not need.
+
+`leadline export --config P --to DIR` is the reverse: it copies the configured
+database into `*.jsonl` files in `DIR` (made when missing) and checks each
+reads back as it was. It copies nothing and exits with status 2 when `DIR`
+already holds a file of one of those names. Its files are what `leadline
+diff` compares with another folder, so a database's rows can be checked
+against another run's.
 
 `leadline import --config P [--from DIR]` copies the `*.jsonl` row files in
 `DIR` (default `out_dir`) into the configured database and checks each reads

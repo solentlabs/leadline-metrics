@@ -10,14 +10,22 @@ from pathlib import Path
 from typing import Callable
 
 import pytest
+from fake_d1 import FakeD1
 
+from leadline.http import Http
 from leadline.storage import Backend
+from leadline.storage.d1 import D1
 from leadline.storage.jsonl import Jsonl
 from leadline.storage.sqlite import Sqlite
 
 Make = Callable[[Path], Backend]
 
-BACKENDS: dict[str, Make] = {"jsonl": Jsonl, "sqlite": lambda folder: Sqlite(folder / "leadline.db")}
+
+def _d1(_folder: Path) -> Backend:
+    return D1("account", "database", "t0ken", Http("agent", FakeD1("account", "database", "t0ken"), lambda _s: None))
+
+
+BACKENDS: dict[str, Make] = {"jsonl": Jsonl, "sqlite": lambda folder: Sqlite(folder / "leadline.db"), "d1": _d1}
 
 FILE = "example.jsonl"
 

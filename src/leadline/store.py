@@ -9,6 +9,10 @@ no line in the file makes a write fail (docs/ARCHITECTURE_DECISIONS.md):
 - `replace_window`: cloudflare_analytics_engine. A window of days rewritten,
   the file re-sorted.
 
+A row whose values are those already stored is not written, in either: the stored line stands, `captured_at` with
+it (docs/ARCHITECTURE_DECISIONS.md, "Unchanged rows are left as they are"). That is the one place the script is not
+reproduced.
+
 Neither reads the clock: each stamps `captured_at` with the `now` it is given,
 the run's `ctx.now` (docs/CORE.md, "Store"). A source writes through
 neither directly, but through the functions that keep the decided rules:
@@ -309,6 +313,10 @@ def upsert(file: File, row: Row, now: datetime, second_key: str | None = None) -
     kept (where the script crashes on the latter, docs/ARCHITECTURE_DECISIONS.md).
     The row gets `captured_at`, from `now`, and is appended. Returns the row it
     replaced (the last line with the key), or None.
+
+    A row whose values are those of the one line that holds its key (`captured_at` and the order of keys aside)
+    is not written: the file is left as it is, the first capture's `captured_at` with it, and the stored row is
+    returned (docs/ARCHITECTURE_DECISIONS.md, "Unchanged rows are left as they are").
     """
     key = _key(row, second_key)
     record = dict(row)
@@ -316,6 +324,7 @@ def upsert(file: File, row: Row, now: datetime, second_key: str | None = None) -
 
     kept: list[str] = []
     replaced: Row | None = None
+    holding = 0
     for line in file.read_lines():
         try:
             existing = _loads(line)
@@ -323,8 +332,12 @@ def upsert(file: File, row: Row, now: datetime, second_key: str | None = None) -
             existing = None  # kept rather than silently dropped
         if _matches(existing, key):
             replaced = existing
+            holding += 1
             continue
         kept.append(line if line.endswith("\n") else line + "\n")
+    if holding == 1 and replaced is not None and _unchanged(replaced, record):
+        log.info("Kept %s in %s: unchanged", _describe(key), file.name)
+        return replaced
     kept.append(json.dumps(record) + "\n")
     file.write_lines(kept)
 
@@ -346,7 +359,8 @@ def replace_window(file: File, rows: Iterable[Row], now: datetime) -> dict[str, 
     captured_at = _captured_at(now)
     by_date: dict[str, Row] = {}
     unparsed: list[str] = []
-    for line in file.read_lines():
+    old = file.read_lines()
+    for line in old:
         try:
             existing = _loads(line)
         except ValueError:
@@ -356,18 +370,23 @@ def replace_window(file: File, rows: Iterable[Row], now: datetime) -> dict[str, 
         else:
             unparsed.append(line.rstrip("\n"))
     before = dict(by_date)
-    written: list[str] = []
+    window: list[str] = []
+    written = 0
     for row in rows:
+        window.append(row["date"])
+        if row["date"] in by_date and _unchanged(by_date[row["date"]], row):
+            continue  # the stored row stands, its first capture's `captured_at` with it
         record = dict(row)
         record["captured_at"] = captured_at
         by_date[record["date"]] = record
-        written.append(record["date"])
+        written += 1
 
     lines = [line + "\n" for line in unparsed]
     lines += [json.dumps(by_date[d]) + "\n" for d in sorted(by_date)]
-    file.write_lines(lines)
-    log.info("Wrote %d row(s) to %s", len(written), file.name)
-    return {day: before[day] for day in written if day in before}
+    if lines != old:
+        file.write_lines(lines)
+    log.info("Wrote %d row(s) to %s", written, file.name)
+    return {day: before[day] for day in window if day in before}
 
 
 def write_good(file: File, row: Row, ctx: Context, source: str, second_key: str | None = None) -> None:
@@ -592,6 +611,13 @@ def _add_missing(stored: Row, row: Row, rebuilt: bool) -> bool:
         elif isinstance(stored[key], dict) and isinstance(value, dict):
             changed = _add_missing(stored[key], value, rebuilt) or changed
     return changed
+
+
+def _unchanged(stored: Row, row: Row) -> bool:
+    """Whether `row` has the values of `stored`, `captured_at` and the order of keys aside."""
+    return _json({k: v for k, v in stored.items() if k != "captured_at"}) == _json(
+        {k: v for k, v in row.items() if k != "captured_at"}
+    )
 
 
 def _json(value: Any) -> str:

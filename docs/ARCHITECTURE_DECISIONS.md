@@ -1501,7 +1501,8 @@ entry's rows, named as the config names it
 `store` keeps every rule (upsert, a failure never replacing good data,
 merges, windows, backfills) and reaches a file only through the contract:
 `read_lines(file)` returns the file's lines in order, `write_lines(file,
-lines)` replaces them atomically, and `files()` names the files that exist.
+lines)` replaces them atomically (D1, which can make only one request atomic,
+says how it repairs a bigger write in its own decision), and `files()` names the files that exist.
 A database backend keeps a file as rows in its tables, keyed by the file's
 name. The unit is the line, because `store` keeps the lines it does not
 change exactly as they are. A backend returns each line exactly as it was
@@ -1530,3 +1531,51 @@ file is a line a day, so a database backend writes only the lines that
 changed. SQLite (`sqlite3`) and an HTTPS API (`urllib`) are in the standard
 library, so the runtime stays stdlib-only. A backend that needs a driver is
 an optional extra, decided when it is proposed.
+
+## D1 is reached over its REST API, with a token of its own
+
+**Decision:** The `d1` storage backend sends its statements to Cloudflare's
+REST API, as batches to the database's `query` endpoint, from standard
+library `urllib`. Its token is read from the environment variable
+`CLOUDFLARE_D1_TOKEN`, a token of its own with edit access to the one D1
+database, kept apart from the `CLOUDFLARE_API_TOKEN` that reads analytics. The
+account and database ids are settings, since they are identifiers. A file's
+lines are read once a run and kept, and a write finds what changed by a
+digest kept with each line, so it reads no values. A write of more than one
+request's share (50 statements) is sent as several requests in order; one that
+stops part-way leaves a file the next write repairs by the same digests, and a
+run that cannot reach the database, or has no token, stops before it starts.
+
+**Rationale:** D1 has no network port or SQL protocol, so the REST API is the
+only way in from outside Cloudflare, and a Worker's binding (for the live
+charts) is the only way in from inside it. A hosted Postgres would need a
+driver, a new dependency. A token of its own means a leak of either token costs
+less, and a write token to one database cannot read the account's analytics. D1
+limits a statement to 100 bound values and 100 KB and a request to 30 seconds,
+and a free plan counts rows read and written, so a night's run must not read a
+file's values more than once. A request is the only unit D1 makes atomic over
+REST; a night's rows fit in one, and an import, which does not, can be repeated
+into a new database, so the weaker guarantee for a big write costs nothing a
+run depends on.
+
+## Unchanged rows are left as they are
+
+**Decision:** A write that would not change a row's values does not touch the
+row. `store.upsert` leaves the file as it is when the one line holding the
+row's key has the same values, `captured_at` and the order of keys aside, so
+the stored `captured_at` stays the first capture's. `store.replace_window`
+keeps each stored row of its window whose values are the new row's, writes a
+`captured_at` on the rows that differ or are new, and writes nothing when no
+row changes. A changed value is still replaced and recorded as a correction,
+and a missing day is still filled; nothing else about the rules moves.
+
+**Rationale:** leadline captures and keeps data, then reports on it. A night
+that re-reads a window the API has not changed has captured nothing new, so
+the rows already kept are the record: rewriting them only moves their
+`captured_at`, and `captured_at` is more useful as when the values were first
+read. Backfill exists for the data a run failed to get or a day with no row,
+not to rewrite what is already there. Leaving the rows alone also keeps a
+hosted database to the rows that changed, where a free plan counts every row
+written. The script stamps every row of a window each night, so this is a
+decided divergence from it, and the tests that compare with its output
+(`tests/test_store.py`) cover only writes that change a value.

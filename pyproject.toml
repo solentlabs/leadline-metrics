@@ -102,10 +102,10 @@ max-complexity = 10
 "src/leadline/cli.py" = ["T20"]
 # assert is pytest's idiom; tests run the script and interpreters with
 # arguments they build themselves; fakes keep the signature they replace;
-# seeded random makes made-up test data, never a secret.
+# seeded random makes made-up test data, never a secret; a token in a test is made up.
 # A source's or API's own tests, in its tests/ folder, are held to the same.
-"tests/**" = ["S101", "S311", "S603", "S607", "ARG"]
-"src/leadline/**/tests/**" = ["S101", "S311", "S603", "S607", "ARG"]
+"tests/**" = ["S101", "S105", "S106", "S311", "S603", "S607", "ARG"]
+"src/leadline/**/tests/**" = ["S101", "S105", "S106", "S311", "S603", "S607", "ARG"]
 # Stand-ins for curl and date, and CLIs: stdout and stderr are their interface.
 "tests/oracle/{shim,script_harness,forbidden_terms}.py" = ["T20"]
 "tests/scenarios/__main__.py" = ["T20"]

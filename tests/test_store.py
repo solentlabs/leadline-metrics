@@ -229,6 +229,88 @@ def test_upsert_stamps_captured_at_last_without_changing_the_row(tmp_path: Path)
     assert row == {"date": "2026-09-23", "n": 1}
 
 
+# --- unchanged data is not touched (docs/ARCHITECTURE_DECISIONS.md, "Unchanged rows are left as they are") ---
+
+LATER = datetime(2026, 9, 24, 23, 31, 5).astimezone()  # a later run's clock
+
+
+def test_upsert_of_an_unchanged_row_leaves_the_file_as_it_is(tmp_path: Path, logged: Logged) -> None:
+    path = tmp_path / "m.jsonl"
+    store.upsert(file_at(path), {"date": "2026-09-23", "n": 1}, WHEN)
+    before = path.read_bytes()
+
+    replaced = store.upsert(file_at(path), {"n": 1, "date": "2026-09-23"}, LATER)  # the same values, any key order
+
+    assert path.read_bytes() == before  # captured_at is the first capture's
+    assert replaced is not None
+    assert replaced["n"] == 1
+    assert logged.messages == ["Added 2026-09-23 to m.jsonl", "Kept 2026-09-23 in m.jsonl: unchanged"]
+
+
+def test_upsert_of_a_changed_row_replaces_it_and_stamps_the_new_time(tmp_path: Path) -> None:
+    path = tmp_path / "m.jsonl"
+    store.upsert(file_at(path), {"date": "2026-09-23", "n": 1}, WHEN)
+
+    store.upsert(file_at(path), {"date": "2026-09-23", "n": 2}, LATER)
+
+    [row] = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    assert (row["n"], row["captured_at"]) == (2, LATER.isoformat(timespec="seconds"))
+
+
+def test_upsert_of_a_row_with_a_field_more_adds_it(tmp_path: Path) -> None:
+    path = tmp_path / "m.jsonl"
+    store.upsert(file_at(path), {"date": "2026-09-23", "n": 1}, WHEN)
+
+    store.upsert(file_at(path), {"date": "2026-09-23", "n": 1, "m": 2}, LATER)
+
+    [row] = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    assert (row["m"], row["captured_at"]) == (2, LATER.isoformat(timespec="seconds"))
+
+
+def test_upsert_of_an_unchanged_row_that_a_file_holds_twice_still_leaves_one(tmp_path: Path) -> None:
+    path = tmp_path / "m.jsonl"
+    line = json.dumps({"date": "2026-09-23", "n": 1, "captured_at": "x"}) + "\n"
+    path.write_text(line * 2, encoding="utf-8")
+
+    store.upsert(file_at(path), {"date": "2026-09-23", "n": 1}, LATER)
+
+    assert len(path.read_text(encoding="utf-8").splitlines()) == 1
+
+
+def test_a_window_leaves_the_rows_whose_values_are_unchanged_as_they_are(tmp_path: Path) -> None:
+    path = tmp_path / "m.jsonl"
+    store.replace_window(file_at(path), [{"date": "2026-09-21", "n": 1}, {"date": "2026-09-22", "n": 2}], WHEN)
+    before = path.read_text(encoding="utf-8").splitlines()
+
+    replaced = store.replace_window(
+        file_at(path),
+        [{"date": "2026-09-21", "n": 1}, {"date": "2026-09-22", "n": 9}, {"date": "2026-09-23", "n": 3}],
+        LATER,
+    )
+
+    after = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    assert path.read_text(encoding="utf-8").splitlines()[0] == before[0]  # unchanged: the first capture's line
+    stamp = LATER.isoformat(timespec="seconds")
+    assert [(r["date"], r["n"], r["captured_at"] == stamp) for r in after] == [
+        ("2026-09-21", 1, False),
+        ("2026-09-22", 9, True),  # changed: the new time
+        ("2026-09-23", 3, True),  # added
+    ]
+    assert sorted(replaced) == ["2026-09-21", "2026-09-22"]  # what the window held, for the corrections
+
+
+def test_a_window_with_nothing_changed_writes_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = tmp_path / "m.jsonl"
+    rows = [{"date": "2026-09-21", "n": 1}, {"date": "2026-09-22", "n": 2}]
+    store.replace_window(file_at(path), rows, WHEN)
+    writes: list[Path] = []
+    monkeypatch.setattr(jsonl, "write_text", lambda p, text: writes.append(p))
+
+    store.replace_window(file_at(path), rows, LATER)
+
+    assert writes == []
+
+
 # The usage writer, driven through its own fetch code with canned SQL replies.
 RUN_DATE = date(2026, 9, 23)
 REFETCH_DAYS = 3

@@ -10,11 +10,15 @@ conformance suite every backend passes.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Protocol
+from typing import TYPE_CHECKING, Iterable, Protocol
 
 from leadline import config
+
+if TYPE_CHECKING:
+    from leadline.http import Http
 
 SUFFIX = ".jsonl"
 
@@ -59,6 +63,14 @@ class File:
         self.backend.write_lines(self.name, lines)
 
 
+def d1_http() -> Http:
+    """The HTTP client the D1 backend sends its requests with (a test gives its own)."""
+    from leadline import __version__
+    from leadline.http import Http  # here, not at the top: a run that keeps its files locally loads no HTTP
+
+    return Http(f"leadline-metrics/{__version__}")
+
+
 def open_backend(storage: config.Storage, out_dir: Path) -> Backend:
     """The backend the config names, checked to be usable: a database is opened (and made or migrated) here, so a
     run that cannot keep its files stops before it starts; raises StorageError."""
@@ -67,6 +79,15 @@ def open_backend(storage: config.Storage, out_dir: Path) -> Backend:
         from leadline.storage.sqlite import Sqlite  # here, not at the top: a jsonl run never loads sqlite3
 
         backend = Sqlite(storage.path)
+        backend.files()
+        return backend
+    if storage.backend == "d1" and storage.account_id and storage.database_id:
+        from leadline.storage import d1
+
+        token = os.environ.get(d1.CREDENTIAL, "")
+        if not token:
+            raise StorageError(f"set {d1.CREDENTIAL} to an API token that can edit the D1 database")
+        backend = d1.D1(storage.account_id, storage.database_id, token, d1_http())
         backend.files()
         return backend
     from leadline.storage.jsonl import Jsonl

@@ -5,11 +5,20 @@ follow [SemVer](https://semver.org/).
 
 ## Unreleased
 
+- A row whose values are unchanged is no longer rewritten: a same-day rerun, and each
+  night's rewrite of a 14- or 28-day window (`cloudflare_zone_traffic`,
+  `cloudflare_analytics_engine`), leave the stored rows alone, so an unchanged row
+  keeps its first `captured_at`. A changed value is still replaced and recorded
+  as a correction.
 - `storage` setting: the row files can be kept in a SQLite database, in
   normalized tables, instead of `*.jsonl` files (`{"backend": "sqlite",
-  "path": "leadline.db"}`). Without the setting nothing changes.
+  "path": "leadline.db"}`) or in Cloudflare D1 (`{"backend": "d1",
+  "account_id": "...", "database_id": "..."}`, with its token in
+  `CLOUDFLARE_D1_TOKEN`). Without the setting nothing changes.
   `leadline import` copies existing files into an empty database, and
   refuses, copying nothing, when it already holds one of them.
+  `leadline export` copies a database back into `*.jsonl` files, for
+  `leadline diff` or a backup.
 
 ## 0.8.10 - 2026-10-26
 

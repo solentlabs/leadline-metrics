@@ -11,8 +11,8 @@ from contextlib import closing
 from pathlib import Path
 from typing import Sequence
 
-from leadline.storage import StorageError, tables
-from leadline.storage.sql import Rows, SqlBackend, Statement
+from leadline.storage import StorageError
+from leadline.storage.sql import Rows, SqlBackend, Statement, schema_statements
 
 
 class Sqlite(SqlBackend):
@@ -49,20 +49,6 @@ class Sqlite(SqlBackend):
 def _prepare(conn: sqlite3.Connection, path: Path) -> None:
     """Make the tables in an empty database, migrate an older one, and stop at one this leadline does not know."""
     existing = {name for (name,) in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
-    if not existing:
-        for statement in tables.DDL:
-            conn.execute(statement)
-        conn.execute("INSERT INTO schema_version (version) VALUES (?)", (tables.VERSION,))
-        return
-    if "schema_version" not in existing:
-        raise StorageError(f"{path} is a database that leadline did not make")
-    (version,) = conn.execute("SELECT version FROM schema_version").fetchone()
-    if version > tables.VERSION:
-        raise StorageError(
-            f"{path} was made by a newer leadline (its structure is version {version}, this one reads "
-            f"{tables.VERSION}); update leadline"
-        )
-    for step in range(version, tables.VERSION):
-        for statement in tables.MIGRATIONS[step]:
-            conn.execute(statement)
-        conn.execute("UPDATE schema_version SET version = ?", (step + 1,))
+    found = conn.execute("SELECT version FROM schema_version").fetchone() if "schema_version" in existing else None
+    for sql, params in schema_statements(existing, found[0] if found else None, str(path)):
+        conn.execute(sql, params)

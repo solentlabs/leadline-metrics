@@ -139,7 +139,7 @@ The modules under `src/leadline/`, and what each owns.
 | `context.py` | `Context`: the run's clock and date, output folder, logger and HTTP client, and what sources report for health; `ReportContext`, the same without HTTP, for `report`; the logging of both. It loads `http` only when a run opens its context |
 | `http.py` | the `urllib` wrapper: timeouts, user agent, retries, pagination, GraphQL, answer reuse, reading an answer, saved responses ([CORE.md](CORE.md#http)) |
 | `store.py` | the rules for reading and writing row files; every file's atomic write ([CORE.md](CORE.md#store)) |
-| `storage/` | where row files are kept: the `Backend` contract and the `File` a source holds (`__init__.py`), the JSONL and SQLite backends (`jsonl.py`, `sqlite.py`), and what a SQL backend shares: the tables and how a line becomes values (`tables.py`) and the queries (`sql.py`, where a backend says only how to run statements), the one place that knows how rows are kept ([CORE.md](CORE.md#where-rows-are-kept)) |
+| `storage/` | where row files are kept: the `Backend` contract and the `File` a source holds (`__init__.py`), the JSONL, SQLite and D1 backends (`jsonl.py`, `sqlite.py`, `d1.py`), and what a SQL backend shares: the tables and how a line becomes values (`tables.py`) and the queries (`sql.py`, where a backend says only how to run statements), the one place that knows how rows are kept ([CORE.md](CORE.md#where-rows-are-kept)) |
 | `runner.py` | one run: validation, sources in order with failures isolated, the retry pass, checks, health, then `build`; and `report`, which validates and runs `build` alone |
 | `health.py` | `health.jsonl`: freshness, critical sources, check findings, corrections |
 | `reports.py` | the report blocks in Markdown files ([REPORTS.md](REPORTS.md)) |
@@ -171,7 +171,7 @@ scanning imports.
   sections from the runner.
 - **The report path** is what `leadline report` loads: `reports`, `trends`,
   `sources/__init__.py` and the sources' `spec` modules. None imports
-  `http`, and no source's `source.py` or group's `api.py` is imported
+  `http` (only a `d1` storage, which reaches D1 by HTTP, loads it), and no source's `source.py` or group's `api.py` is imported
   (`discover(specs_only=True)` imports the `spec` alone); a test runs
   `report` in a subprocess and checks `sys.modules`.
 - **`sources/__init__.py`** also imports `health` and `reports`, to build
@@ -556,7 +556,7 @@ operations (`leadline.storage.Backend`):
 | Operation | Meaning |
 | --------- | ------- |
 | `read_lines(file)` | the file's lines in order, each as written, line end included; none for a file never written |
-| `write_lines(file, lines)` | replaces the file with `lines`, atomically: a write that fails leaves the file as it was |
+| `write_lines(file, lines)` | replaces the file with `lines`, atomically: a write that fails leaves the file as it was (D1 sends a write bigger than one request in several, [below](#cloudflare-d1)) |
 | `files()` | the names of the files that exist, in order |
 
 The unit is the line, because `store` keeps the lines it does not change
@@ -565,7 +565,7 @@ exactly as they are. A name is a plain `*.jsonl` file name. A source holds a
 `ctx.file(name)`. `tests/test_storage.py` is the suite every backend passes.
 
 The `storage` setting ([CONFIGURATION.md](CONFIGURATION.md#storage)) chooses
-the backend: JSONL without it, or SQLite. The context opens it before the run
+the backend: JSONL without it, SQLite, or Cloudflare D1. The context opens it before the run
 starts, so a database that cannot be used stops the run (exit status 2).
 
 ### JSONL
@@ -580,6 +580,28 @@ writes through a temporary file renamed over the file.
 The SQLite backend (`storage/sqlite.py`) keeps the files in normalized tables;
 `storage/tables.py` holds the layout and how a line becomes values and back,
 and `storage/sql.py` the queries, for any SQL backend to share.
+
+### Cloudflare D1
+
+D1 is SQLite behind Cloudflare's REST API (ADR: D1 is reached over its REST
+API). It has no connection to open: `storage/d1.py` sends each batch of
+statements as one HTTPS request to the `query` endpoint of the account's
+database, with the token in `CLOUDFLARE_D1_TOKEN` (never in the config or the
+log), and makes the same tables as SQLite on first access.
+
+- **Limits.** D1 allows 100 bound values and 100 KB of SQL in a statement, and
+  30 seconds a request. A row is inserted nine values-rows at a time to stay
+  under the first, and requests hold at most 50 statements. A request that
+  fails in a way waiting can fix is tried up to three times.
+- **Atomic where it fits.** A request is one unit. A write of up to 50
+  statements, which a night's rows are, is atomic; a bigger one (an import) is
+  sent in order, and one that stops part-way is repaired by the next write,
+  which compares what the file holds by digest.
+- **Rows read and written.** A free plan counts both, so a file's lines are
+  read once a run and kept, and a write finds what changed by digest and
+  reads no values. A run is the only writer of its files, as `store` assumes.
+- **Raw lines** are bytes, which a JSON request cannot carry, so a `raw_line`'s
+  `data` is their base64 text.
 
 | Table | Columns | Holds |
 | ----- | ------- | ----- |

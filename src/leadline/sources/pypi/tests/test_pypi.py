@@ -544,7 +544,9 @@ def test_failed_metadata_keeps_the_version_an_earlier_run_got_and_the_row_is_goo
 
     done = run_scenario("downloads_for_the_day_week_and_month", tmp_path, responses=responses, seed={FILE: earlier})
 
-    assert done.rows == {FILE: GOOD}
+    assert done.rows == {
+        FILE: earlier
+    }  # the row is as the earlier run wrote it: nothing changed, so nothing is touched
     stored = f"Kept the stored latest_version, requires_python for 2026-09-23 in {FILE}, which this run failed to get"
     assert stored in done.log
 

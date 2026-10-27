@@ -692,7 +692,7 @@ def test_a_failed_part_keeps_the_value_an_earlier_run_got(tmp_path: Path) -> Non
 
     done = run(tmp_path, *three_pages(total=exchange(gc.TOTAL, "", status=500)), seed=BEFORE + earlier)
 
-    assert done.rows == {FILE: BEFORE + yesterday()}
+    assert done.rows == {FILE: BEFORE + earlier}  # nothing changed, so the earlier run's row is not touched
     assert f"Kept the stored window_total for 2026-09-22 in {FILE}, which this run failed to get" in done.log
     assert done.ctx.corrections == []
 

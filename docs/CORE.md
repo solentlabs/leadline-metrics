@@ -282,6 +282,10 @@ for every source but `cloudflare_analytics_engine`. It is behind
 - **The new row** gets `captured_at`, `now` to the second (local time with
   offset), as its last key, and is **appended**. The file is not
   re-sorted. The caller's dict is not changed.
+- **An unchanged row is not written.** Where one line holds the key and the
+  row has its values (`captured_at` and the order of keys aside), the file is
+  left exactly as it is, the first capture's `captured_at` with it, and a
+  line says so (ADR: unchanged rows are left as they are).
 - **Serialization** is `json.dumps` with default settings: `", "` and `":
   "` separators, `ensure_ascii=True`, insertion order.
 - **Returns** the row it replaced, or None.
@@ -296,8 +300,10 @@ for every source but `cloudflare_analytics_engine`. It is behind
 - Rewrites the file: lines that aren't a row (they don't parse, aren't an
   object or have no string `date`) first, as they were, then every row,
   re-serialized and **sorted by date**.
-- Each of `rows` gets `captured_at` from `now`.
-- Returns the rows it replaced, by date.
+- Each of `rows` whose values differ from the stored row for its date, or that
+  has none, gets `captured_at` from `now`; a row with the stored row's values
+  leaves it as it is, and a window that changes nothing writes nothing.
+- Returns the rows it replaced, by date (those unchanged included).
 
 ### Good rows
 

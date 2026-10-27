@@ -7,10 +7,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from fake_d1 import FakeD1
 
-from leadline import cli
+from leadline import cli, storage
 from leadline.config import ConfigError, Storage, load
 from leadline.context import open_context, open_report_context
+from leadline.http import Http
 from leadline.storage.jsonl import Jsonl
 from leadline.storage.sqlite import Sqlite
 
@@ -26,6 +28,15 @@ def write_config(tmp_path: Path, **settings: Any) -> Path:
 
 def test_without_a_storage_setting_the_row_files_are_jsonl_files_in_out_dir(tmp_path: Path) -> None:
     assert load(write_config(tmp_path), {}).storage == Storage("jsonl", None)
+
+
+D1 = {"backend": "d1", "account_id": "account", "database_id": "database"}
+
+
+def test_a_d1_database_is_named_by_its_account_and_id(tmp_path: Path) -> None:
+    config = load(write_config(tmp_path, storage=D1), {})
+
+    assert config.storage == Storage("d1", None, "account", "database")
 
 
 def test_a_sqlite_database_is_relative_to_the_config_file(tmp_path: Path) -> None:
@@ -45,6 +56,11 @@ def test_a_sqlite_database_is_relative_to_the_config_file(tmp_path: Path) -> Non
         ({"backend": "sqlite", "path": 3}, "storage.path must be a non-empty string"),
         ({"backend": "jsonl", "path": "x.db"}, "storage.path: jsonl keeps its files in out_dir"),
         ({"backend": "sqlite", "path": "x.db", "extra": 1}, "storage.extra: unknown key"),
+        ({"backend": "d1", "database_id": "d"}, "storage.account_id is required for d1"),
+        ({"backend": "d1", "account_id": "a"}, "storage.database_id is required for d1"),
+        ({**D1, "account_id": ""}, "storage.account_id must be a non-empty string"),
+        ({**D1, "path": "x.db"}, "storage.path: d1 keeps its files in D1"),
+        ({"backend": "sqlite", "path": "x.db", "account_id": "a"}, "storage.account_id: only d1 takes it"),
     ],
 )
 def test_a_storage_setting_that_cannot_be_used_stops_the_run(tmp_path: Path, storage: Any, message: str) -> None:
@@ -155,3 +171,84 @@ def test_import_run_twice_stops_the_second_time(tmp_path: Path) -> None:
     assert cli.main(["import", "--config", str(path)]) == 2
 
     assert len(Sqlite(tmp_path / "leadline.db").read_lines("a.jsonl")) == 2
+
+
+@pytest.fixture
+def d1(monkeypatch: pytest.MonkeyPatch) -> FakeD1:
+    """A D1 database that answers the backend, and the token in the environment."""
+    fake = FakeD1("account", "database", "t0ken")
+    monkeypatch.setenv("CLOUDFLARE_D1_TOKEN", "t0ken")
+    monkeypatch.setattr(storage, "d1_http", lambda: Http("agent", fake, lambda _s: None))
+    return fake
+
+
+def test_a_run_keeps_its_row_files_in_d1(tmp_path: Path, d1: FakeD1) -> None:
+    config = load(write_config(tmp_path, storage=D1), {})
+
+    with open_context(config) as ctx:
+        ctx.file("a.jsonl").write_lines([ROW])
+
+    assert d1.db.execute("SELECT name FROM file").fetchall() == [("a.jsonl",)]
+    assert not (tmp_path / "out" / "a.jsonl").exists()
+
+
+def test_a_d1_run_without_its_token_stops_before_it_starts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CLOUDFLARE_D1_TOKEN", raising=False)
+    config = load(write_config(tmp_path, storage=D1), {})
+
+    with pytest.raises(ConfigError, match="CLOUDFLARE_D1_TOKEN"), open_context(config):
+        pass
+
+
+def test_a_d1_token_the_api_rejects_stops_the_run_before_it_starts(
+    tmp_path: Path, d1: FakeD1, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CLOUDFLARE_D1_TOKEN", "someone-elses")
+    config = load(write_config(tmp_path, storage=D1), {})
+
+    with pytest.raises(ConfigError, match="rejected"), open_context(config):
+        pass
+
+
+def test_export_copies_the_configured_backend_into_jsonl_files(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = write_config(tmp_path, storage={"backend": "sqlite", "path": "../leadline.db"})
+    Sqlite(tmp_path / "leadline.db").write_lines("a.jsonl", [ROW, "not json\n"])
+    Sqlite(tmp_path / "leadline.db").write_lines("b.jsonl", [ROW])
+
+    assert cli.main(["export", "--config", str(path), "--to", str(tmp_path / "copy")]) == 0
+
+    assert Jsonl(tmp_path / "copy").read_lines("a.jsonl") == [ROW, "not json\n"]
+    assert Jsonl(tmp_path / "copy").files() == ["a.jsonl", "b.jsonl"]
+    assert "2 file(s), 3 line(s)" in capsys.readouterr().out
+
+
+def test_export_from_d1(tmp_path: Path, d1: FakeD1) -> None:
+    path = write_config(tmp_path, storage=D1)
+    config = load(path, {})
+    with open_context(config) as ctx:
+        ctx.file("a.jsonl").write_lines([ROW])
+
+    assert cli.main(["export", "--config", str(path), "--to", str(tmp_path / "copy")]) == 0
+
+    assert Jsonl(tmp_path / "copy").read_lines("a.jsonl") == [ROW]
+
+
+def test_export_refuses_a_folder_that_already_holds_a_file_of_that_name(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = write_config(tmp_path, storage={"backend": "sqlite", "path": "../leadline.db"})
+    Sqlite(tmp_path / "leadline.db").write_lines("a.jsonl", [ROW])
+    Jsonl(tmp_path / "copy").write_lines("a.jsonl", [ROW, ROW.replace("09-21", "09-22")])
+
+    assert cli.main(["export", "--config", str(path), "--to", str(tmp_path / "copy")]) == 2
+
+    assert "a.jsonl" in capsys.readouterr().err
+    assert len(Jsonl(tmp_path / "copy").read_lines("a.jsonl")) == 2
+
+
+def test_export_from_jsonl_is_refused(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert cli.main(["export", "--config", str(write_config(tmp_path)), "--to", str(tmp_path / "copy")]) == 2
+
+    assert "storage" in capsys.readouterr().err

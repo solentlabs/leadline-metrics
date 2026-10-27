@@ -18,6 +18,7 @@ CORE = {
     "leadline.http",
     "leadline.places",
     "leadline.storage",
+    "leadline.storage.d1",
     "leadline.storage.jsonl",
     "leadline.storage.sql",
     "leadline.storage.sqlite",
