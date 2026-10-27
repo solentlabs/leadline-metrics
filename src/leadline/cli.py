@@ -15,11 +15,15 @@
   when the config has no `reports`, printed as a `reports` setting to
   paste into the config and change; exit status 2 when the config is
   unusable.
-- `leadline import --config P [--from DIR]`: copy the `*.jsonl` row files in
-  DIR (default: the output folder) into the config's `storage` database, and
-  check each reads back as it was; exit status 2, copying nothing, when the
-  database already holds a file of one of those names, and when the storage is
-  jsonl, DIR is not a folder, or the config is unusable.
+- `leadline import --config P [--from DIR] [--max-values N]`: copy the lines of
+  the `*.jsonl` row files in DIR (default: the output folder) that the config's
+  `storage` database lacks, `health.jsonl` aside, and check each file reads
+  back as it was. A run continues where the last stopped, and takes at most N
+  values (the first line always, so each run makes progress): a database that
+  counts what it writes (a free D1 plan) is filled over several runs. Exit
+  status 2, copying nothing, when the database holds a night the folder lacks
+  or differs from it, the storage is jsonl, DIR is not a folder, or the
+  config is unusable.
 - `leadline export --config P --to DIR`: copy the config's `storage` database
   into `*.jsonl` row files in DIR (made when missing), and check each reads
   back as it was; exit status 2, copying nothing, when DIR already holds a
@@ -40,7 +44,7 @@ from pathlib import Path
 from typing import Sequence
 
 from leadline import __version__, rowdiff, runner, storage
-from leadline.config import SETTINGS, Config, ConfigError, load
+from leadline.config import HEALTH_FILE, SETTINGS, Config, ConfigError, load
 from leadline.sources import Registry, Source, Spec, default_reports, discover
 from leadline.storage import Backend, StorageError
 from leadline.storage.jsonl import Jsonl
@@ -86,6 +90,9 @@ def main(argv: Sequence[str] | None = None, registry: Registry[Source] | None = 
     copy = commands.add_parser("import", help="copy the jsonl row files of a folder into the configured database")
     copy.add_argument("--config", required=True, type=Path, help="the JSON config file")
     copy.add_argument("--from", dest="from_dir", type=Path, help="the folder of row files (default: out_dir)")
+    copy.add_argument(
+        "--max-values", type=int, help="stop after about this many values, to be continued by the next run"
+    )
     export = commands.add_parser("export", help="copy the configured database into jsonl row files in a folder")
     export.add_argument("--config", required=True, type=Path, help="the JSON config file")
     export.add_argument("--to", dest="to_dir", required=True, type=Path, help="the folder to write the row files in")
@@ -102,7 +109,7 @@ def main(argv: Sequence[str] | None = None, registry: Registry[Source] | None = 
         if args.command == "export":
             return _export(load(args.config, {}), args.to_dir)
         if args.command == "import":
-            return _import(load(args.config, {}), args.from_dir)
+            return _import(load(args.config, {}), args.from_dir, args.max_values)
         if args.command == "report":
             return runner.report(load(args.config, {"out_dir": args.out_dir}), registry=registry)
         config = load(args.config, {key: getattr(args, key) for key in SETTINGS})
@@ -119,19 +126,25 @@ def _default_reports(config: Config, registry: Registry[Spec] | None) -> int:
     return 0
 
 
-def _import(config: Config, folder: Path | None) -> int:
+def _import(config: Config, folder: Path | None, max_values: int | None) -> int:
     if config.storage.backend == "jsonl":
         raise ConfigError("storage is jsonl: set a database in the config's storage setting to import into it")
     folder = config.out_dir if folder is None else folder
     if not folder.is_dir():
         raise ConfigError(f"not a folder: {folder}")
+    if max_values is not None and max_values < 1:
+        raise ConfigError("--max-values must be at least 1")
     try:
-        source, target = Jsonl(folder), storage.open_backend(config.storage, config.out_dir)
-        _refuse_held(source, target, "database")
-        files, lines = storage.copy_files(source, target)
+        done = storage.import_files(
+            Jsonl(folder),
+            storage.open_backend(config.storage, config.out_dir),
+            skip=(HEALTH_FILE,),
+            max_values=max_values,
+        )
     except StorageError as e:
         raise ConfigError(f"storage: {e}") from e
-    print(f"Imported {files} file(s), {lines} line(s) from {folder} into {config.storage.path}")
+    left = f"{done.remaining} line(s) remain" if done.remaining else "everything is imported"
+    print(f"Imported {done.lines} line(s) in {done.files} file(s) ({done.values} values) from {folder}; {left}")
     return 0
 
 

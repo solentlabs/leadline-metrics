@@ -123,14 +123,28 @@ already holds a file of one of those names. Its files are what `leadline
 diff` compares with another folder, so a database's rows can be checked
 against another run's.
 
-`leadline import --config P [--from DIR]` copies the `*.jsonl` row files in
-`DIR` (default `out_dir`) into the configured database and checks each reads
-back as it was. It is how existing files move to a database; the files
-themselves are left as they are. It is for a database with none of those
-files yet: if the database holds a file of one of those names, the command
-copies nothing and exits with status 2, because replacing it would erase the
-nights the database has collected since. Import once, then switch `storage`
-over; keep the old folder as a backup.
+`leadline import --config P [--from DIR] [--max-values N]` copies the lines of
+the `*.jsonl` row files in `DIR` (default `out_dir`) that the configured
+database lacks, and checks each file reads back as it was. The files
+themselves are left as they are, and `health.jsonl` is left out: it is a log of
+the last 14 days, and the database starts its own.
+
+- **It continues.** A file the database already holds must be the start of the
+  folder's file, and only the lines after it are added, so a run stopped
+  part-way, or run again, picks up where it was. Run it until it says
+  everything is imported.
+- **It never erases.** If the database holds a night the folder lacks, or
+  differs from the folder, the command copies nothing and exits with status 2,
+  naming the files. That is how a database that has since collected new nights
+  is protected from a re-run.
+- **A limit per run.** `--max-values N` stops after about `N` stored values (a
+  line is never split, and the first line of a run is always taken, so every
+  run makes progress). A database that counts what it writes, such as a free
+  D1 plan with 100,000 rows a day, is filled over several runs: about 40,000
+  values a run is well under it.
+
+Import once, in runs, before the database is the only copy of the nights it
+collects; keep the old folder as a backup.
 
 ## History on first use
 

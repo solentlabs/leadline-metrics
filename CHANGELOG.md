@@ -17,8 +17,10 @@ follow [SemVer](https://semver.org/).
   "path": "leadline.db"}`) or in Cloudflare D1 (`{"backend": "d1",
   "account_id": "...", "database_id": "..."}`, with its token in
   `CLOUDFLARE_D1_TOKEN`). Without the setting nothing changes.
-  `leadline import` copies existing files into an empty database, and
-  refuses, copying nothing, when it already holds one of them.
+  `leadline import` copies existing files into the database, a limited number
+  of values a run (`--max-values`), continuing where it stopped and leaving
+  `health.jsonl` out; it refuses, copying nothing, a database that holds a night
+  the folder lacks.
   `leadline export` copies a database back into `*.jsonl` files, for
   `leadline diff` or a backup.
 

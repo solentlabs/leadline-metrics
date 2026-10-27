@@ -13,9 +13,10 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterable, Protocol
+from typing import TYPE_CHECKING, Collection, Iterable, NamedTuple, Protocol
 
 from leadline import config
+from leadline.storage import tables
 
 if TYPE_CHECKING:
     from leadline.http import Http
@@ -106,3 +107,55 @@ def copy_files(source: Backend, target: Backend) -> tuple[int, int]:
             raise StorageError(f"{name} did not read back as it was written")
         files, lines = files + 1, lines + len(found)
     return files, lines
+
+
+class Imported(NamedTuple):
+    """What one `import_files` run did."""
+
+    files: int  # files it added lines to
+    lines: int
+    values: int  # the values in those lines, what a database counts as written
+    remaining: int  # lines still to import
+
+
+def import_files(
+    source: Backend, target: Backend, skip: Collection[str] = (), max_values: int | None = None
+) -> Imported:
+    """Copy the lines of `source`'s files that `target` lacks, in file order, up to `max_values` values in all.
+
+    A file `target` holds is continued: what it holds must be the start of the file in `source`, and only the lines
+    after it are added. If any file's held lines are not (it holds a night `source` lacks, or differs), nothing is
+    copied and StorageError says which, so a later run is never erased. A line is never split: the first line of a
+    run is taken even if it alone is over `max_values`, so every run makes progress. Each file is read back and
+    checked after it is written.
+    """
+    names = [name for name in source.files() if name not in skip]
+    present = set(target.files())
+    wanted = {name: source.read_lines(name) for name in names}
+    held = {name: target.read_lines(name) if name in present else [] for name in names}
+    differing = [name for name in names if held[name] != wanted[name][: len(held[name])]]
+    if differing:
+        raise StorageError(
+            f"{', '.join(differing)} in the destination holds lines the source lacks or differs from it; "
+            "nothing was imported"
+        )
+    files = lines = values = 0
+    stopped = False
+    for name in names:
+        taken: list[str] = []
+        for line in wanted[name][len(held[name]) :]:
+            cost = max(1, len(tables.shred(line) or ()))
+            if max_values is not None and lines + len(taken) > 0 and values + cost > max_values:
+                stopped = True
+                break
+            taken.append(line)
+            values += cost
+        if taken:
+            target.write_lines(name, held[name] + taken)
+            if target.read_lines(name) != held[name] + taken:
+                raise StorageError(f"{name} did not read back as it was written")
+            files, lines = files + 1, lines + len(taken)
+        if stopped:
+            break
+    remaining = sum(len(wanted[name]) - len(held[name]) for name in names) - lines
+    return Imported(files, lines, values, remaining)

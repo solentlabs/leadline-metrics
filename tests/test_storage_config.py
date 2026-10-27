@@ -118,7 +118,7 @@ def test_import_copies_the_jsonl_files_of_a_folder_into_the_database(
     database = Sqlite(tmp_path / "leadline.db")
     assert database.files() == ["a.jsonl", "b.jsonl"]
     assert database.read_lines("a.jsonl") == [ROW, "not json\n"]
-    assert "2 file(s), 3 line(s)" in capsys.readouterr().out
+    assert "3 line(s) in 2 file(s)" in capsys.readouterr().out
 
 
 def test_import_without_a_folder_reads_out_dir(tmp_path: Path) -> None:
@@ -144,7 +144,7 @@ def test_import_stops_when_the_folder_is_not_one(tmp_path: Path, capsys: pytest.
     assert "not a folder" in capsys.readouterr().err
 
 
-def test_import_refuses_a_file_the_database_already_holds_and_copies_nothing(
+def test_import_refuses_a_file_with_a_night_the_folder_lacks_and_copies_nothing(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     newer = '{"date": "2026-09-22", "n": 2}\n'
@@ -252,3 +252,79 @@ def test_export_from_jsonl_is_refused(tmp_path: Path, capsys: pytest.CaptureFixt
     assert cli.main(["export", "--config", str(write_config(tmp_path)), "--to", str(tmp_path / "copy")]) == 2
 
     assert "storage" in capsys.readouterr().err
+
+
+# --- a resumable import: it continues where it stopped, within a limit, and never erases ---
+
+SIX = [f'{{"date": "2026-09-{day:02d}", "n": {day}, "tags": ["a", "b"]}}\n' for day in range(1, 7)]  # 5 values a line
+
+
+def sqlite_config(tmp_path: Path) -> Path:
+    return write_config(tmp_path, storage={"backend": "sqlite", "path": "../leadline.db"})
+
+
+def test_import_within_a_limit_takes_what_fits_and_the_next_run_continues(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    folder = tmp_path / "old"
+    Jsonl(folder).write_lines("a.jsonl", SIX)
+    path = sqlite_config(tmp_path)
+
+    assert cli.main(["import", "--config", str(path), "--from", str(folder), "--max-values", "12"]) == 0
+
+    assert Sqlite(tmp_path / "leadline.db").read_lines("a.jsonl") == SIX[:2]  # 5 + 5, a third line would pass 12
+    assert "4 line(s) remain" in capsys.readouterr().out
+    assert cli.main(["import", "--config", str(path), "--from", str(folder), "--max-values", "12"]) == 0
+    assert Sqlite(tmp_path / "leadline.db").read_lines("a.jsonl") == SIX[:4]
+    assert cli.main(["import", "--config", str(path), "--from", str(folder)]) == 0
+    assert Sqlite(tmp_path / "leadline.db").read_lines("a.jsonl") == SIX
+    assert cli.main(["import", "--config", str(path), "--from", str(folder)]) == 0
+    assert "everything is imported" in capsys.readouterr().out
+
+
+def test_import_always_takes_a_line_that_alone_is_over_the_limit(tmp_path: Path) -> None:
+    folder = tmp_path / "old"
+    Jsonl(folder).write_lines("a.jsonl", SIX)
+
+    assert (
+        cli.main(["import", "--config", str(sqlite_config(tmp_path)), "--from", str(folder), "--max-values", "1"]) == 0
+    )
+
+    assert Sqlite(tmp_path / "leadline.db").read_lines("a.jsonl") == SIX[:1]  # a line cannot be split; progress is made
+
+
+def test_import_leaves_health_jsonl_out(tmp_path: Path) -> None:
+    folder = tmp_path / "old"
+    Jsonl(folder).write_lines("a.jsonl", [ROW])
+    Jsonl(folder).write_lines("health.jsonl", [ROW])
+
+    assert cli.main(["import", "--config", str(sqlite_config(tmp_path)), "--from", str(folder)]) == 0
+
+    assert Sqlite(tmp_path / "leadline.db").files() == ["a.jsonl"]
+
+
+def test_import_refuses_a_file_the_database_has_gone_on_from_and_copies_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    folder = tmp_path / "old"
+    Jsonl(folder).write_lines("a.jsonl", SIX[:3])
+    Jsonl(folder).write_lines("b.jsonl", SIX[:3])
+    database = Sqlite(tmp_path / "leadline.db")
+    database.write_lines("b.jsonl", [*SIX[:3], SIX[3]])  # a night the folder lacks
+
+    assert cli.main(["import", "--config", str(sqlite_config(tmp_path)), "--from", str(folder)]) == 2
+
+    assert "b.jsonl" in capsys.readouterr().err
+    assert database.files() == ["b.jsonl"]  # a.jsonl was not copied either
+    assert database.read_lines("b.jsonl") == SIX[:4]
+
+
+def test_import_refuses_a_file_whose_start_differs_from_the_database(tmp_path: Path) -> None:
+    folder = tmp_path / "old"
+    Jsonl(folder).write_lines("a.jsonl", SIX[:3])
+    database = Sqlite(tmp_path / "leadline.db")
+    database.write_lines("a.jsonl", [SIX[0], SIX[2].replace('"n": 3', '"n": 99')])
+
+    assert cli.main(["import", "--config", str(sqlite_config(tmp_path)), "--from", str(folder)]) == 2
+
+    assert len(database.read_lines("a.jsonl")) == 2
