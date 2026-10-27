@@ -61,7 +61,7 @@ def collect(ctx: Context, cfg: Any) -> None:
 
 
 def _collect(ctx: Context, entry: Any) -> None:
-    dataset, path = entry["dataset"], ctx.out_dir / spec.file_name(entry)
+    dataset, file = entry["dataset"], ctx.file(spec.file_name(entry))
     first = ctx.date - timedelta(days=entry.get("refetch_days", spec.REFETCH_DAYS))
     yesterday = ctx.date - timedelta(days=1)
     ctx.log.info("Collecting Analytics Engine dataset %s...", dataset)
@@ -71,21 +71,21 @@ def _collect(ctx: Context, entry: Any) -> None:
         days, outside = _totals(answers, first, yesterday)
     except HttpError as e:
         # The script's http_code: the status as it is, "0" for no response.
-        ctx.record_unfixable(spec.NAME, path.name, e, f"{dataset}: HTTP {e.code} from Analytics Engine's SQL API")
+        ctx.record_unfixable(spec.NAME, file.name, e, f"{dataset}: HTTP {e.code} from Analytics Engine's SQL API")
         failure = ("fetch_failed", str(e.code), e.reason[:REASON_CHARS])
     except _UnreadableError as e:
         failure = ("parse_failed", str(e.status), e.reason)
     else:
         rows = [_row(dataset, day, days.get(day, {}), queries) for day in _dates(first, yesterday)]
-        store.write_window(path, rows, ctx, spec.NAME)
+        store.write_window(file, rows, ctx, spec.NAME)
         ctx.log.info("Analytics Engine %s: %d day(s) %s..%s", dataset, len(rows), first, yesterday)
         for reason in outside:
-            ctx.record_critical(spec.NAME, path.name, f"{dataset}: {reason}")
+            ctx.record_critical(spec.NAME, file.name, f"{dataset}: {reason}")
         return
     status, http_code, reason = failure
     ctx.log.info("ERROR: Analytics Engine %s: %s (HTTP %s): %s", dataset, status, http_code, reason)
     row = {"date": yesterday.isoformat(), "dataset": dataset, "status": status, "http_code": http_code}
-    store.write_window(path, [{**row, "reason": reason}], ctx, spec.NAME)  # kept off a good row by store
+    store.write_window(file, [{**row, "reason": reason}], ctx, spec.NAME)  # kept off a good row by store
 
 
 def _midnight(day: date) -> datetime:

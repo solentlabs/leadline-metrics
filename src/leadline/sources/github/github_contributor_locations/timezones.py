@@ -19,13 +19,13 @@ The file is public, on another host than the API, so no token is sent to it.
 from __future__ import annotations
 
 from collections import Counter
-from pathlib import Path
 from typing import Any
 
 from leadline import config
 from leadline.context import Context
 from leadline.http import HttpError
 from leadline.sources.github.github_contributor_locations import comments, spec
+from leadline.storage import File
 
 SOURCE = "timezone_inference"  # a person's source where a zone gave their region
 STATE = "timezones_read"  # the row's field: {"rules": fingerprint, "issues": {number: URL of the file read}}
@@ -42,7 +42,7 @@ def fingerprint(table: dict[str, Any]) -> str:
 
 def place(
     ctx: Context,
-    path: Path,
+    file: File,
     entry: Any,
     people: list[dict[str, Any]],
     attachments: dict[str, list[tuple[int, str]]],
@@ -54,7 +54,7 @@ def place(
     The zone only checks a person in `checked` (placed by the answer to the provider question) or placed by a profile.
     """
     table, key = entry["regions"], fingerprint(entry["regions"])
-    held = comments.held_row(path, STATE)
+    held = comments.held_row(file, STATE)
     nightly = held is not None and held[0] == key
     read = dict(held[1]) if held is not None and nightly else {}
     kept = {p["login"]: p for p in held[2] if p.get("source") == SOURCE} if held is not None and nightly else {}

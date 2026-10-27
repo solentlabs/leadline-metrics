@@ -16,6 +16,7 @@ from typing import Any
 
 import pytest
 import scenarios
+from row_files import files_in
 from scenarios import Scenario
 from scenarios.builders.common import exchange
 from scratch_package import make
@@ -145,7 +146,7 @@ def test_every_sources_sections_chart_the_fields_they_name_from_its_golden_rows(
                 f.write(text)
     sections = source.summary(scenario_config(source.NAME))
 
-    data = trends.build(tmp_path, date(2026, 9, 24), sections, "health.jsonl")
+    data = trends.build(files_in(tmp_path), date(2026, 9, 24), sections, "health.jsonl")
 
     assert all(shown.kind in SUMMARY_KINDS for section in sections for shown in section.shown)
     assert [section["title"] for section in data["sections"]] == [section.title for section in sections]

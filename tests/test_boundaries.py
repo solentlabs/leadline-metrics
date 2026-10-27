@@ -17,6 +17,8 @@ CORE = {
     "leadline.context",
     "leadline.http",
     "leadline.places",
+    "leadline.storage",
+    "leadline.storage.jsonl",
     "leadline.store",
 }
 # What the report path (reports, trends, the registry) may import: the core without HTTP, which only a run loads.

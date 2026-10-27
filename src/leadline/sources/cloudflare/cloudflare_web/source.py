@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import os
 from datetime import timedelta
-from pathlib import Path
 from typing import Any, Dict, Tuple
 from urllib.parse import quote
 
@@ -13,6 +12,7 @@ from leadline import store
 from leadline.context import Context, Finding
 from leadline.http import HttpError, Response
 from leadline.sources.cloudflare.cloudflare_web import spec
+from leadline.storage import File
 
 ENV: tuple[str, ...] = ("CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID")
 LAGGING = True
@@ -155,7 +155,7 @@ def _sites(ctx: Context) -> list[dict[str, Any]]:
 
 
 def _collect(ctx: Context, entry: Any) -> None:
-    label, tag, path = entry["label"], entry["site_tag"], ctx.out_dir / spec.file_name(entry)
+    label, tag, file = entry["label"], entry["site_tag"], ctx.file(spec.file_name(entry))
     yesterday = (ctx.date - timedelta(days=1)).isoformat()
     week_ago = (ctx.date - timedelta(days=WEEK_DAYS)).isoformat()
     heal_start = ctx.date - timedelta(days=HEAL_DAYS)
@@ -164,19 +164,19 @@ def _collect(ctx: Context, entry: Any) -> None:
     ctx.log.info("Collecting Cloudflare Web Analytics for %s...", label)
     try:
         days, row = _read(_post(ctx, query).body, label, tag, week_ago, yesterday)
-        found, failed = _read_lists(ctx, label, path.name, account, tag, week_ago, yesterday)
+        found, failed = _read_lists(ctx, label, file.name, account, tag, week_ago, yesterday)
     except HttpError as e:
         ctx.log.info("ERROR: Cloudflare %s failed (HTTP %s)", label, e.http_code)
-        ctx.record_unfixable(spec.NAME, path.name, e, f"{label}: HTTP {e.http_code} from Cloudflare's GraphQL API")
+        ctx.record_unfixable(spec.NAME, file.name, e, f"{label}: HTTP {e.http_code} from Cloudflare's GraphQL API")
         failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": "graphql request failed"}
-        _write_failure(ctx, path, {"date": yesterday, "site": label, **failure})
+        _write_failure(ctx, file, {"date": yesterday, "site": label, **failure})
         return
     except _FailureRowError as e:
-        _write_failure(ctx, path, {"date": yesterday, "site": label, **e.fields})
+        _write_failure(ctx, file, {"date": yesterday, "site": label, **e.fields})
         return
     past = [(heal_start + timedelta(days=n)).isoformat() for n in range(HEAL_DAYS - 1)]  # oldest first
-    _heal(ctx, path, label, tag, past, days)
-    _write_yesterday(ctx, path, {**row, **found}, failed)
+    _heal(ctx, file, label, tag, past, days)
+    _write_yesterday(ctx, file, {**row, **found}, failed)
 
 
 def _post(ctx: Context, query: str) -> Response:
@@ -349,7 +349,7 @@ def _numbers(row: dict[str, Any]) -> dict[str, Any]:
     return {key: row.get(key) for key in NUMBERS}
 
 
-def _heal(ctx: Context, path: Path, label: str, tag: str, past: list[str], days: Days) -> None:
+def _heal(ctx: Context, file: File, label: str, tag: str, past: list[str], days: Days) -> None:
     """The 30 days before yesterday: fill as the script does, and correct the changed (ADR: cloudflare_web
     re-reads and corrects its last 30 days).
 
@@ -358,7 +358,7 @@ def _heal(ctx: Context, path: Path, label: str, tag: str, past: list[str], days:
     filled, marked `backfilled`; a good row read under this tag whose numbers changed gets the new ones,
     its other fields kept. A day the answer leaves out had no page loads, as the script reads yesterday.
     """
-    existing = store.rows_by_date(path)
+    existing = store.rows_by_date(file)
     first = min(existing, default=None)
     for day in past:
         if first is None or day < first:
@@ -369,23 +369,23 @@ def _heal(ctx: Context, path: Path, label: str, tag: str, past: list[str], days:
         if old is None or old.get("status") != "ok" or old.get("site_tag") != tag:
             filled = {"date": day, "site": label, "site_tag": tag, "status": "ok", **new, store.BACKFILLED: True}
             ctx.log.info("Cloudflare %s backfill: %s", label, json.dumps(filled))
-            store.write_good(path, filled, ctx, spec.NAME)
+            store.write_good(file, filled, ctx, spec.NAME)
         elif _numbers(old) != new:  # a correction, which store records
             kept = {key: value for key, value in old.items() if key != "captured_at"}
-            store.write_good(path, {**kept, **new}, ctx, spec.NAME)
+            store.write_good(file, {**kept, **new}, ctx, spec.NAME)
 
 
-def _write_yesterday(ctx: Context, path: Path, row: dict[str, Any], failed: dict[str, list[str]]) -> None:
+def _write_yesterday(ctx: Context, file: File, row: dict[str, Any], failed: dict[str, list[str]]) -> None:
     """Yesterday's row, always rewritten as the script does; store records a correction of a good one. A list that
     could not be read is null in it, and it goes through write_partial, which keeps the list an earlier run got."""
     ctx.log.info("Cloudflare %s result: %s", row["site"], json.dumps(row))
     if failed:
-        store.write_partial(path, row, failed, ctx, spec.NAME)
+        store.write_partial(file, row, failed, ctx, spec.NAME)
     else:
-        store.write_good(path, row, ctx, spec.NAME)
+        store.write_good(file, row, ctx, spec.NAME)
 
 
-def _write_failure(ctx: Context, path: Path, row: dict[str, Any]) -> None:
+def _write_failure(ctx: Context, file: File, row: dict[str, Any]) -> None:
     """The failure row, logged as the script logs a result; store keeps a good row in its place."""
     ctx.log.info("Cloudflare %s result: %s", row["site"], json.dumps(row))
-    store.write_failure(path, row, ctx.now)
+    store.write_failure(file, row, ctx.now)

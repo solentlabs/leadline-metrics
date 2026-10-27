@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 from datetime import timedelta
-from pathlib import Path
 from typing import Any
 
 from leadline import store
@@ -13,6 +12,7 @@ from leadline.context import Context, Finding
 from leadline.http import HttpError, Response, UnusableError, read_json, unexpected
 from leadline.sources.github import api as github
 from leadline.sources.github.github_traffic_daily import spec
+from leadline.storage import File
 
 ENV: tuple[str, ...] = (github.CREDENTIAL,)
 LAGGING = True
@@ -59,7 +59,7 @@ def _days(kind: str, answer: Any) -> list[tuple[str, int, int]]:
 
 
 def _collect(ctx: Context, entry: Any) -> None:
-    repo, path = entry["repo"], ctx.out_dir / spec.file_name(entry)
+    repo, file = entry["repo"], ctx.file(spec.file_name(entry))
     ctx.log.info("Collecting GitHub daily traffic for %s...", repo)
     answers: dict[str, Response] = {}
     try:
@@ -71,15 +71,15 @@ def _collect(ctx: Context, entry: Any) -> None:
         }
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch GitHub %s for daily for %s: HTTP %s", kind, repo, e.http_code)
-        ctx.record_unfixable(spec.NAME, path.name, e, f"{repo}: HTTP {e.http_code} from GitHub's traffic API")
+        ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: HTTP {e.http_code} from GitHub's traffic API")
         failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": f"{kind} request failed"}
     except UnusableError as e:
         ctx.log.info("ERROR: Failed to parse GitHub daily traffic for %s: %s", repo, e)
         failure = {"status": "parse_failed", "reason": str(e)}
     else:
-        _write(ctx, path, repo, views, clones)
+        _write(ctx, file, repo, views, clones)
         return
-    store.write_failure(path, {"date": _yesterday(ctx), **failure}, ctx.now)
+    store.write_failure(file, {"date": _yesterday(ctx), **failure}, ctx.now)
 
 
 def _yesterday(ctx: Context) -> str:
@@ -88,7 +88,7 @@ def _yesterday(ctx: Context) -> str:
 
 
 def _write(
-    ctx: Context, path: Path, repo: str, views: dict[str, tuple[int, int]], clones: dict[str, tuple[int, int]]
+    ctx: Context, file: File, repo: str, views: dict[str, tuple[int, int]], clones: dict[str, tuple[int, int]]
 ) -> None:
     """A row for each day of the window the file has no good row for, and for yesterday again; never today.
 
@@ -98,7 +98,7 @@ def _write(
         ctx.log.info("GitHub daily traffic: no days in the window for %s", repo)
         return
     today, yesterday = ctx.date.isoformat(), _yesterday(ctx)
-    good = {day for day, row in store.rows_by_date(path).items() if store.is_good(row)}
+    good = {day for day, row in store.rows_by_date(file).items() if store.is_good(row)}
     due = [day for day in sorted(views.keys() | clones.keys()) if day < today and (day not in good or day == yesterday)]
     if not due:
         ctx.log.info("GitHub daily traffic: already current")
@@ -114,4 +114,4 @@ def _write(
             "clones": clone_count,
             "clones_unique": clone_unique,
         }
-        store.write_good(path, row, ctx, spec.NAME)
+        store.write_good(file, row, ctx, spec.NAME)

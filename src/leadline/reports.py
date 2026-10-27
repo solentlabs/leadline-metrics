@@ -28,6 +28,7 @@ from typing import Any, Callable, Dict, List, Mapping, NamedTuple, Sequence, Tup
 from leadline import store
 from leadline.config import Hide, Section, complement, plain_jsonl, section_lines, version_key
 from leadline.context import Reporter
+from leadline.storage import File
 
 Row = Dict[str, Any]
 Fields = typing.ChainMap[str, Any]  # a piece's template fields: its own, then those of the pieces it is in
@@ -467,7 +468,7 @@ def write(ctx: Reporter, cfg: Sequence[Mapping[str, Any]], hide: Mapping[str, Se
     for entry in cfg:
         files.setdefault(_file_key(entry["file"]), []).append(entry)
     for entries in files.values():
-        _write_file(ctx, entries, Folder(ctx.out_dir, hide or {}))
+        _write_file(ctx, entries, Folder(ctx.file, hide or {}))
 
 
 def _write_file(ctx: Reporter, entries: Sequence[Mapping[str, Any]], folder: Folder) -> None:
@@ -555,14 +556,14 @@ def _span(lines: Sequence[str], name: str, file: str) -> tuple[int, int] | None:
 
 
 class Folder(NamedTuple):
-    """Where the blocks read their files: the output folder, and the items to leave out of each file's lists."""
+    """Where the blocks read their files: how to open one by name, and the items to leave out of each file's lists."""
 
-    path: Path
+    file: Callable[[str], File]
     hidden: Mapping[str, Sequence[Hide]]
 
     def rows(self, name: str, where: Mapping[str, Any] | None = None) -> store.Dated:
         """The dated rows of the file `name` (`store.dated_rows`) without the items hidden in it."""
-        return store.dated_rows(self.path / name, where, self.hidden.get(name, ()))
+        return store.dated_rows(self.file(name), where, self.hidden.get(name, ()))
 
 
 def _block(folder: Folder, entry: Mapping[str, Any], newline: str) -> list[str]:

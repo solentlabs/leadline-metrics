@@ -49,7 +49,7 @@ def collect(ctx: Context, cfg: Any) -> None:
         except _UnreadableError as e:
             _write_failure(ctx, entry, {"status": "parse_failed", "reason": e.reason})
         else:
-            store.write_good(ctx.out_dir / spec.file_name(entry), row, ctx, spec.NAME)
+            store.write_good(ctx.file(spec.file_name(entry)), row, ctx, spec.NAME)
 
 
 def check(ctx: Context, cfg: Any) -> list[Finding]:
@@ -83,7 +83,7 @@ def _finding(feed: Any, integration: str, day: str) -> Finding:
 def _write_failure(ctx: Context, entry: Any, failure: dict[str, str]) -> None:
     """The entry's failure row for the run's date; store keeps a good row in its place."""
     ctx.log.info("ERROR: No Home Assistant analytics for %s: %s", entry["integration"], failure["reason"])
-    store.write_failure(ctx.out_dir / spec.file_name(entry), {"date": ctx.date.isoformat(), **failure}, ctx.now)
+    store.write_failure(ctx.file(spec.file_name(entry)), {"date": ctx.date.isoformat(), **failure}, ctx.now)
 
 
 def _version_key(version: str) -> tuple[tuple[int, Any], ...]:

@@ -68,7 +68,7 @@ def _row(releases: Any, repo: str, day: str) -> dict[str, Any]:
 
 
 def _collect(ctx: Context, entry: Any) -> None:
-    repo, path, day = entry["repo"], ctx.out_dir / spec.file_name(entry), ctx.date.isoformat()
+    repo, file, day = entry["repo"], ctx.file(spec.file_name(entry)), ctx.date.isoformat()
     ctx.log.info("Collecting GitHub release asset downloads for %s...", repo)
     try:
         row = _row(
@@ -76,15 +76,15 @@ def _collect(ctx: Context, entry: Any) -> None:
         )
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch releases for %s: HTTP %s", repo, e.http_code)
-        ctx.record_unfixable(spec.NAME, path.name, e, f"{repo}: HTTP {e.http_code} from GitHub's releases API")
+        ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: HTTP {e.http_code} from GitHub's releases API")
         failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": "releases request failed"}
     except ValueError:
         failure = {"status": "parse_failed", "reason": "response was not JSON"}
     except _UnreadableError as e:
         failure = {"status": "parse_failed", "reason": str(e) or UNEXPECTED}
     else:
-        store.write_good(path, row, ctx, spec.NAME)
+        store.write_good(file, row, ctx, spec.NAME)
         return
     if failure["status"] == "parse_failed":
         ctx.log.info("ERROR: Failed to parse releases for %s: %s", repo, failure["reason"])
-    store.write_failure(path, {"date": day, "repo": repo, **failure}, ctx.now)
+    store.write_failure(file, {"date": day, "repo": repo, **failure}, ctx.now)

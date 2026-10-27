@@ -16,6 +16,7 @@ from typing import Any, Sequence
 import port
 import pytest
 import scenarios
+from row_files import files_in
 from scenarios.builders.common import exchange, failed, failing_at
 
 from leadline import config, http, trends
@@ -1242,7 +1243,9 @@ def test_trends_carry_the_counts_by_kind_as_a_breakdown_of_counts(tmp_path: Path
     done = port.run(source, gi.leadline_config(scenario), scenario, tmp_path)
     (tmp_path / "health.jsonl").write_text("", encoding="utf-8")
 
-    data = trends.build(tmp_path, date(2026, 9, 23), source.summary(gi.leadline_config(scenario)), "health.jsonl")
+    data = trends.build(
+        files_in(tmp_path), date(2026, 9, 23), source.summary(gi.leadline_config(scenario)), "health.jsonl"
+    )
 
     (section,) = data["sections"]
     field = next(f for f in section["fields"] if f["field"] == "issues.opened_by_kind")

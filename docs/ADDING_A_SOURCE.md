@@ -284,23 +284,23 @@ def collect(ctx: Context, cfg: Any) -> None:
 
 
 def _collect(ctx: Context, entry: Any) -> None:
-    package, path = entry["package"], ctx.out_dir / _file(entry)
+    package, file = entry["package"], ctx.file(_file(entry))
     row = {"date": ctx.date.isoformat(), "package": package}
     try:
         downloads = _downloads(ctx.http.get_json(f"{SEARCH}?q=packageid:{quote(package)}"))
     except HttpError as e:
         # Critical when waiting can't fix it: rejected, or not there.
-        ctx.record_unfixable(NAME, path.name, e, f"{package}: HTTP {e.http_code} from NuGet")
+        ctx.record_unfixable(NAME, file.name, e, f"{package}: HTTP {e.http_code} from NuGet")
         failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": "search request failed"}
     except ValueError:  # not JSON, or not a search result
         failure = {"status": "parse_failed", "reason": "response was not a search result"}
     else:
         if downloads is not None:
-            store.write_good(path, {**row, "downloads": downloads}, ctx, NAME)
+            store.write_good(file, {**row, "downloads": downloads}, ctx, NAME)
             return
-        ctx.record_critical(NAME, path.name, f"NuGet has no package {package}")
+        ctx.record_critical(NAME, file.name, f"NuGet has no package {package}")
         failure = {"status": "not_found", "reason": "no such package"}
-    store.write_failure(path, {**row, **failure}, ctx.now)  # kept out where a good row holds the date
+    store.write_failure(file, {**row, **failure}, ctx.now)  # kept out where a good row holds the date
 
 
 def _downloads(answer: Any) -> int | None:
@@ -376,8 +376,8 @@ def _file(entry: Any) -> str:
 - **Dates and time** come from `ctx.date` and `ctx.now`, never the clock.
   Every write goes through `store`, which stamps `captured_at` from
   `ctx.now`.
-- **Good rows** go through `store.write_good(path, row, ctx, NAME)` (or
-  `store.write_window(path, rows, ctx, NAME)` for a source that rewrites a
+- **Good rows** go through `store.write_good(file, row, ctx, NAME)` (or
+  `store.write_window(file, rows, ctx, NAME)` for a source that rewrites a
   window of days), which records each correction it makes on the context: a
   good row for a day before the run's date replaced with other values (ADR:
   every correction is recorded). A source never calls `store.upsert`,
@@ -401,7 +401,7 @@ def _file(entry: Any) -> str:
   `tests/test_adding_a_source.py` runs this example.
 - **Partial rows.** A row built from several requests keeps its good parts
   when an optional part fails: that part is null, never 0, and the row goes
-  through `store.write_partial(path, row, failed, ctx, NAME)`, where
+  through `store.write_partial(file, row, failed, ctx, NAME)`, where
   `failed` maps each failure, as the row's `reason` names it, to the fields
   its part left null. Store keeps the value an earlier run of the day got
   for each failed part, marks the row partial while a part is still
@@ -417,7 +417,7 @@ def _file(entry: Any) -> str:
 - **Rebuilt history.** Where what a run fetches holds past days' values
   (each issue's opening and closing times), the source can rebuild them
   for the days `store.rebuild_days` gives and pass them to
-  `store.fill(path, rows, ctx)`, which adds only what a past row lacks,
+  `store.fill(file, rows, ctx)`, which adds only what a past row lacks,
   and a row for a day with none, never changing a value
   ([Backfills](CORE.md#backfills); ADR: past values a source can rebuild
   are filled, never changed), as `github_issues` and `github_discussions`

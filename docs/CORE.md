@@ -214,19 +214,29 @@ Sources write only through `write_good`, `write_window`, `write_failure`,
 `upsert` or `replace_window` directly
 ([ARCHITECTURE.md](ARCHITECTURE.md#failures-and-what-sources-report)).
 
+### Where rows are kept
+
+A row file is held by a backend (`leadline.storage`; ADR: storage is a
+backend behind one contract). A source takes its file from the context,
+`ctx.file(name)`, and passes it to `store`; it never builds a path to a row
+file. The backend is JSONL, a flat file of that name in `out_dir`. Its
+contract is the lines of a file, `read_lines(file)`, `write_lines(file,
+lines)` and `files()`, and `tests/test_storage.py` is the suite a backend
+passes.
+
 ### Reading rows
 
-- `store.rows_by_date(path)`: rows with a string `date`, keyed by it, the
+- `store.rows_by_date(file)`: rows with a string `date`, keyed by it, the
   last line for a date winning. A source reads these to decide what to
   write, such as whether a good row is already there.
-- `store.rows(path)`: every line that is a JSON object, in file order, for
+- `store.rows(file)`: every line that is a JSON object, in file order, for
   a source that reads line by line as the script does (such as
   `github_issues`' previous snapshot).
 - `store.parse_date(value)`: a `YYYY-MM-DD` string naming a real day, else
   None. Health and the reports skip a line without one.
 - `store.is_good(row)`: a `status` absent or `ok`; the test of a good row
   ([Terms](ARCHITECTURE.md#terms)) for any code that reads rows.
-- `store.dated_rows(path, where=None, hide=())`: the file's rows as the
+- `store.dated_rows(file, where=None, hide=())`: the file's rows as the
   reports and trends read them: `good`, the good rows, one a date (its last
   line), oldest first, and `newest`, the newest date with any row; a line
   without a real date is skipped, and `where` keeps the rows whose dotted
@@ -236,7 +246,7 @@ Sources write only through `write_good`, `write_window`, `write_failure`,
   A section's `hide` is how a source's `exclude` reaches every reader.
 - `store.value(row, field)`: the value at a dotted path (`issues.open`),
   None where there is none.
-- `store.stored(path, row, second_key=None)`: the stored row for `row`'s
+- `store.stored(file, row, second_key=None)`: the stored row for `row`'s
   key: the last good or partial line.
 
 ### Atomic writes
@@ -253,7 +263,7 @@ and refuses one without a UTC offset.
 
 ### Upsert
 
-`store.upsert(path, row, now, second_key=None)`: the script's write path
+`store.upsert(file, row, now, second_key=None)`: the script's write path
 for every source but `cloudflare_analytics_engine`. It is behind
 `write_good` and `write_failure`.
 
@@ -277,7 +287,7 @@ for every source but `cloudflare_analytics_engine`. It is behind
 
 ### Window replace
 
-`store.replace_window(path, rows, now)`: the script's write path for
+`store.replace_window(file, rows, now)`: the script's write path for
 `cloudflare_analytics_engine`, behind `write_window`.
 
 - Loads the existing rows keyed by `date` (the last line for a date wins)
@@ -290,7 +300,7 @@ for every source but `cloudflare_analytics_engine`. It is behind
 
 ### Good rows
 
-`store.write_good(path, row, ctx, source, second_key=None)` (ADR: every
+`store.write_good(file, row, ctx, source, second_key=None)` (ADR: every
 correction is recorded):
 
 - `row` must be a good row; a failure row is refused (it goes through
@@ -301,7 +311,7 @@ correction is recorded):
   any order), it calls `ctx.record_correction` with the source, the file,
   the date, the values that differ before and after, and the second key.
 
-`store.write_window(path, rows, ctx, source)` does the same for a window
+`store.write_window(file, rows, ctx, source)` does the same for a window
 replace, one check per date. Its `rows` may hold a failure row, as the
 script's window does; that row is left out where a good or partial row
 holds its date, with `write_failure`'s WARN line, and the rest of the
@@ -309,7 +319,7 @@ window is written.
 
 ### Failure rows
 
-`store.write_failure(path, row, now, second_key=None)` (ADR: a failure
+`store.write_failure(file, row, now, second_key=None)` (ADR: a failure
 never replaces good data):
 
 - `row` must be a failure row; a good row is refused.
@@ -323,7 +333,7 @@ never replaces good data):
 
 ### Partial rows
 
-`store.write_partial(path, row, failed, ctx, source, second_key=None)`
+`store.write_partial(file, row, failed, ctx, source, second_key=None)`
 (ADRs: a partly failed row keeps its good parts; a run never erases what it
 didn't get):
 
@@ -352,9 +362,9 @@ For a part that isn't read whole, such as `github_contributor_locations`'
 people, each read on their own (ADR: a partly failed row keeps its good
 parts):
 
-- The source reads `store.stored(path, row, second_key=None)` and merges
+- The source reads `store.stored(file, row, second_key=None)` and merges
   its part with it itself.
-- `store.write_merged(path, row, missing, ctx, source, second_key=None)`
+- `store.write_merged(file, row, missing, ctx, source, second_key=None)`
   writes the merged row, which has no `status` (or `ok`, as in
   `write_partial`): good through `write_good` where `missing` is empty,
   else `partial` with a `reason` joining `missing`.
@@ -362,7 +372,7 @@ parts):
 
 ### Backfills
 
-`store.fill(path, rows, ctx, second_key=None)` (ADR: past values a source
+`store.fill(file, rows, ctx, second_key=None)` (ADR: past values a source
 can rebuild are filled, never changed): `rows` are good rows, without a
 `status`, for days before `ctx.date`, rebuilt from what the run fetched
 (`github_issues`' totals from each issue's dates). For each row's date,
@@ -388,10 +398,10 @@ filled, M added, <first date> to <last date>`; with nothing missing it
 writes nothing, so a second run with the same rows leaves the file as it
 is. A row with a `status`, or for the run date or later, is refused.
 
-The days to rebuild: `store.first_night(path, ctx, where=None)` is the
+The days to rebuild: `store.first_night(file, ctx, where=None)` is the
 date of the file's first row a night wrote before the run date (any row
 not marked `backfilled`, good or not, that `where` keeps, each dotted
-field equal to its value), or None. `store.rebuild_days(path, start, ctx,
+field equal to its value), or None. `store.rebuild_days(file, start, ctx,
 where=None)` lists the days from `start`, the first its history can tell,
 to the day before it: none without a first night or a `start`, so a new
 file gets its history the night after its first row. Days that have a row
@@ -402,7 +412,7 @@ for a source that asks for more only when a day needs it.
 
 ### Recomputed history
 
-`store.recompute(path, rows, ctx, source)` (ADR: derived history follows
+`store.recompute(file, rows, ctx, source)` (ADR: derived history follows
 today's rules): `rows` are good rows, without a `status`, for days before
 `ctx.date`, recomputed under the run's rules from what it read
 (`github_response_times`' counts from each issue's times, `github_issues`'
@@ -427,7 +437,7 @@ line for each correction; with nothing changed it writes nothing, so a
 second run with the same rows leaves the file as it is. A row with a
 `status`, or for the run date or later, is refused.
 
-The days to recompute: `store.recompute_days(path, start, ctx)` lists the
+The days to recompute: `store.recompute_days(file, start, ctx)` lists the
 days from `start`, the first its history can tell, to the day before
 `ctx.date`: none without a `first_night` or a `start`, so a new file gets
 its history the night after its first row, as with a fill.

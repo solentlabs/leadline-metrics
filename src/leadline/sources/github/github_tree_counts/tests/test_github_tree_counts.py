@@ -15,6 +15,7 @@ from typing import Any
 import port
 import pytest
 import scenarios
+from row_files import files_in
 from scenarios.builders.common import exchange, failed
 
 from leadline import config, trends
@@ -1167,7 +1168,7 @@ def test_trends_chart_the_counts_by_value_stacked_to_the_files(tmp_path: Path) -
     (tmp_path / FILE).write_text(ALL_TODAY, encoding="utf-8")
     (tmp_path / "health.jsonl").write_text("", encoding="utf-8")
 
-    data = trends.build(tmp_path, date(2026, 9, 24), github_tree_counts.summary(WITH_CONTENT), "health.jsonl")
+    data = trends.build(files_in(tmp_path), date(2026, 9, 24), github_tree_counts.summary(WITH_CONTENT), "health.jsonl")
 
     (section,) = data["sections"]
     field = next(f for f in section["fields"] if f["field"] == "by_status")

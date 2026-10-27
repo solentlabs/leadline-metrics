@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import statistics
 from datetime import date, datetime
-from pathlib import Path
 from typing import Any
 
 from leadline import store
@@ -12,6 +11,7 @@ from leadline.context import Context, Finding
 from leadline.http import HttpError, UnusableError, unexpected
 from leadline.sources.github import api as github
 from leadline.sources.github.github_response_times import spec
+from leadline.storage import File
 
 ENV: tuple[str, ...] = (github.CREDENTIAL,)
 LAGGING = False
@@ -56,7 +56,7 @@ def check(ctx: Context, cfg: Any) -> list[Finding]:
 
 
 def _collect(ctx: Context, entry: Any) -> None:
-    repo, path, day = entry["repo"], ctx.out_dir / spec.file_name(entry), ctx.date.isoformat()
+    repo, file, day = entry["repo"], ctx.file(spec.file_name(entry)), ctx.date.isoformat()
     ctx.log.info("Collecting issue response times for %s...", repo)
     pages: list[dict[str, Any]] = []
     try:
@@ -70,23 +70,23 @@ def _collect(ctx: Context, entry: Any) -> None:
         nodes = _nodes(pages)
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch issue page %d for %s: HTTP %s", len(pages) + 1, repo, e.http_code)
-        ctx.record_unfixable(spec.NAME, path.name, e, f"{repo}: HTTP {e.http_code} from GitHub's GraphQL API")
+        ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: HTTP {e.http_code} from GitHub's GraphQL API")
         failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": f"{KIND} request failed"}
     except github.GraphqlError as e:
         ctx.log.info("ERROR: Failed to page issues for %s: %s", repo, e)
-        ctx.record_unfixable(spec.NAME, path.name, e, f"{repo}: GitHub's GraphQL API answered: {e}")
+        ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: GitHub's GraphQL API answered: {e}")
         failure = {"status": "graphql_error", "reason": str(e)}
     except UnusableError as e:
         ctx.log.info("ERROR: Failed to compute response times for %s: %s", repo, e)
         failure = {"status": "parse_failed", "reason": str(e)}
     else:
-        _recompute(ctx, path, entry["maintainer"], nodes)
-        store.write_good(path, _row(day, entry["maintainer"], nodes), ctx, spec.NAME)
+        _recompute(ctx, file, entry["maintainer"], nodes)
+        store.write_good(file, _row(day, entry["maintainer"], nodes), ctx, spec.NAME)
         return
-    store.write_failure(path, {"date": day, **failure}, ctx.now)
+    store.write_failure(file, {"date": day, **failure}, ctx.now)
 
 
-def _recompute(ctx: Context, path: Path, maintainer: str, nodes: list[dict[str, Any]]) -> None:
+def _recompute(ctx: Context, file: File, maintainer: str, nodes: list[dict[str, Any]]) -> None:
     """Write the row of each past day from the first community issue's (store.recompute), each counting what the
     issues opened by the end of that day (in the run's offset) were by then."""
 
@@ -96,7 +96,7 @@ def _recompute(ctx: Context, path: Path, maintainer: str, nodes: list[dict[str, 
     community = [issue for issue in nodes if _login(issue) and _login(issue) != maintainer]
     first = min((github.local_date(ctx, issue["createdAt"]) for issue in community), default=None)
     rows = []
-    for day in store.recompute_days(path, first, ctx):
+    for day in store.recompute_days(file, first, ctx):
         then = [
             {
                 **issue,
@@ -109,7 +109,7 @@ def _recompute(ctx: Context, path: Path, maintainer: str, nodes: list[dict[str, 
             if by(issue["createdAt"], day)
         ]
         rows.append(_row(day.isoformat(), maintainer, then))
-    store.recompute(path, rows, ctx, spec.NAME)
+    store.recompute(file, rows, ctx, spec.NAME)
 
 
 def _issues(data: Any) -> dict[str, Any]:

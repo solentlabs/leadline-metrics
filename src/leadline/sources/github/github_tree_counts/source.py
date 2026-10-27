@@ -6,7 +6,6 @@ import base64
 import re
 from collections import Counter
 from datetime import date
-from pathlib import Path
 from typing import Any, Callable, Mapping, Tuple
 from urllib.parse import quote
 
@@ -15,6 +14,7 @@ from leadline.context import Context, Finding
 from leadline.http import HttpError
 from leadline.sources.github import api as github
 from leadline.sources.github.github_tree_counts import spec
+from leadline.storage import File
 
 ENV: tuple[str, ...] = (github.CREDENTIAL,)
 LAGGING = False
@@ -118,7 +118,7 @@ class _Blobs:
     hands it to the row that is the first to hold it, so across the rows each blob is listed once.
     """
 
-    def __init__(self, ctx: Context, entry: Any, path: Path) -> None:
+    def __init__(self, ctx: Context, entry: Any, file: File) -> None:
         self.ctx, self.repo = ctx, entry["repo"]
         content = entry["content"]
         self.key = content["key"] + spec.BLOBS_SUFFIX
@@ -130,7 +130,7 @@ class _Blobs:
             if isinstance(own, dict)
         }
         self.default = (re.compile(content["pattern"], re.MULTILINE), self.names)
-        self.values = self.canonical(_seen(path, self.key))
+        self.values = self.canonical(_seen(file, self.key))
         self.fresh: dict[str, str] = {}
         self.reads = 0
 
@@ -181,22 +181,22 @@ def _blobs_read(row: Any, key: str) -> dict[str, str]:
     }
 
 
-def _seen(path: Path, key: str) -> dict[str, str]:
+def _seen(file: File, key: str) -> dict[str, str]:
     """Every blob the file's rows list (partial rows too): a blob's SHA names its text, so any row's is good."""
     seen: dict[str, str] = {}
-    for row in store.rows(path):
+    for row in store.rows(file):
         seen.update(_blobs_read(row, key))
     return seen
 
 
 def _collect(ctx: Context, entry: Any) -> None:
-    repo, path, day = entry["repo"], ctx.out_dir / spec.file_name(entry), ctx.date.isoformat()
+    repo, file, day = entry["repo"], ctx.file(spec.file_name(entry)), ctx.date.isoformat()
     ctx.log.info("Collecting GitHub tree counts for %s...", repo)
     try:
         matches, truncated = _matches(_tree(ctx, entry), entry)
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch the tree of %s: HTTP %s", repo, e.http_code)
-        ctx.record_unfixable(spec.NAME, path.name, e, f"{repo}: HTTP {e.http_code} from GitHub's git trees API")
+        ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: HTTP {e.http_code} from GitHub's git trees API")
         failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": "tree request failed"}
     except ValueError:
         failure = {"status": "parse_failed", "reason": "response was not JSON"}
@@ -205,19 +205,19 @@ def _collect(ctx: Context, entry: Any) -> None:
     else:
         if truncated:
             ctx.log.info("WARN: the tree of %s was truncated; its counts are floors, not totals", repo)
-        blobs = _Blobs(ctx, entry, path) if "content" in entry else None
-        _write_row(ctx, entry, path, matches, truncated, blobs)
-        _rebuild(ctx, entry, path, blobs)
+        blobs = _Blobs(ctx, entry, file) if "content" in entry else None
+        _write_row(ctx, entry, file, matches, truncated, blobs)
+        _rebuild(ctx, entry, file, blobs)
         return
     if failure["status"] == "parse_failed":
         ctx.log.info("ERROR: Failed to parse the tree of %s: %s", repo, failure["reason"])
-    store.write_failure(path, {"date": day, **failure}, ctx.now)
+    store.write_failure(file, {"date": day, **failure}, ctx.now)
 
 
 def _write_row(
     ctx: Context,
     entry: Any,
-    path: Path,
+    file: File,
     matches: list[tuple[Any, Any, Blob | None]],
     truncated: bool,
     blobs: _Blobs | None,
@@ -232,32 +232,32 @@ def _write_row(
         except HttpError as e:
             ctx.log.info("ERROR: Failed to fetch a blob of %s: HTTP %s", entry["repo"], e.http_code)
             reason = f"{entry['repo']}: HTTP {e.http_code} from GitHub's git blobs API"
-            ctx.record_unfixable(spec.NAME, path.name, e, reason)
+            ctx.record_unfixable(spec.NAME, file.name, e, reason)
             failed[f"blob request failed (HTTP {e.http_code})"] = [entry["content"]["key"]]
         except ValueError:
             ctx.log.info("ERROR: Failed to parse a blob of %s: not a base64 blob", entry["repo"])
             failed["blob response was not usable"] = [entry["content"]["key"]]
     row = _row(entry, day, matches, truncated, by_value)
     if blobs is not None:
-        kept = blobs.canonical(_blobs_read(store.rows_by_date(path).get(day), blobs.key))  # an earlier run of the day's
+        kept = blobs.canonical(_blobs_read(store.rows_by_date(file).get(day), blobs.key))  # an earlier run of the day's
         read = blobs.take(kept)
         if read:
             row[blobs.key] = read
     if failed:
-        store.write_partial(path, row, failed, ctx, spec.NAME)
+        store.write_partial(file, row, failed, ctx, spec.NAME)
     else:
-        store.write_good(path, row, ctx, spec.NAME)
+        store.write_good(file, row, ctx, spec.NAME)
 
 
-def _rebuild(ctx: Context, entry: Any, path: Path, blobs: _Blobs | None) -> None:
+def _rebuild(ctx: Context, entry: Any, file: File, blobs: _Blobs | None) -> None:
     """Write a row for each day before the file's first a night wrote, each counted in the tree of the day's last
     commit, from the first day whose tree matches anything; rows an earlier rebuild added mark where it starts.
     With `content`, each day through yesterday whose good row lacks the counts by value gets them too, and a night
     reads no more than BLOB_BUDGET blobs (a tree that needs more waits for the next night). A night asks for no more
     than TREE_BUDGET trees, and goes on the next. A failed request stops it,
     keeping the days counted so far (store.fill)."""
-    repo, end = entry["repo"], store.first_night(path, ctx)
-    by_date = store.rows_by_date(path)
+    repo, end = entry["repo"], store.first_night(file, ctx)
+    by_date = store.rows_by_date(file)
     earliest = min(filter(None, map(store.parse_date, by_date)), default=None)
     if end is None or earliest is None:
         return
@@ -269,18 +269,18 @@ def _rebuild(ctx: Context, entry: Any, path: Path, blobs: _Blobs | None) -> None
         return stored is None or (key is not None and store.is_good(stored) and store.lacks(stored, key))
 
     resumed = bool(by_date[earliest.isoformat()].get(store.BACKFILLED))  # an earlier rebuild found the start
-    if resumed and not any(needed(day) for day in days_from(path, earliest, ctx)):
+    if resumed and not any(needed(day) for day in days_from(file, earliest, ctx)):
         return
     rows: list[dict[str, Any]] = []
     try:
         last = _last_commits(ctx, github.numbered_pages(ctx, _commits_url(entry)))
         start = earliest if resumed else min(last, default=earliest)
-        _count_days(ctx, entry, blobs, days_from(path, start, ctx), needed, last, resumed, rows)
+        _count_days(ctx, entry, blobs, days_from(file, start, ctx), needed, last, resumed, rows)
     except HttpError as e:
         ctx.log.info("Stopped rebuilding past tree counts for %s: HTTP %s; the next night goes on", repo, e.http_code)
     except (ValueError, _UnreadableError):
         ctx.log.info("Stopped rebuilding past tree counts for %s: %s", repo, UNEXPECTED)
-    store.fill(path, rows, ctx)
+    store.fill(file, rows, ctx)
 
 
 def _count_days(

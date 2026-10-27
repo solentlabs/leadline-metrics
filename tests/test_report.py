@@ -17,6 +17,7 @@ from typing import Any, Iterator
 import port
 import pytest
 import scenarios
+from row_files import files_in
 from test_runner import CRITICAL_BLOCK, FakeSource, broken, config, reg
 
 from leadline import cli, health, reports, runner, trends
@@ -119,9 +120,11 @@ def test_a_report_with_no_health_row_builds_what_trends_builds_with_none(tmp_pat
 
     assert frozen_report(cfg) == 0
 
-    expected = trends.build(tmp_path, NOW.date(), sections, health.FILE)
+    expected = trends.build(files_in(tmp_path), NOW.date(), sections, health.FILE)
     scenario = scenarios.scenarios(SOURCE)[0]
-    expected = trends.build(tmp_path, port.local_time(scenario.now, scenario.tz).date(), sections, health.FILE)
+    expected = trends.build(
+        files_in(tmp_path), port.local_time(scenario.now, scenario.tz).date(), sections, health.FILE
+    )
     assert json.loads((tmp_path / trends.DATA).read_text(encoding="utf-8")) == json.loads(json.dumps(expected))
     assert not (tmp_path / health.FILE).exists()
 

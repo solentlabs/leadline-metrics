@@ -22,12 +22,14 @@ from pathlib import Path
 from typing import Any, Dict, Iterator
 
 import pytest
+from row_files import file_at
 from script_harness import script_side
 
 from leadline import store
 from leadline.config import Hide
 from leadline.context import Context, Correction
 from leadline.http import Http
+from leadline.storage import jsonl
 
 ORACLE = Path(__file__).parent / "oracle"
 # Naive, as the script's clock reads (the shim freezes its datetime.now() to
@@ -94,7 +96,7 @@ def test_upsert_matches_script(tmp_path: Path, existing: bytes | None) -> None:
     theirs, ours = seed(tmp_path, existing)
     run_oracle("upsert_jsonl.heredoc", [str(theirs), NEW_ROW["date"], json.dumps(NEW_ROW, ensure_ascii=False)])
 
-    store.upsert(ours, NEW_ROW, WHEN)
+    store.upsert(file_at(ours), NEW_ROW, WHEN)
 
     assert ours.read_bytes() == theirs.read_bytes()
     assert list(ours.parent.glob("*.tmp")) == []
@@ -107,7 +109,7 @@ def test_a_line_that_is_not_valid_utf_8_is_kept_byte_for_byte(tmp_path: Path) ->
     path = tmp_path / "m.jsonl"
     path.write_bytes(LATIN_1_LINE)
 
-    store.upsert(path, NEW_ROW, WHEN)
+    store.upsert(file_at(path), NEW_ROW, WHEN)
 
     assert path.read_bytes().startswith(LATIN_1_LINE)
     assert json.loads(path.read_bytes().splitlines()[1])["date"] == NEW_ROW["date"]
@@ -117,16 +119,16 @@ def test_a_row_with_bad_bytes_is_still_that_days_row_and_is_replaced(tmp_path: P
     path = tmp_path / "m.jsonl"
     path.write_bytes(LATIN_1_LINE)
 
-    store.upsert(path, {"date": "2026-09-21", "x": "new"}, WHEN)
+    store.upsert(file_at(path), {"date": "2026-09-21", "x": "new"}, WHEN)
 
-    assert [row["x"] for row in store.rows(path)] == ["new"]
+    assert [row["x"] for row in store.rows(file_at(path))] == ["new"]
 
 
 def test_a_value_with_bad_bytes_reads_with_a_replacement_character(tmp_path: Path) -> None:
     path = tmp_path / "m.jsonl"
     path.write_bytes(LATIN_1_LINE)
 
-    (row,) = store.rows(path)
+    (row,) = store.rows(file_at(path))
 
     assert row["x"] == "caf\ufffd"
     json.dumps(row, ensure_ascii=False).encode("utf-8")  # a later report or page can write it
@@ -136,9 +138,12 @@ def test_a_byte_order_mark_does_not_hide_the_first_row(tmp_path: Path) -> None:
     path = tmp_path / "m.jsonl"
     path.write_bytes(b'\xef\xbb\xbf{"date": "2026-09-21", "x": "old"}\n{"date": "2026-09-22", "x": "keep"}\n')
 
-    store.upsert(path, {"date": "2026-09-21", "x": "new"}, WHEN)
+    store.upsert(file_at(path), {"date": "2026-09-21", "x": "new"}, WHEN)
 
-    assert [(row["date"], row["x"]) for row in store.rows(path)] == [("2026-09-22", "keep"), ("2026-09-21", "new")]
+    assert [(row["date"], row["x"]) for row in store.rows(file_at(path))] == [
+        ("2026-09-22", "keep"),
+        ("2026-09-21", "new"),
+    ]
     assert b"old" not in path.read_bytes()
 
 
@@ -207,7 +212,7 @@ def test_second_key_upsert_matches_script(tmp_path: Path, topic_id: int) -> None
     row: Row = {"date": "2026-09-23", "topic_id": topic_id, "posts": 4}
     run_oracle("upsert_forum_jsonl.heredoc", [str(theirs), row["date"], str(topic_id), json.dumps(row)])
 
-    store.upsert(ours, row, WHEN, second_key="topic_id")
+    store.upsert(file_at(ours), row, WHEN, second_key="topic_id")
 
     assert ours.read_bytes() == theirs.read_bytes()
 
@@ -216,7 +221,7 @@ def test_upsert_stamps_captured_at_last_without_changing_the_row(tmp_path: Path)
     path = tmp_path / "m.jsonl"
     row: Row = {"date": "2026-09-23", "n": 1}
 
-    store.upsert(path, row, WHEN)
+    store.upsert(file_at(path), row, WHEN)
 
     written = json.loads(path.read_text(encoding="utf-8"))
     assert list(written) == ["date", "n", "captured_at"]
@@ -291,7 +296,7 @@ def test_window_replace_matches_script(tmp_path: Path, existing: bytes | None) -
     args = [str(theirs), DATASET, str(RUN_DATE), str(REFETCH_DAYS), "ua"]
     run_oracle("usage_writer.heredoc", args, OK_REPLIES, tmp_path)
 
-    store.replace_window(ours, usage_rows(), WHEN)
+    store.replace_window(file_at(ours), usage_rows(), WHEN)
 
     assert ours.read_bytes() == theirs.read_bytes()
 
@@ -309,7 +314,7 @@ def test_window_replace_of_a_failure_matches_script(tmp_path: Path, existing: by
 
     # The collector's rule: a failure never overwrites a good reading.
     newest_ok = existing is not None and b'"ok"' in existing
-    store.replace_window(ours, [] if newest_ok else [FAILURE_ROW], WHEN)
+    store.replace_window(file_at(ours), [] if newest_ok else [FAILURE_ROW], WHEN)
 
     assert ours.read_bytes() == theirs.read_bytes()
 
@@ -321,7 +326,7 @@ OTHER_TIME = datetime(2001, 2, 3, 4, 5, 6, 789, tzinfo=timezone(timedelta(hours=
 def test_upsert_stamps_the_time_it_is_given_never_the_wall_clock(tmp_path: Path) -> None:
     path = tmp_path / "m.jsonl"
 
-    store.upsert(path, {"date": "2026-09-23"}, OTHER_TIME)
+    store.upsert(file_at(path), {"date": "2026-09-23"}, OTHER_TIME)
 
     assert json.loads(path.read_text(encoding="utf-8"))["captured_at"] == "2001-02-03T04:05:06+05:45"
 
@@ -329,7 +334,7 @@ def test_upsert_stamps_the_time_it_is_given_never_the_wall_clock(tmp_path: Path)
 def test_window_replace_stamps_every_row_with_the_time_it_is_given(tmp_path: Path) -> None:
     path = tmp_path / "m.jsonl"
 
-    store.replace_window(path, usage_rows(), OTHER_TIME)
+    store.replace_window(file_at(path), usage_rows(), OTHER_TIME)
 
     stamps = {json.loads(line)["captured_at"] for line in path.read_text(encoding="utf-8").splitlines()}
     assert stamps == {"2001-02-03T04:05:06+05:45"}
@@ -367,7 +372,7 @@ def test_upsert_keeps_a_non_object_json_line(tmp_path: Path, line: bytes, second
     else:
         run_oracle("upsert_forum_jsonl.heredoc", [str(theirs), row["date"], "5", json.dumps(row)])
 
-    store.upsert(ours, row, WHEN, second_key=second_key)
+    store.upsert(file_at(ours), row, WHEN, second_key=second_key)
 
     assert ours.read_bytes() == line + theirs.read_bytes()
 
@@ -392,7 +397,7 @@ def test_window_replace_keeps_a_line_whose_date_is_not_a_string(tmp_path: Path, 
     args = [str(theirs), DATASET, str(RUN_DATE), str(REFETCH_DAYS), "ua"]
     run_oracle("usage_writer.heredoc", args, OK_REPLIES, tmp_path)
 
-    store.replace_window(ours, usage_rows(), WHEN)
+    store.replace_window(file_at(ours), usage_rows(), WHEN)
 
     assert ours.read_bytes() == line + theirs.read_bytes()
 
@@ -413,7 +418,7 @@ def test_upsert_keeps_lines_whose_key_is_missing_or_not_a_string(tmp_path: Path,
     else:
         run_oracle("upsert_forum_jsonl.heredoc", [str(theirs), row["date"], "5", json.dumps(row)])
 
-    store.upsert(ours, row, WHEN, second_key=second_key)
+    store.upsert(file_at(ours), row, WHEN, second_key=second_key)
 
     assert ours.read_bytes() == theirs.read_bytes()
     assert ours.read_bytes().startswith(unusable)
@@ -432,7 +437,7 @@ def test_rows_by_date_reads_each_dated_row_the_last_for_a_date_winning(tmp_path:
         b'{"date": "2026-09-21", "n": 5}'
     )
 
-    assert store.rows_by_date(path) == {
+    assert store.rows_by_date(file_at(path)) == {
         "2026-09-21": {"date": "2026-09-21", "n": 5},
         "2026-09-20": {"date": "2026-09-20", "n": 4},
     }
@@ -451,7 +456,7 @@ def test_rows_are_every_object_line_in_file_order(tmp_path: Path) -> None:
         b'{"date": "2026-09-21", "n": 5}'
     )
 
-    assert store.rows(path) == [
+    assert store.rows(file_at(path)) == [
         {"date": "2026-09-21", "n": 1},
         {"date": 5, "n": 2},
         {"n": 3},
@@ -460,11 +465,11 @@ def test_rows_are_every_object_line_in_file_order(tmp_path: Path) -> None:
 
 
 def test_rows_of_a_missing_file_are_none(tmp_path: Path) -> None:
-    assert store.rows(tmp_path / "absent.jsonl") == []
+    assert store.rows(file_at(tmp_path / "absent.jsonl")) == []
 
 
 def test_rows_by_date_of_a_missing_file_is_empty(tmp_path: Path) -> None:
-    assert store.rows_by_date(tmp_path / "absent.jsonl") == {}
+    assert store.rows_by_date(file_at(tmp_path / "absent.jsonl")) == {}
 
 
 def test_dated_rows_are_the_good_rows_one_a_date_the_last_line_winning_oldest_first(tmp_path: Path) -> None:
@@ -481,7 +486,7 @@ def test_dated_rows_are_the_good_rows_one_a_date_the_last_line_winning_oldest_fi
         encoding="utf-8",
     )
 
-    dated = store.dated_rows(path)
+    dated = store.dated_rows(file_at(path))
 
     assert dated.good == [{"date": "2026-09-20", "n": 2, "status": "ok"}, {"date": "2026-09-22", "n": 3}]
     assert dated.newest == "2026-09-24"
@@ -495,11 +500,13 @@ def test_dated_rows_leave_out_the_hidden_items_of_a_list_ignoring_a_leading_v_an
     path.write_text(json.dumps(row) + "\n", encoding="utf-8")
     before = path.read_text(encoding="utf-8")
 
-    (shown,) = store.dated_rows(path, hide=[Hide("t.l", "tag", frozenset({"1.0.0", "1.1.0"}))]).good
+    (shown,) = store.dated_rows(file_at(path), hide=[Hide("t.l", "tag", frozenset({"1.0.0", "1.1.0"}))]).good
 
     assert shown == {"date": "2026-09-24", "n": 1, "t": {"l": [{"tag": "v1.2.0"}]}}
     assert path.read_text(encoding="utf-8") == before
-    assert store.dated_rows(path, hide=[Hide("t.x", "tag", frozenset({"1.0.0"}))]).good == [row]  # no such list
+    assert store.dated_rows(file_at(path), hide=[Hide("t.x", "tag", frozenset({"1.0.0"}))]).good == [
+        row
+    ]  # no such list
 
 
 def test_dated_rows_keep_the_rows_where_says_by_dotted_field(tmp_path: Path) -> None:
@@ -507,9 +514,9 @@ def test_dated_rows_keep_the_rows_where_says_by_dotted_field(tmp_path: Path) -> 
     rows = [{"date": "2026-09-24", "t": {"id": i}, "n": i} for i in (1, 2)]
     path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
 
-    assert store.dated_rows(path, {"t.id": 2}).good == [rows[1]]
-    assert store.dated_rows(path, {"t.id": 3}) == store.Dated([], None)
-    assert store.dated_rows(tmp_path / "absent.jsonl") == store.Dated([], None)
+    assert store.dated_rows(file_at(path), {"t.id": 2}).good == [rows[1]]
+    assert store.dated_rows(file_at(path), {"t.id": 3}) == store.Dated([], None)
+    assert store.dated_rows(file_at(tmp_path / "absent.jsonl")) == store.Dated([], None)
 
 
 @pytest.mark.parametrize(
@@ -583,9 +590,9 @@ def test_a_good_row_has_no_status_or_ok(row: Row, good: bool) -> None:
 )
 def test_write_failure_writes_where_no_good_row_holds_the_date(tmp_path: Path, existing: bytes | None) -> None:
     theirs, ours = seed(tmp_path, existing)
-    store.upsert(theirs, FAILURE, WHEN)
+    store.upsert(file_at(theirs), FAILURE, WHEN)
 
-    assert store.write_failure(ours, FAILURE, WHEN) is True
+    assert store.write_failure(file_at(ours), FAILURE, WHEN) is True
     assert ours.read_bytes() == theirs.read_bytes()
 
 
@@ -603,7 +610,7 @@ def test_write_failure_keeps_a_good_row_and_says_so(tmp_path: Path, existing: st
     path = tmp_path / "m.jsonl"
     path.write_text(existing, encoding="utf-8")
 
-    wrote = store.write_failure(path, FAILURE, WHEN)
+    wrote = store.write_failure(file_at(path), FAILURE, WHEN)
 
     assert wrote is False
     assert path.read_text(encoding="utf-8") == existing
@@ -615,8 +622,8 @@ def test_write_failure_by_a_second_key_keeps_only_that_keys_good_row(tmp_path: P
     path.write_text('{"date": "2026-09-23", "topic_id": 1, "views": 5}\n', encoding="utf-8")
     failure = {"date": "2026-09-23", "topic_id": 2, "status": "fetch_failed"}
 
-    assert store.write_failure(path, failure, WHEN, second_key=store.SECOND_KEY) is True
-    assert store.write_failure(path, {**failure, "topic_id": 1}, WHEN, second_key=store.SECOND_KEY) is False
+    assert store.write_failure(file_at(path), failure, WHEN, second_key=store.SECOND_KEY) is True
+    assert store.write_failure(file_at(path), {**failure, "topic_id": 1}, WHEN, second_key=store.SECOND_KEY) is False
 
     assert path.read_text(encoding="utf-8") == (
         '{"date": "2026-09-23", "topic_id": 1, "views": 5}\n'
@@ -631,7 +638,7 @@ def test_write_failure_refuses_a_good_row(tmp_path: Path, status: Row) -> None:
     path = tmp_path / "m.jsonl"
 
     with pytest.raises(ValueError, match="not a failure row"):
-        store.write_failure(path, {"date": "2026-09-23", "n": 1, **status}, WHEN)
+        store.write_failure(file_at(path), {"date": "2026-09-23", "n": 1, **status}, WHEN)
     assert not path.exists()
 
 
@@ -655,9 +662,9 @@ def written(**fields: Any) -> str:
 def test_write_partial_writes_the_row_marked_partial_naming_each_failure(tmp_path: Path) -> None:
     theirs, ours = seed(tmp_path, b'{"date": "2026-09-22", "n": 1}\n')
 
-    store.write_partial(ours, READING, BOTH_FAILED, run_context(tmp_path), "src")
+    store.write_partial(file_at(ours), READING, BOTH_FAILED, run_context(tmp_path), "src")
 
-    store.upsert(theirs, {**READING, "status": "partial", "reason": f"{M_FAILED}; {K_FAILED}"}, WHEN)
+    store.upsert(file_at(theirs), {**READING, "status": "partial", "reason": f"{M_FAILED}; {K_FAILED}"}, WHEN)
     assert ours.read_bytes() == theirs.read_bytes()
 
 
@@ -673,9 +680,9 @@ def test_a_partial_row_replaces_a_failure_row(tmp_path: Path, existing: bytes) -
     """A failure row holds no values, so there is nothing to keep from it."""
     theirs, ours = seed(tmp_path, existing)
 
-    store.write_partial(ours, READING, {M_FAILED: ["m"]}, run_context(tmp_path), "src")
+    store.write_partial(file_at(ours), READING, {M_FAILED: ["m"]}, run_context(tmp_path), "src")
 
-    store.upsert(theirs, {**READING, "status": "partial", "reason": M_FAILED}, WHEN)
+    store.upsert(file_at(theirs), {**READING, "status": "partial", "reason": M_FAILED}, WHEN)
     assert ours.read_bytes() == theirs.read_bytes()
 
 
@@ -684,7 +691,7 @@ def test_a_failure_row_never_replaces_a_partial_row(tmp_path: Path, logged: Logg
     existing = line(n=1, m=None, k=2, status="partial", reason=M_FAILED) + "\n"
     path.write_text(existing, encoding="utf-8")
 
-    assert store.write_failure(path, FAILURE, WHEN) is False
+    assert store.write_failure(file_at(path), FAILURE, WHEN) is False
 
     assert path.read_text(encoding="utf-8") == existing
     assert logged.messages == ["WARN: kept the partial row for 2026-09-23 in m.jsonl; fetch_failed not recorded"]
@@ -744,7 +751,7 @@ def test_a_partial_reading_keeps_the_stored_values_it_failed_to_get(
     path.write_text(existing + "\n", encoding="utf-8")
     ctx = run_context(tmp_path)
 
-    store.write_partial(path, row, failed, ctx, "src")
+    store.write_partial(file_at(path), row, failed, ctx, "src")
 
     assert path.read_text(encoding="utf-8") == expected
     assert ctx.corrections == []  # the run's own date
@@ -754,7 +761,7 @@ def test_a_merged_write_says_which_stored_values_it_kept(tmp_path: Path, logged:
     path = tmp_path / "m.jsonl"
     path.write_text(line(n=1, m=2, k=3) + "\n", encoding="utf-8")
 
-    store.write_partial(path, READING, BOTH_FAILED, run_context(tmp_path), "src")
+    store.write_partial(file_at(path), READING, BOTH_FAILED, run_context(tmp_path), "src")
 
     assert logged.messages == [
         "Kept the stored m, k for 2026-09-23 in m.jsonl, which this run failed to get",
@@ -768,9 +775,9 @@ def test_a_merged_write_that_changes_a_past_days_good_row_is_a_correction(tmp_pa
     path.write_text('{"date": "2026-09-22", "site": "example", "n": 1, "m": 2, "k": 3}\n', encoding="utf-8")
     ctx = run_context(tmp_path)
 
-    store.write_partial(path, {**READING, "date": "2026-09-22", "n": 5, "k": 3}, {M_FAILED: ["m"]}, ctx, "src")
+    store.write_partial(file_at(path), {**READING, "date": "2026-09-22", "n": 5, "k": 3}, {M_FAILED: ["m"]}, ctx, "src")
 
-    assert store.rows_by_date(path)["2026-09-22"] == {
+    assert store.rows_by_date(file_at(path))["2026-09-22"] == {
         "date": "2026-09-22",
         "site": "example",
         "n": 5,
@@ -790,9 +797,11 @@ def test_a_merge_by_a_second_key_reads_only_that_keys_row(tmp_path: Path) -> Non
     path.write_text("\n".join(rows) + "\n", encoding="utf-8")
     row = {"date": "2026-09-23", "topic_id": 2, "n": 3, "m": None}
 
-    store.write_partial(path, row, {M_FAILED: ["m"]}, run_context(tmp_path), "src", second_key=store.SECOND_KEY)
+    store.write_partial(
+        file_at(path), row, {M_FAILED: ["m"]}, run_context(tmp_path), "src", second_key=store.SECOND_KEY
+    )
 
-    assert store.rows_by_date(path)["2026-09-23"] == {**row, "m": 9, "captured_at": WHEN.isoformat()}
+    assert store.rows_by_date(file_at(path))["2026-09-23"] == {**row, "m": 9, "captured_at": WHEN.isoformat()}
 
 
 def test_a_good_row_replaces_a_partial_row_and_is_no_correction(tmp_path: Path) -> None:
@@ -800,11 +809,11 @@ def test_a_good_row_replaces_a_partial_row_and_is_no_correction(tmp_path: Path) 
     path = tmp_path / "m.jsonl"
     past = {**READING, "date": "2026-09-22"}
     ctx = run_context(tmp_path)
-    store.write_partial(path, past, BOTH_FAILED, ctx, "src")
+    store.write_partial(file_at(path), past, BOTH_FAILED, ctx, "src")
 
-    store.write_good(path, {**past, "m": 2, "k": 3}, ctx, "src")
+    store.write_good(file_at(path), {**past, "m": 2, "k": 3}, ctx, "src")
 
-    assert store.rows_by_date(path)["2026-09-22"] == {**past, "m": 2, "k": 3, "captured_at": WHEN.isoformat()}
+    assert store.rows_by_date(file_at(path))["2026-09-22"] == {**past, "m": 2, "k": 3, "captured_at": WHEN.isoformat()}
     assert ctx.corrections == []
 
 
@@ -825,7 +834,7 @@ def test_write_partial_refuses_a_row_that_is_not_one(
     path = tmp_path / "m.jsonl"
 
     with pytest.raises(ValueError, match=problem):
-        store.write_partial(path, row, failed, run_context(tmp_path), "src")
+        store.write_partial(file_at(path), row, failed, run_context(tmp_path), "src")
     assert not path.exists()
 
 
@@ -837,9 +846,9 @@ def test_a_readings_ok_status_becomes_partial_in_place(tmp_path: Path) -> None:
     """The row keeps the source's field order: `partial` where `ok` was, the reason after the fields."""
     theirs, ours = seed(tmp_path, b"")
 
-    store.write_partial(ours, READING_OK, {M_FAILED: ["m"]}, run_context(tmp_path), "src")
+    store.write_partial(file_at(ours), READING_OK, {M_FAILED: ["m"]}, run_context(tmp_path), "src")
 
-    store.upsert(theirs, {**READING_OK, "status": "partial", "reason": M_FAILED}, WHEN)
+    store.upsert(file_at(theirs), {**READING_OK, "status": "partial", "reason": M_FAILED}, WHEN)
     assert ours.read_bytes() == theirs.read_bytes()
     assert list(json.loads(ours.read_text())) == ["date", "site", "status", "n", "m", "reason", "captured_at"]
 
@@ -847,9 +856,9 @@ def test_a_readings_ok_status_becomes_partial_in_place(tmp_path: Path) -> None:
 def test_a_reading_with_an_ok_status_filled_from_the_stored_row_is_good_with_its_status(tmp_path: Path) -> None:
     theirs, ours = seed(tmp_path, (line(status="ok", n=1, m=2) + "\n").encode())
 
-    store.write_partial(ours, READING_OK, {M_FAILED: ["m"]}, run_context(tmp_path), "src")
+    store.write_partial(file_at(ours), READING_OK, {M_FAILED: ["m"]}, run_context(tmp_path), "src")
 
-    store.upsert(theirs, {**READING_OK, "m": 2}, WHEN)
+    store.upsert(file_at(theirs), {**READING_OK, "m": 2}, WHEN)
     assert ours.read_bytes() == theirs.read_bytes()
 
 
@@ -879,7 +888,7 @@ def test_stored_is_the_rows_last_good_or_partial_line(tmp_path: Path, existing: 
     path = tmp_path / "m.jsonl"
     path.write_text(existing + "\n", encoding="utf-8")
 
-    found = store.stored(path, READING)
+    found = store.stored(file_at(path), READING)
 
     stamp = {"captured_at": "2026-09-23T08:00:00+00:00"}
     assert found == (None if expected is None else {"date": "2026-09-23", "site": "example", **expected, **stamp})
@@ -889,7 +898,7 @@ def test_stored_reads_by_the_second_key_too(tmp_path: Path) -> None:
     path = tmp_path / "m.jsonl"
     path.write_text('{"date": "2026-09-23", "topic_id": 1, "n": 1}\n{"date": "2026-09-23", "topic_id": 2, "n": 2}\n')
 
-    found = store.stored(path, {"date": "2026-09-23", "topic_id": 1}, second_key=store.SECOND_KEY)
+    found = store.stored(file_at(path), {"date": "2026-09-23", "topic_id": 1}, second_key=store.SECOND_KEY)
 
     assert found == {"date": "2026-09-23", "topic_id": 1, "n": 1}
 
@@ -897,9 +906,9 @@ def test_stored_reads_by_the_second_key_too(tmp_path: Path) -> None:
 def test_write_merged_with_something_missing_writes_a_partial_row_naming_it(tmp_path: Path) -> None:
     theirs, ours = seed(tmp_path, b'{"date": "2026-09-23", "site": "example", "n": 1}\n')
 
-    store.write_merged(ours, READING, [M_FAILED, K_FAILED], run_context(tmp_path), "src")
+    store.write_merged(file_at(ours), READING, [M_FAILED, K_FAILED], run_context(tmp_path), "src")
 
-    store.upsert(theirs, {**READING, "status": "partial", "reason": f"{M_FAILED}; {K_FAILED}"}, WHEN)
+    store.upsert(file_at(theirs), {**READING, "status": "partial", "reason": f"{M_FAILED}; {K_FAILED}"}, WHEN)
     assert ours.read_bytes() == theirs.read_bytes()
 
 
@@ -908,9 +917,9 @@ def test_write_merged_with_nothing_missing_is_a_good_row_and_records_a_correctio
     path.write_text('{"date": "2026-09-22", "site": "example", "n": 1}\n', encoding="utf-8")
     ctx = run_context(tmp_path)
 
-    store.write_merged(path, {"date": "2026-09-22", "site": "example", "n": 5}, [], ctx, "src")
+    store.write_merged(file_at(path), {"date": "2026-09-22", "site": "example", "n": 5}, [], ctx, "src")
 
-    assert store.rows_by_date(path)["2026-09-22"] == {
+    assert store.rows_by_date(file_at(path))["2026-09-22"] == {
         "date": "2026-09-22",
         "site": "example",
         "n": 5,
@@ -923,7 +932,7 @@ def test_write_merged_refuses_a_row_with_a_status_but_ok(tmp_path: Path) -> None
     path = tmp_path / "m.jsonl"
 
     with pytest.raises(ValueError, match="a merged row has no status of its own but ok"):
-        store.write_merged(path, {**READING, "status": "partial"}, [M_FAILED], run_context(tmp_path), "src")
+        store.write_merged(file_at(path), {**READING, "status": "partial"}, [M_FAILED], run_context(tmp_path), "src")
     assert not path.exists()
 
 
@@ -955,9 +964,9 @@ def test_a_good_row_replacing_a_past_days_good_row_with_other_values_is_a_correc
     theirs, ours = seed(tmp_path, existing.encode())
     ctx = run_context(tmp_path)
 
-    store.write_good(ours, row, ctx, "src")
+    store.write_good(file_at(ours), row, ctx, "src")
 
-    store.upsert(theirs, row, WHEN)
+    store.upsert(file_at(theirs), row, WHEN)
     assert ours.read_bytes() == theirs.read_bytes()
     assert ctx.corrections == [Correction("src", "m.jsonl", "2026-09-22", old, new)]
 
@@ -978,9 +987,9 @@ def test_other_good_writes_are_no_correction(tmp_path: Path, existing: str | Non
     theirs, ours = seed(tmp_path, None if existing is None else existing.encode())
     ctx = run_context(tmp_path)
 
-    store.write_good(ours, row, ctx, "src")
+    store.write_good(file_at(ours), row, ctx, "src")
 
-    store.upsert(theirs, row, WHEN)
+    store.upsert(file_at(theirs), row, WHEN)
     assert ours.read_bytes() == theirs.read_bytes()
     assert ctx.corrections == []
 
@@ -990,11 +999,15 @@ def test_a_correction_by_a_second_key_names_its_key(tmp_path: Path) -> None:
     ctx = run_context(tmp_path)
     row: Row = {"date": "2026-09-22", "topic_id": 4101, "posts": 7}
 
-    store.write_good(ours, row, ctx, "forum", second_key=store.SECOND_KEY)
-    store.write_good(ours, {"date": "2026-09-22", "topic_id": 4102, "posts": 1}, ctx, "forum", store.SECOND_KEY)
+    store.write_good(file_at(ours), row, ctx, "forum", second_key=store.SECOND_KEY)
+    store.write_good(
+        file_at(ours), {"date": "2026-09-22", "topic_id": 4102, "posts": 1}, ctx, "forum", store.SECOND_KEY
+    )
 
-    store.upsert(theirs, row, WHEN, second_key=store.SECOND_KEY)
-    store.upsert(theirs, {"date": "2026-09-22", "topic_id": 4102, "posts": 1}, WHEN, second_key=store.SECOND_KEY)
+    store.upsert(file_at(theirs), row, WHEN, second_key=store.SECOND_KEY)
+    store.upsert(
+        file_at(theirs), {"date": "2026-09-22", "topic_id": 4102, "posts": 1}, WHEN, second_key=store.SECOND_KEY
+    )
     assert ours.read_bytes() == theirs.read_bytes()
     assert ctx.corrections == [
         Correction("forum", "m.jsonl", "2026-09-22", {"posts": 1}, {"posts": 7}, {"topic_id": 4101})
@@ -1006,7 +1019,7 @@ def test_write_good_refuses_a_failure_row(tmp_path: Path, status: str) -> None:
     path = tmp_path / "m.jsonl"
 
     with pytest.raises(ValueError, match="not a good row"):
-        store.write_good(path, {"date": "2026-09-22", "status": status}, run_context(tmp_path), "src")
+        store.write_good(file_at(path), {"date": "2026-09-22", "status": status}, run_context(tmp_path), "src")
     assert not path.exists()
 
 
@@ -1027,9 +1040,9 @@ def test_a_window_replacing_past_days_good_rows_records_each_correction(tmp_path
     theirs, ours = seed(tmp_path, existing)
     ctx = run_context(tmp_path)
 
-    store.write_window(ours, rows, ctx, "usage")
+    store.write_window(file_at(ours), rows, ctx, "usage")
 
-    store.replace_window(theirs, rows, WHEN)
+    store.replace_window(file_at(theirs), rows, WHEN)
     assert ours.read_bytes() == theirs.read_bytes()
     assert ctx.corrections == [Correction("usage", "m.jsonl", "2026-09-20", {"n": 1}, {"n": 2})]
 
@@ -1052,9 +1065,11 @@ def test_a_window_never_puts_a_failure_row_over_a_good_or_partial_row(
     """ADR: a failure never replaces good data; the file is still rewritten, as the script's window is."""
     theirs, ours = seed(tmp_path, existing + b'{"date": "2026-09-01", "status": "ok"}\n')
 
-    store.write_window(ours, [WINDOW_FAILURE, {"date": "2026-09-21", "status": "ok"}], run_context(tmp_path), "usage")
+    store.write_window(
+        file_at(ours), [WINDOW_FAILURE, {"date": "2026-09-21", "status": "ok"}], run_context(tmp_path), "usage"
+    )
 
-    store.replace_window(theirs, [{"date": "2026-09-21", "status": "ok"}], WHEN)
+    store.replace_window(file_at(theirs), [{"date": "2026-09-21", "status": "ok"}], WHEN)
     assert ours.read_bytes() == theirs.read_bytes()
     assert f"WARN: kept the {held} row for 2026-09-22 in m.jsonl; fetch_failed not recorded" in logged.messages
 
@@ -1065,9 +1080,9 @@ def test_a_window_never_puts_a_failure_row_over_a_good_or_partial_row(
 def test_a_window_writes_a_failure_row_where_no_good_row_holds_its_date(tmp_path: Path, existing: bytes | None) -> None:
     theirs, ours = seed(tmp_path, existing)
 
-    store.write_window(ours, [WINDOW_FAILURE], run_context(tmp_path), "usage")
+    store.write_window(file_at(ours), [WINDOW_FAILURE], run_context(tmp_path), "usage")
 
-    store.replace_window(theirs, [WINDOW_FAILURE], WHEN)
+    store.replace_window(file_at(theirs), [WINDOW_FAILURE], WHEN)
     assert ours.read_bytes() == theirs.read_bytes()
 
 
@@ -1076,7 +1091,7 @@ def test_nested_values_in_another_key_order_are_no_correction(tmp_path: Path) ->
     path.write_text('{"date": "2026-09-22", "top": [{"ref": "a", "count": 1}]}\n', encoding="utf-8")
     ctx = run_context(tmp_path)
 
-    store.write_good(path, {"date": "2026-09-22", "top": [{"count": 1, "ref": "a"}]}, ctx, "src")
+    store.write_good(file_at(path), {"date": "2026-09-22", "top": [{"count": 1, "ref": "a"}]}, ctx, "src")
 
     assert ctx.corrections == []
 
@@ -1087,9 +1102,9 @@ def test_a_window_with_a_date_twice_writes_as_replace_window_does_and_corrects_t
     theirs, ours = seed(tmp_path, existing)
     ctx = run_context(tmp_path)
 
-    store.write_window(ours, rows, ctx, "usage")
+    store.write_window(file_at(ours), rows, ctx, "usage")
 
-    store.replace_window(theirs, rows, WHEN)
+    store.replace_window(file_at(theirs), rows, WHEN)
     assert ours.read_bytes() == theirs.read_bytes()
     assert ctx.corrections == [Correction("usage", "m.jsonl", "2026-09-20", {"n": 1}, {"n": 3})]
 
@@ -1109,7 +1124,7 @@ def test_a_fill_adds_the_fields_a_past_good_row_lacks_in_place_and_keeps_its_cap
     path.write_text(f"{old}\n" + '{"date": "2026-09-22", "issues": {"open": 3, "opened_total": 5}}\n', encoding="utf-8")
     ctx = run_context(tmp_path)
 
-    store.fill(path, [{"date": "2026-09-21", "issues": {"opened_total": 4, "closed_total": 1}}], ctx)
+    store.fill(file_at(path), [{"date": "2026-09-21", "issues": {"opened_total": 4, "closed_total": 1}}], ctx)
 
     filled = (
         '{"date": "2026-09-21", "issues": {"open": 2, "opened_total": 4, "closed_total": 1}, "repo": {"stars": 1}, '
@@ -1127,7 +1142,7 @@ def test_a_field_a_fill_adds_to_a_row_comes_before_its_captured_at_which_stays_l
     path = tmp_path / "m.jsonl"
     path.write_text('{"date": "2026-09-21", "repo": {"stars": 1}, "captured_at": "2026-09-21T23:00:00Z"}\n', "utf-8")
 
-    store.fill(path, [{"date": "2026-09-21", "issues": {"opened_total": 4}}], run_context(tmp_path))
+    store.fill(file_at(path), [{"date": "2026-09-21", "issues": {"opened_total": 4}}], run_context(tmp_path))
 
     added = '"issues": {"opened_total": 4}, "captured_at": "2026-09-21T23:00:00Z"}\n'
     assert path.read_text(encoding="utf-8") == '{"date": "2026-09-21", "repo": {"stars": 1}, ' + added
@@ -1153,7 +1168,7 @@ def test_a_fill_never_changes_a_value_a_row_has_nor_a_failure_or_partial_row(
     path.write_text(existing, encoding="utf-8")
     ctx = run_context(tmp_path)
 
-    store.fill(path, [{"date": "2026-09-21", "issues": {"opened_total": 4, "closed_total": 1}}], ctx)
+    store.fill(file_at(path), [{"date": "2026-09-21", "issues": {"opened_total": 4, "closed_total": 1}}], ctx)
 
     assert path.read_text(encoding="utf-8") == existing
     assert (ctx.corrections, logged.messages) == ([], [])
@@ -1166,7 +1181,7 @@ def test_a_fill_adds_a_row_for_a_day_with_none_marked_backfilled_in_date_order(t
     ctx = run_context(tmp_path)
 
     days = ("2026-09-21", "2026-09-17", "2026-09-18")
-    store.fill(path, [{"date": day, "total": n, "answered": None} for n, day in enumerate(days)], ctx)
+    store.fill(file_at(path), [{"date": day, "total": n, "answered": None} for n, day in enumerate(days)], ctx)
 
     stamp = captured(WHEN)
     added = [
@@ -1184,9 +1199,9 @@ def test_a_fill_with_nothing_missing_writes_nothing(tmp_path: Path, monkeypatch:
     path = tmp_path / "m.jsonl"
     path.write_text('{"date": "2026-09-21", "total": 3}\n', encoding="utf-8")
     writes: list[Path] = []
-    monkeypatch.setattr(store, "write_text", lambda p, text: writes.append(p))
+    monkeypatch.setattr(jsonl, "write_text", lambda p, text: writes.append(p))
 
-    store.fill(path, [{"date": "2026-09-21", "total": 4}], run_context(tmp_path))
+    store.fill(file_at(path), [{"date": "2026-09-21", "total": 4}], run_context(tmp_path))
 
     assert writes == []
 
@@ -1194,9 +1209,11 @@ def test_a_fill_with_nothing_missing_writes_nothing(tmp_path: Path, monkeypatch:
 def test_a_fill_of_a_missing_file_adds_its_rows(tmp_path: Path) -> None:
     path = tmp_path / "m.jsonl"
 
-    store.fill(path, [{"date": "2026-09-22", "total": 4}], run_context(tmp_path))
+    store.fill(file_at(path), [{"date": "2026-09-22", "total": 4}], run_context(tmp_path))
 
-    assert store.rows(path) == [{"date": "2026-09-22", "total": 4, "backfilled": True, "captured_at": captured(WHEN)}]
+    assert store.rows(file_at(path)) == [
+        {"date": "2026-09-22", "total": 4, "backfilled": True, "captured_at": captured(WHEN)}
+    ]
 
 
 @pytest.mark.parametrize(
@@ -1206,7 +1223,7 @@ def test_a_fill_of_a_missing_file_adds_its_rows(tmp_path: Path) -> None:
 )
 def test_a_fill_refuses_a_row_not_a_good_one_for_a_past_day(tmp_path: Path, row: Row) -> None:
     with pytest.raises(ValueError, match="fill"):
-        store.fill(tmp_path / "m.jsonl", [row], run_context(tmp_path))
+        store.fill(file_at(tmp_path / "m.jsonl"), [row], run_context(tmp_path))
 
 
 @pytest.mark.parametrize(
@@ -1247,7 +1264,9 @@ def test_a_fill_fills_a_null_in_a_backfilled_row_with_a_value_but_never_a_nights
     ctx = run_context(tmp_path)
 
     store.fill(
-        path, [{"date": day, "total": 9, "comments": 4, "recent": None} for day in ("2026-09-20", "2026-09-21")], ctx
+        file_at(path),
+        [{"date": day, "total": 9, "comments": 4, "recent": None} for day in ("2026-09-20", "2026-09-21")],
+        ctx,
     )
 
     filled = '{"date": "2026-09-20", "total": 1, "comments": 4, "recent": null, "backfilled": true}\n'
@@ -1266,7 +1285,7 @@ def test_a_fill_by_a_second_key_adds_and_fills_each_keys_row_on_its_own(tmp_path
     ctx = run_context(tmp_path)
 
     rows = [{"date": "2026-09-21", "topic_id": t, "replies": 1, "views": None} for t in (1, 2)]
-    store.fill(path, rows, ctx, store.SECOND_KEY)
+    store.fill(file_at(path), rows, ctx, store.SECOND_KEY)
 
     lines = existing.splitlines(keepends=True)
     filled = '{"date": "2026-09-21", "topic_id": 1, "replies": 3, "views": null}\n'
@@ -1316,7 +1335,7 @@ def test_the_days_to_rebuild_run_from_the_start_to_the_day_before_the_first_row_
     path = tmp_path / "m.jsonl"
     path.write_text(existing, encoding="utf-8")
 
-    found = store.rebuild_days(path, start, run_context(tmp_path), where)
+    found = store.rebuild_days(file_at(path), start, run_context(tmp_path), where)
 
     assert [day.isoformat() for day in found] == days
 
@@ -1349,7 +1368,7 @@ def test_a_recompute_replaces_a_past_good_rows_values_in_place_and_records_the_c
     path.write_text(old + later, encoding="utf-8")
     ctx = run_context(tmp_path)
 
-    store.recompute(path, [{"date": "2026-09-21", "n": 5, "m": 2, "added": None}], ctx, "src")
+    store.recompute(file_at(path), [{"date": "2026-09-21", "n": 5, "m": 2, "added": None}], ctx, "src")
 
     new = f'{{"date": "2026-09-21", "n": 5, "kept": "x", "m": 2, "added": null, "captured_at": "{captured(WHEN)}"}}\n'
     assert path.read_text(encoding="utf-8") == new + later
@@ -1364,10 +1383,10 @@ def test_a_recompute_leaves_a_row_with_the_same_values_and_writes_nothing_when_n
     path = tmp_path / "m.jsonl"
     path.write_text('{"date": "2026-09-21", "n": {"a": 1, "b": 2}, "captured_at": "x"}\n', encoding="utf-8")
     writes: list[Path] = []
-    monkeypatch.setattr(store, "write_text", lambda p, text: writes.append(p))
+    monkeypatch.setattr(jsonl, "write_text", lambda p, text: writes.append(p))
     ctx = run_context(tmp_path)
 
-    store.recompute(path, [{"date": "2026-09-21", "n": {"b": 2, "a": 1}}], ctx, "src")
+    store.recompute(file_at(path), [{"date": "2026-09-21", "n": {"b": 2, "a": 1}}], ctx, "src")
 
     assert (writes, ctx.corrections, logged.messages) == ([], [], [])
 
@@ -1388,7 +1407,7 @@ def test_a_recompute_replaces_a_failure_or_partial_row_with_the_good_row_and_no_
     path.write_text(existing + '{"date": "2026-09-22", "n": 3}\n', encoding="utf-8")
     ctx = run_context(tmp_path)
 
-    store.recompute(path, [{"date": "2026-09-21", "n": 2}], ctx, "src")
+    store.recompute(file_at(path), [{"date": "2026-09-21", "n": 2}], ctx, "src")
 
     replaced = f'{{"date": "2026-09-21", "n": 2, "captured_at": "{captured(WHEN)}"}}\n'
     assert path.read_text(encoding="utf-8") == replaced + '{"date": "2026-09-22", "n": 3}\n'
@@ -1405,7 +1424,7 @@ def test_a_recompute_adds_a_row_for_a_day_with_none_marked_backfilled_in_date_or
     ctx = run_context(tmp_path)
 
     days = ("2026-09-21", "2026-09-18", "2026-09-20", "2026-09-22")
-    store.recompute(path, [{"date": day, "n": n} for n, day in zip((4, 1, 3, 5), days)], ctx, "src")
+    store.recompute(file_at(path), [{"date": day, "n": n} for n, day in zip((4, 1, 3, 5), days)], ctx, "src")
 
     lines = existing.splitlines(keepends=True)
     stamp = captured(WHEN)
@@ -1426,7 +1445,7 @@ def test_a_recompute_adds_a_row_for_a_day_with_none_marked_backfilled_in_date_or
 def test_a_recompute_refuses_a_row_not_a_good_one_for_a_past_day(tmp_path: Path, row: Row) -> None:
     """The run date's row is the night's reading, written by write_good."""
     with pytest.raises(ValueError, match="recompute"):
-        store.recompute(tmp_path / "m.jsonl", [row], run_context(tmp_path), "src")
+        store.recompute(file_at(tmp_path / "m.jsonl"), [row], run_context(tmp_path), "src")
 
 
 @pytest.mark.parametrize(
@@ -1459,6 +1478,6 @@ def test_the_days_to_recompute_run_from_the_start_to_the_day_before_the_run_date
     path = tmp_path / "m.jsonl"
     path.write_text(existing, encoding="utf-8")
 
-    found = store.recompute_days(path, start, run_context(tmp_path))
+    found = store.recompute_days(file_at(path), start, run_context(tmp_path))
 
     assert [day.isoformat() for day in found] == days

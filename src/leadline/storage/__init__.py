@@ -10,6 +10,7 @@ conformance suite every backend passes.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Iterable, Protocol
 
 
@@ -27,3 +28,17 @@ class Backend(Protocol):
     def files(self) -> list[str]:
         """The names of the files that exist, in order."""
         ...
+
+
+@dataclass(frozen=True)
+class File:
+    """A file of a backend: what `store` reads and writes, and what a source holds in place of a path."""
+
+    backend: Backend
+    name: str
+
+    def read_lines(self) -> list[str]:
+        return self.backend.read_lines(self.name)
+
+    def write_lines(self, lines: Iterable[str]) -> None:
+        self.backend.write_lines(self.name, lines)

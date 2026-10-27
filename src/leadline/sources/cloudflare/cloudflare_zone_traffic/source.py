@@ -5,13 +5,13 @@ from __future__ import annotations
 import json
 import os
 from datetime import date, timedelta
-from pathlib import Path
 from typing import Any, Dict
 
 from leadline import store
 from leadline.context import Context, Finding
 from leadline.http import HttpError, Response
 from leadline.sources.cloudflare.cloudflare_zone_traffic import spec
+from leadline.storage import File
 
 ENV: tuple[str, ...] = ("CLOUDFLARE_API_TOKEN",)
 LAGGING = True  # yesterday's row is the newest a run can write
@@ -242,10 +242,10 @@ def _read_list(zone: dict[str, Any], dimension: str, top: int) -> dict[str, dict
 
 def _collect(ctx: Context, entry: Any) -> None:
     label, zone, top = entry["label"], entry["zone"], entry.get("top", spec.TOP)
-    path = ctx.out_dir / spec.file_name(entry)
+    file = ctx.file(spec.file_name(entry))
     yesterday = ctx.date - timedelta(days=1)
     window_start = yesterday - timedelta(days=spec.WINDOW_DAYS - 1)
-    existing = store.rows_by_date(path)
+    existing = store.rows_by_date(file)
     # The year is read once: until the file holds a row older than the 28 days every run heals.
     older = any((parsed := store.parse_date(day)) is not None and parsed < window_start for day in existing)
     start = window_start if older else yesterday - timedelta(days=spec.HISTORY_DAYS - 1)
@@ -254,24 +254,24 @@ def _collect(ctx: Context, entry: Any) -> None:
         daily = _read_daily(_answer(_post(ctx, spec.daily_query(zone, start, yesterday))))
     except HttpError as e:
         ctx.log.info("ERROR: Cloudflare %s failed (HTTP %s)", label, e.http_code)
-        ctx.record_unfixable(spec.NAME, path.name, e, f"{label}: HTTP {e.http_code} from Cloudflare's GraphQL API")
+        ctx.record_unfixable(spec.NAME, file.name, e, f"{label}: HTTP {e.http_code} from Cloudflare's GraphQL API")
         failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": "graphql request failed"}
-        _write_failure(ctx, path, {"date": yesterday.isoformat(), "zone": label, **failure})
+        _write_failure(ctx, file, {"date": yesterday.isoformat(), "zone": label, **failure})
         return
     except _FailureRowError as e:
-        _write_failure(ctx, path, {"date": yesterday.isoformat(), "zone": label, **e.fields})
+        _write_failure(ctx, file, {"date": yesterday.isoformat(), "zone": label, **e.fields})
         return
     except _UnreadableError:
         fields = {"status": "parse_failed", "reason": UNEXPECTED}
-        _write_failure(ctx, path, {"date": yesterday.isoformat(), "zone": label, **fields})
+        _write_failure(ctx, file, {"date": yesterday.isoformat(), "zone": label, **fields})
         return
-    requests, failed = _read_requests(ctx, zone, label, path.name, window_start, yesterday, top)
+    requests, failed = _read_requests(ctx, zone, label, file.name, window_start, yesterday, top)
     rows, partial = _rows(label, daily, requests, failed, existing, window_start, yesterday)
     if rows:
         ctx.log.info("Cloudflare %s: %d day(s) %s..%s", label, len(rows), rows[0]["date"], rows[-1]["date"])
-        store.write_window(path, rows, ctx, spec.NAME)
+        store.write_window(file, rows, ctx, spec.NAME)
     if partial is not None:
-        store.write_partial(path, partial, failed, ctx, spec.NAME)
+        store.write_partial(file, partial, failed, ctx, spec.NAME)
 
 
 def _read_requests(
@@ -393,7 +393,7 @@ def _requests_of(
     return fields
 
 
-def _write_failure(ctx: Context, path: Path, row: dict[str, Any]) -> None:
+def _write_failure(ctx: Context, file: File, row: dict[str, Any]) -> None:
     """The failure row, logged; store keeps a good row in its place."""
     ctx.log.info("Cloudflare %s result: %s", row["zone"], json.dumps(row))
-    store.write_failure(path, row, ctx.now)
+    store.write_failure(file, row, ctx.now)

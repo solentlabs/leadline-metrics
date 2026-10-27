@@ -7,7 +7,6 @@ import statistics
 from bisect import bisect_right
 from collections import defaultdict
 from datetime import date, datetime
-from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
@@ -17,6 +16,7 @@ from leadline.context import Context, Finding
 from leadline.http import HttpError, Response, UnusableError, counts, read_json, unexpected
 from leadline.sources.github import api as github
 from leadline.sources.github.github_issues import regions, spec
+from leadline.storage import File
 
 ENV: tuple[str, ...] = (github.CREDENTIAL,)
 LAGGING = False
@@ -79,7 +79,7 @@ def _check_label(ctx: Context, repo: str, label: str) -> Finding:
 
 
 def _collect(ctx: Context, entry: Any) -> None:
-    repo, path, day = entry["repo"], ctx.out_dir / spec.file_name(entry), ctx.date.isoformat()
+    repo, file, day = entry["repo"], ctx.file(spec.file_name(entry)), ctx.date.isoformat()
     ctx.log.info("Collecting GitHub issues snapshot for %s...", repo)
     base = f"{github.API}/repos/{repo}"
     kind = "repository"
@@ -93,24 +93,24 @@ def _collect(ctx: Context, entry: Any) -> None:
         ctx.log.info("Fetched %d page(s) of all issues for %s", len(all_pages), repo)
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch GitHub %s for %s: HTTP %s", kind, repo, e.http_code)
-        ctx.record_unfixable(spec.NAME, path.name, e, f"{repo}: HTTP {e.http_code} from GitHub's {kind} API")
+        ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: HTTP {e.http_code} from GitHub's {kind} API")
         failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": f"{kind} request failed"}
-        store.write_failure(path, {"date": day, **failure}, ctx.now)
+        store.write_failure(file, {"date": day, **failure}, ctx.now)
         return
     try:
         stats = counts("repository", read_json("repository", repository), STATS)
         open_items, all_items = _items("open issues", open_pages), _items("all issues", all_pages)
     except UnusableError as e:
         ctx.log.info("ERROR: Failed to process GitHub issues snapshot for %s: %s", repo, e)
-        store.write_failure(path, {"date": day, "status": "parse_failed", "reason": str(e)}, ctx.now)
+        store.write_failure(file, {"date": day, "status": "parse_failed", "reason": str(e)}, ctx.now)
         return
     tallies = {}
     if spec.by_region(entry):
-        tallies = regions.count(ctx, entry, path, stats, lambda field: _listed(ctx, base, field), HISTORY_LIMIT)
-    _rebuild(ctx, path, all_items, entry.get("kinds"), base, stats, tallies)
-    row = _snapshot(ctx, entry, stats, open_items, all_items, _previous(path, day))
+        tallies = regions.count(ctx, entry, file, stats, lambda field: _listed(ctx, base, field), HISTORY_LIMIT)
+    _rebuild(ctx, file, all_items, entry.get("kinds"), base, stats, tallies)
+    row = _snapshot(ctx, entry, stats, open_items, all_items, _previous(file, day))
     row["repo"] = {**stats, **regions.on(tallies, ctx.date)}
-    store.write_good(path, row, ctx, spec.NAME)
+    store.write_good(file, row, ctx, spec.NAME)
 
 
 def _issues(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -174,7 +174,7 @@ def _open_by_kind(
 
 def _rebuild(
     ctx: Context,
-    path: Path,
+    file: File,
     items: list[dict[str, Any]],
     kinds: list[dict[str, str]] | None,
     base: str,
@@ -193,7 +193,7 @@ def _rebuild(
     """
     issues_ever = _issues(items)
     prs_ever = [i for i in items if "pull_request" in i]
-    days = [day for day in map(store.parse_date, store.rows_by_date(path)) if day is not None and day < ctx.date]
+    days = [day for day in map(store.parse_date, store.rows_by_date(file)) if day is not None and day < ctx.date]
 
     def counted(day: date) -> dict[str, Any]:
         """The day's totals, and its issues opened by kind with `kinds`."""
@@ -201,12 +201,12 @@ def _rebuild(
         return {**_totals(ctx, issues_ever, day), **by_kind}
 
     if kinds:  # before the fill, which would add a kind a stored row lacks inside its counts
-        _recompute_kinds(ctx, path, issues_ever, kinds)
+        _recompute_kinds(ctx, file, issues_ever, kinds)
     rebuilt = {day: {"date": day.isoformat(), "issues": counted(day)} for day in days}
     first = min((github.local_date(ctx, i["created_at"]) for i in issues_ever), default=None)
-    history = _history(ctx, path, base, stats, store.rebuild_days(path, first, ctx))
+    history = _history(ctx, file, base, stats, store.rebuild_days(file, first, ctx))
     first = min([day for day in [first, *(dates[0] for _, dates in history.values() if dates)] if day], default=None)
-    for day in store.rebuild_days(path, first, ctx):
+    for day in store.rebuild_days(file, first, ctx):
         totals = counted(day)
         prs = _totals(ctx, prs_ever, day)
         opened = {
@@ -219,17 +219,17 @@ def _rebuild(
         counted_repo = {**_repo_on(history, day), **regions.on(tallies, day)}
         if counted_repo:
             rebuilt[day] = {"date": row["date"], "repo": counted_repo, "issues": row["issues"]}
-    store.fill(path, [rebuilt[day] for day in sorted(rebuilt)], ctx)
+    store.fill(file, [rebuilt[day] for day in sorted(rebuilt)], ctx)
     if kinds:  # after the fill, which gives a row its opened_by_kind, so open_by_kind comes after it
-        _recompute_open_kinds(ctx, path, issues_ever, kinds)
+        _recompute_open_kinds(ctx, file, issues_ever, kinds)
 
 
-def _anchor(path: Path, ctx: Context, field: str) -> date | None:
+def _anchor(file: File, ctx: Context, field: str) -> date | None:
     """The date of the file's first past row a night wrote (not marked backfilled) with a real count of `field`
     (`repo.stars`): the days before it are the ones a fill gives it. None without one."""
     found = [
         day
-        for row in store.rows(path)
+        for row in store.rows(file)
         if store.is_good(row) and not row.get(store.BACKFILLED) and is_count(store.value(row, f"repo.{field}"))
         for day in [store.parse_date(row.get("date"))]
         if day is not None and day < ctx.date
@@ -269,7 +269,7 @@ def _listed(ctx: Context, base: str, field: str) -> list[regions.Listed]:
 
 
 def _history(
-    ctx: Context, path: Path, base: str, stats: dict[str, int], rebuilt_days: list[date]
+    ctx: Context, file: File, base: str, stats: dict[str, int], rebuilt_days: list[date]
 ) -> dict[str, tuple[date, list[date]]]:
     """For each of `HISTORIES` the fill is due for: the day its count first has a real one in the file, and the dates
     the repo's stars or forks happened, each listed once and only when a past row lacks the count.
@@ -280,9 +280,9 @@ def _history(
     failed fill costs the run's row nothing. A star or fork since removed is no longer listed, so the early counts of
     a repo that lost some can be low.
     """
-    stored, found = store.rows_by_date(path), {}
+    stored, found = store.rows_by_date(file), {}
     for field in HISTORIES:
-        anchor = _anchor(path, ctx, field)
+        anchor = _anchor(file, ctx, field)
         days = {day for day in map(store.parse_date, stored) if day is not None} | set(rebuilt_days)
         if anchor is None or not any(day < anchor and _lacks(stored.get(day.isoformat()), field) for day in days):
             continue
@@ -291,9 +291,9 @@ def _history(
                 raise UnusableError(f"{stats[field]} {field} are more than the {HISTORY_LIMIT} it reads")
             found[field] = (anchor, [listed.day for listed in _listed(ctx, base, field)] if stats[field] else [])
         except HttpError as e:
-            ctx.log.info("Left the %s of %s unfilled: HTTP %s", field, path.name, e.http_code)
+            ctx.log.info("Left the %s of %s unfilled: HTTP %s", field, file.name, e.http_code)
         except UnusableError as e:
-            ctx.log.info("Left the %s of %s unfilled: %s", field, path.name, e)
+            ctx.log.info("Left the %s of %s unfilled: %s", field, file.name, e)
     return found
 
 
@@ -303,12 +303,12 @@ def _repo_on(history: dict[str, tuple[date, list[date]]], day: date) -> dict[str
     return {field: bisect_right(dates, day) for field, (anchor, dates) in history.items() if day < anchor}
 
 
-def _recompute_kinds(ctx: Context, path: Path, issues_ever: list[dict[str, Any]], kinds: list[dict[str, str]]) -> None:
+def _recompute_kinds(ctx: Context, file: File, issues_ever: list[dict[str, Any]], kinds: list[dict[str, str]]) -> None:
     """Count again, under `kinds`, the issues opened by kind of each past good row that has them (store.recompute;
     ADR: derived history follows today's rules): the rest of its `issues` is kept, and a changed count is a
     recorded correction. A row without the counts, or with a null, is left to the fill."""
     rows = []
-    for stamp, row in store.rows_by_date(path).items():
+    for stamp, row in store.rows_by_date(file).items():
         day, issues = store.parse_date(stamp), row.get("issues")
         if day is None or day >= ctx.date or not store.is_good(row) or not isinstance(issues, dict):
             continue
@@ -317,18 +317,18 @@ def _recompute_kinds(ctx: Context, path: Path, issues_ever: list[dict[str, Any]]
         rows.append(
             {"date": stamp, "issues": {**issues, "opened_by_kind": _opened_by_kind(ctx, issues_ever, kinds, day)}}
         )
-    store.recompute(path, rows, ctx, spec.NAME)
+    store.recompute(file, rows, ctx, spec.NAME)
 
 
 def _recompute_open_kinds(
-    ctx: Context, path: Path, issues_ever: list[dict[str, Any]], kinds: list[dict[str, str]]
+    ctx: Context, file: File, issues_ever: list[dict[str, Any]], kinds: list[dict[str, str]]
 ) -> None:
     """Give each past good row its open issues by kind, counted from the issues' dates as of its day, and count again
     the ones that have them (store.recompute; ADR: derived history follows today's rules); a changed count is a
     recorded correction. A row whose `open` the counts don't add up to, or that has none, is left as it is, and said
     so: the dates can't tell what that night's snapshot saw (an issue reopened, deleted or transferred since)."""
     rows, unmatched = [], []
-    for stamp, row in store.rows_by_date(path).items():
+    for stamp, row in store.rows_by_date(file).items():
         day, issues = store.parse_date(stamp), row.get("issues")
         if day is None or day >= ctx.date or not store.is_good(row) or not isinstance(issues, dict):
             continue
@@ -338,12 +338,12 @@ def _recompute_open_kinds(
                 unmatched.append(stamp)
             continue
         rows.append({"date": stamp, "issues": {**issues, "open_by_kind": counts}})
-    store.recompute(path, rows, ctx, spec.NAME)
+    store.recompute(file, rows, ctx, spec.NAME)
     if unmatched:
         ctx.log.info(
             "Left %d past row(s) of %s without open_by_kind: their open doesn't match the issues' dates (%s to %s)",
             len(unmatched),
-            path.name,
+            file.name,
             min(unmatched),
             max(unmatched),
         )
@@ -398,9 +398,9 @@ def _earlier(row: dict[str, Any], day: str) -> bool:
     return True
 
 
-def _previous(path: Path, day: str) -> dict[str, Any] | None:
+def _previous(file: File, day: str) -> dict[str, Any] | None:
     """The previous snapshot: the last earlier good row in the file, in file order."""
-    earlier = [row for row in store.rows(path) if _earlier(row, day)]
+    earlier = [row for row in store.rows(file) if _earlier(row, day)]
     return earlier[-1] if earlier else None
 
 

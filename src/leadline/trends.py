@@ -15,7 +15,6 @@ import json
 from bisect import bisect_right
 from collections import Counter
 from datetime import date, timedelta
-from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping, Sequence
 
 from leadline import store
@@ -31,6 +30,7 @@ from leadline.config import (
     version_key,
 )
 from leadline.context import Reporter
+from leadline.storage import File
 
 SOURCE = "trends"  # what a failure here is recorded critical as
 DATA = "trends.json"
@@ -47,7 +47,7 @@ def write(ctx: Reporter, sections: Sequence[Section], health: str, projects: Any
     atomically, each on its own. A file that can't be written, or a bug building them, is logged and critical, and
     never raised."""
     try:
-        data = build(ctx.out_dir, ctx.date, sections, health, projects)
+        data = build(ctx.file, ctx.date, sections, health, projects)
         texts = {DATA: json.dumps(data, ensure_ascii=False) + "\n"}
         if pages is None:
             texts[PAGE] = page(data)
@@ -213,14 +213,14 @@ def _page_health(health: Mapping[str, Any] | None, sections: Sequence[Mapping[st
 
 
 def build(
-    folder: Path,
+    files: Callable[[str], File],
     day: date,
     sections: Sequence[Section],
     health: str,
     projects: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """trends.json's content (docs/TRENDS.md): the format, the run date `day`, the newest row of `health` (the
-    health file), and each section's series, from the files in `folder`: each of `projects` (valid) in turn, its
+    health file), and each section's series, from the files `files` opens: each of `projects` (valid) in turn, its
     sections in its list's order, then the sections in none, in config order."""
     listed = [(p["name"], *_listed(item)) for p in projects or () for item in p["sections"]]
     project = {title: name for name, title, _ in listed}
@@ -231,9 +231,9 @@ def build(
     return {
         "format": FORMAT,
         "date": day.isoformat(),
-        "health": _health(folder / health),
+        "health": _health(files(health)),
         "sections": [
-            _section(folder, section, project.get(section.title), titled.get(section.title), alike)
+            _section(files, section, project.get(section.title), titled.get(section.title), alike)
             for section in ordered
         ],
     }
@@ -253,9 +253,9 @@ def _heading(section: Section, project: str | None, alike: Counter[tuple[str, st
     return label if section.name is None or alone else f"{label} · {section.name}"
 
 
-def _health(path: Path) -> dict[str, Any] | None:
+def _health(file: File) -> dict[str, Any] | None:
     """The newest health row's findings, its checks at warn or error; None with no health row."""
-    rows = store.dated_rows(path).good
+    rows = store.dated_rows(file).good
     if not rows:
         return None
     row = rows[-1]
@@ -267,11 +267,15 @@ def _health(path: Path) -> dict[str, Any] | None:
 
 
 def _section(
-    folder: Path, section: Section, project: str | None, title: str | None, alike: Counter[tuple[str, str, str | None]]
+    files: Callable[[str], File],
+    section: Section,
+    project: str | None,
+    title: str | None,
+    alike: Counter[tuple[str, str, str | None]],
 ) -> dict[str, Any]:
     """The section, in `project`, headed by the project's `title` for it or its own (`_heading`): its good rows, one a
     date, oldest first, their dates once, and a series for each field shown."""
-    rows = store.dated_rows(folder / section.file, section.where, section.hide).good
+    rows = store.dated_rows(files(section.file), section.where, section.hide).good
     shown_all = [*section.shown, *section.charts]
     stacks = {shown.field for shown in shown_all if shown.kind == "breakdown"}
     for shown in shown_all:

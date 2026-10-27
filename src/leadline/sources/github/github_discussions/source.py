@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import date
-from pathlib import Path
 from typing import Any
 
 from leadline import store
@@ -13,6 +12,7 @@ from leadline.context import Context, Finding
 from leadline.http import HttpError, UnusableError, unexpected
 from leadline.sources.github import api as github
 from leadline.sources.github.github_discussions import spec
+from leadline.storage import File
 
 ENV: tuple[str, ...] = (github.CREDENTIAL,)
 LAGGING = False
@@ -68,29 +68,29 @@ def check(ctx: Context, cfg: Any) -> list[Finding]:
 
 
 def _collect(ctx: Context, entry: Any) -> None:
-    repo, path, day = entry["repo"], ctx.out_dir / spec.file_name(entry), ctx.date.isoformat()
+    repo, file, day = entry["repo"], ctx.file(spec.file_name(entry)), ctx.date.isoformat()
     ctx.log.info("Collecting GitHub discussions for %s...", repo)
     try:
         total, nodes = _discussions(github.graphql(ctx, KIND, QUERY, github.owner_and_name(repo)))
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch discussions for %s: HTTP %s", repo, e.http_code)
-        ctx.record_unfixable(spec.NAME, path.name, e, f"{repo}: HTTP {e.http_code} from GitHub's GraphQL API")
+        ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: HTTP {e.http_code} from GitHub's GraphQL API")
         failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": f"{KIND} request failed"}
     except github.GraphqlError as e:
         ctx.log.info("ERROR: Failed to fetch discussions for %s: %s", repo, e)
-        ctx.record_unfixable(spec.NAME, path.name, e, f"{repo}: GitHub's GraphQL API answered: {e}")
+        ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: GitHub's GraphQL API answered: {e}")
         failure = {"status": "graphql_error", "reason": str(e)}
     except UnusableError as e:
         ctx.log.info("ERROR: Failed to parse discussions for %s: %s", repo, e)
         failure = {"status": "parse_failed", "reason": str(e)}
     else:
-        _rebuild(ctx, path, repo, entry["maintainer"], total, nodes)
-        store.write_good(path, _row(day, entry["maintainer"], total, nodes), ctx, spec.NAME)
+        _rebuild(ctx, file, repo, entry["maintainer"], total, nodes)
+        store.write_good(file, _row(day, entry["maintainer"], total, nodes), ctx, spec.NAME)
         return
-    store.write_failure(path, {"date": day, **failure}, ctx.now)
+    store.write_failure(file, {"date": day, **failure}, ctx.now)
 
 
-def _rebuild(ctx: Context, path: Path, repo: str, maintainer: str, total: int, nodes: list[dict[str, Any]]) -> None:
+def _rebuild(ctx: Context, file: File, repo: str, maintainer: str, total: int, nodes: list[dict[str, Any]]) -> None:
     """Write a row for each day from the first discussion's to the day before the file's first row (store.fill).
 
     Each holds what the discussions opened by the end of that day (in the run's offset) tell: their total, who
@@ -110,8 +110,8 @@ def _rebuild(ctx: Context, path: Path, repo: str, maintainer: str, total: int, n
                 "Not rebuilding past discussions for %s: discussion #%s has no creation time", repo, node["number"]
             )
             return
-    days = store.rebuild_days(path, min(created, default=None), ctx)
-    stored = store.rows_by_date(path)
+    days = store.rebuild_days(file, min(created, default=None), ctx)
+    stored = store.rows_by_date(file)
     commented = None
     if any(store.lacks(stored.get(day.isoformat()), "total_comments") for day in days):
         commented = _comment_days(ctx, repo, {node["number"] for node in nodes})
@@ -122,7 +122,7 @@ def _rebuild(ctx: Context, path: Path, repo: str, maintainer: str, total: int, n
         if commented is not None:
             row["total_comments"] = sum(1 for when in commented if when <= day)
         rows.append(row)
-    store.fill(path, rows, ctx)
+    store.fill(file, rows, ctx)
 
 
 def _comment_days(ctx: Context, repo: str, numbers: set[Any]) -> list[date] | None:

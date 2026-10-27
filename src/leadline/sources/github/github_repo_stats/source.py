@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from leadline import store
@@ -10,6 +9,7 @@ from leadline.context import Context, Finding
 from leadline.http import HttpError, UnusableError, counts, read_json, unexpected
 from leadline.sources.github import api as github
 from leadline.sources.github.github_repo_stats import spec
+from leadline.storage import File
 
 ENV: tuple[str, ...] = (github.CREDENTIAL,)
 LAGGING = False
@@ -43,7 +43,7 @@ def check(ctx: Context, cfg: Any) -> list[Finding]:
     return findings
 
 
-def _traffic(ctx: Context, repo: str, path: Path, kind: str) -> tuple[dict[str, int | None], str | None]:
+def _traffic(ctx: Context, repo: str, file: File, kind: str) -> tuple[dict[str, int | None], str | None]:
     """The row's fields for `kind`, and None; or, where they failed or can't be used, nulls and the reason."""
     fields = {f"{kind}_14d": "count", f"{kind}_unique_14d": "uniques"}
     try:
@@ -51,7 +51,7 @@ def _traffic(ctx: Context, repo: str, path: Path, kind: str) -> tuple[dict[str, 
         return dict(counts(kind, read_json(kind, answer), fields)), None
     except HttpError as e:
         ctx.log.info("WARN: Failed to fetch GitHub %s for %s: HTTP %s", kind, repo, e.http_code)
-        ctx.record_unfixable(spec.NAME, path.name, e, f"{repo}: HTTP {e.http_code} from GitHub's traffic API")
+        ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: HTTP {e.http_code} from GitHub's traffic API")
         reason = f"{kind} request failed (HTTP {e.http_code})"
     except UnusableError as e:
         ctx.log.info("WARN: Failed to parse GitHub %s for %s: %s", kind, repo, e)
@@ -60,21 +60,21 @@ def _traffic(ctx: Context, repo: str, path: Path, kind: str) -> tuple[dict[str, 
 
 
 def _collect(ctx: Context, entry: Any) -> None:
-    repo, path, day = entry["repo"], ctx.out_dir / spec.file_name(entry), ctx.date.isoformat()
+    repo, file, day = entry["repo"], ctx.file(spec.file_name(entry)), ctx.date.isoformat()
     ctx.log.info("Collecting GitHub stats for %s...", repo)
     try:
         repository = ctx.http.request(f"{github.API}/repos/{repo}", headers=github.headers())
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch the repository %s: HTTP %s", repo, e.http_code)
-        ctx.record_unfixable(spec.NAME, path.name, e, f"{repo}: HTTP {e.http_code} from GitHub's repository API")
+        ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: HTTP {e.http_code} from GitHub's repository API")
         failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": "repository request failed"}
-        store.write_failure(path, {"date": day, "repo": repo, **failure}, ctx.now)
+        store.write_failure(file, {"date": day, "repo": repo, **failure}, ctx.now)
         return
     row: dict[str, Any] = {"date": day, "repo": repo}
     failed: dict[str, list[str]] = {}  # each failure, as the reason names it, and the fields it left null
     traffic: dict[str, int | None] = {}
     for kind in TRAFFIC:  # asked for whatever the repository holds, as the script asks
-        fields, reason = _traffic(ctx, repo, path, kind)
+        fields, reason = _traffic(ctx, repo, file, kind)
         traffic.update(fields)
         if reason is not None:
             failed[reason] = list(fields)
@@ -87,10 +87,10 @@ def _collect(ctx: Context, entry: Any) -> None:
         row.update(found)
     except UnusableError as e:
         ctx.log.info("ERROR: Failed to parse the repository %s: %s", repo, e)
-        store.write_failure(path, {**row, "status": "parse_failed", "reason": str(e)}, ctx.now)
+        store.write_failure(file, {**row, "status": "parse_failed", "reason": str(e)}, ctx.now)
         return
     row.update(traffic)
     if failed:
-        store.write_partial(path, row, failed, ctx, spec.NAME)
+        store.write_partial(file, row, failed, ctx, spec.NAME)
     else:
-        store.write_good(path, row, ctx, spec.NAME)
+        store.write_good(file, row, ctx, spec.NAME)

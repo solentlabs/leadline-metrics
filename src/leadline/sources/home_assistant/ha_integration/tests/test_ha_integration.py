@@ -14,6 +14,7 @@ from typing import Any
 import port
 import pytest
 import scenarios
+from row_files import files_in
 from scenarios.builders.common import exchange, failed
 
 from leadline import config, trends
@@ -467,7 +468,7 @@ def test_its_trends_chart_draws_the_two_lines_the_band_and_a_hover_with_the_rank
         encoding="utf-8",
     )
 
-    data = trends.build(tmp_path, date(2026, 9, 23), [section], "health.jsonl")
+    data = trends.build(files_in(tmp_path), date(2026, 9, 23), [section], "health.jsonl")
 
     (built,) = data["sections"]
     by_label = {field["label"]: field for field in built["fields"]}

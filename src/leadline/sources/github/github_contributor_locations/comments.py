@@ -15,7 +15,6 @@ kept, and a person a later run places by other means loses the placement.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from leadline import config, store
@@ -23,6 +22,7 @@ from leadline.context import Context
 from leadline.http import HttpError, UnusableError, read_json, unexpected
 from leadline.sources.github import api as github
 from leadline.sources.github.github_contributor_locations import spec
+from leadline.storage import File
 
 SOURCE = "comment_inference"  # a person's source where a comment gave their region
 STATE = "comments_read"  # the row's field: {"rules": fingerprint, "issues": {number: updated_at}}
@@ -35,11 +35,11 @@ def fingerprint(table: dict[str, Any]) -> str:
 
 
 def place(
-    ctx: Context, path: Path, entry: Any, people: list[dict[str, Any]], issues: dict[str, list[tuple[int, str]]]
+    ctx: Context, file: File, entry: Any, people: list[dict[str, Any]], issues: dict[str, list[tuple[int, str]]]
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """`people` with the region comments give each unplaced one, and the state for the row (module docstring)."""
     table, key = entry["regions"], fingerprint(entry["regions"])
-    held = held_row(path, STATE)
+    held = held_row(file, STATE)
     nightly = held is not None and held[0] == key
     read = dict(held[1]) if held is not None and nightly else {}
     kept = {p["login"]: p for p in held[2] if p.get("source") == SOURCE} if held is not None and nightly else {}
@@ -53,7 +53,7 @@ def place(
         except HttpError as e:
             ctx.log.info("WARN: Failed to fetch the comments of issue %d: HTTP %s", number, e.http_code)
             ctx.record_unfixable(
-                spec.NAME, path.name, e, f"{entry['repo']}: HTTP {e.http_code} from GitHub's {KIND} API"
+                spec.NAME, file.name, e, f"{entry['repo']}: HTTP {e.http_code} from GitHub's {KIND} API"
             )
             if nightly:
                 break
@@ -73,10 +73,10 @@ def _unplaced(person: dict[str, Any]) -> bool:
     return bool(person["region"] == spec.UNKNOWN)  # a person whose profile no run read has none
 
 
-def held_row(path: Path, field: str) -> tuple[Any, dict[str, str], list[dict[str, Any]]] | None:
+def held_row(file: File, field: str) -> tuple[Any, dict[str, str], list[dict[str, Any]]] | None:
     """The fingerprint, issues read and people of the newest stored row that remembers its `field` (the comments'
     state or the files'), or None."""
-    rows = store.rows_by_date(path)
+    rows = store.rows_by_date(file)
     for date in sorted(rows, reverse=True):
         row = rows[date]
         state, people = row.get(field), row.get("contributors")

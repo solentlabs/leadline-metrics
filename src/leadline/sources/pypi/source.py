@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from pathlib import Path
 from typing import Any, NamedTuple
 
 from leadline import store
@@ -11,6 +10,7 @@ from leadline.config import is_count
 from leadline.context import Context, Finding
 from leadline.http import HttpError, UnusableError, read_json, unexpected
 from leadline.sources.pypi import spec
+from leadline.storage import File
 
 ENV: tuple[str, ...] = ()  # pypistats and PyPI are public
 LAGGING = False  # pypistats publishes a UTC day just after it ends: a 23:30 run finds its own date
@@ -107,59 +107,59 @@ def _retryable(ctx: Context, cfg: Any, package: str) -> bool:
     good or partial row, or an answer the source couldn't use; and not an error recorded critical for
     the file this run, which waiting can't fix (ADR: one failed night recovers).
     """
-    path = ctx.out_dir / spec.file_name(cfg, package)
-    row = store.rows_by_date(path).get(ctx.date.isoformat())
+    file = ctx.file(spec.file_name(cfg, package))
+    row = store.rows_by_date(file).get(ctx.date.isoformat())
     if row is None or row.get("status") != "fetch_failed" or row.get("http_code") == "200":
         return False
-    return not any(critical.source == spec.NAME and critical.file == path.name for critical in ctx.critical)
+    return not any(critical.source == spec.NAME and critical.file == file.name for critical in ctx.critical)
 
 
 def _collect(ctx: Context, cfg: Any, package: str) -> None:
-    path, day = ctx.out_dir / spec.file_name(cfg, package), ctx.date.isoformat()
+    file, day = ctx.file(spec.file_name(cfg, package)), ctx.date.isoformat()
     ctx.log.info("Collecting PyPI stats for %s...", package)
     try:
         response = ctx.http.request(_overall_url(package), attempts=ATTEMPTS, backoff_s=cfg["sleep_s"])
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch PyPI download history for %s (last HTTP %s)", package, e.http_code)
-        ctx.record_unfixable(spec.NAME, path.name, e, f"{package}: HTTP {e.http_code} from pypistats")
+        ctx.record_unfixable(spec.NAME, file.name, e, f"{package}: HTTP {e.http_code} from pypistats")
         reason = "rate limited by pypistats" if e.code == 429 else "pypistats overall endpoint unavailable"
         failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": reason}
-        store.write_failure(path, {"date": day, "package": package, **failure}, ctx.now)
+        store.write_failure(file, {"date": day, "package": package, **failure}, ctx.now)
         return
-    stored = store.rows_by_date(path)  # before this run writes, as the script reads the file
+    stored = store.rows_by_date(file)  # before this run writes, as the script reads the file
     try:
         history = _history(read_json("overall", response))
     except UnusableError as e:
         ctx.log.info("ERROR: Failed to parse PyPI data for %s: %s", package, e)
         store.write_failure(
-            path, {"date": day, "package": package, "status": "parse_failed", "reason": str(e)}, ctx.now
+            file, {"date": day, "package": package, "status": "parse_failed", "reason": str(e)}, ctx.now
         )
         return
-    metadata, failed = _fetch_metadata(ctx, path, package)
+    metadata, failed = _fetch_metadata(ctx, file, package)
     if history.published >= day:
         row = {"date": day, "package": package, "status": "ok", **_downloads(history, ctx.date)}
         row["latest_version"] = metadata.version if metadata else None
         row["requires_python"] = metadata.requires_python if metadata else None
         if failed is None:
-            store.write_good(path, row, ctx, spec.NAME)
+            store.write_good(file, row, ctx, spec.NAME)
         else:
-            store.write_partial(path, row, {failed: METADATA}, ctx, spec.NAME)
+            store.write_partial(file, row, {failed: METADATA}, ctx, spec.NAME)
     else:
         # An off-hours run may find its date not published yet: marked, not the previous day mislabeled.
         ctx.log.info("WARN: pypistats has not published %s for %s yet; the next run backfills it", day, package)
         reason = f"pypistats has not published {day} yet (latest {history.published})"
         failure = {"status": "fetch_failed", "http_code": "200", "reason": reason}
-        store.write_failure(path, {"date": day, "package": package, **failure}, ctx.now)
-    _backfill(ctx, path, package, history, metadata, stored)
+        store.write_failure(file, {"date": day, "package": package, **failure}, ctx.now)
+    _backfill(ctx, file, package, history, metadata, stored)
 
 
-def _fetch_metadata(ctx: Context, path: Path, package: str) -> tuple[Metadata | None, str | None]:
+def _fetch_metadata(ctx: Context, file: File, package: str) -> tuple[Metadata | None, str | None]:
     """The package's metadata, or None and the reason a partial row gives for it."""
     try:
         return _metadata(read_json("metadata", ctx.http.request(_project_url(package)))), None
     except HttpError as e:
         ctx.log.info("WARN: Failed to fetch PyPI metadata for %s (HTTP %s)", package, e.http_code)
-        ctx.record_unfixable(spec.NAME, path.name, e, f"{package}: HTTP {e.http_code} from PyPI")
+        ctx.record_unfixable(spec.NAME, file.name, e, f"{package}: HTTP {e.http_code} from PyPI")
         return None, f"metadata request failed (HTTP {e.http_code})"
     except UnusableError as e:
         ctx.log.info("WARN: Failed to parse PyPI metadata for %s: %s", package, e)
@@ -167,7 +167,7 @@ def _fetch_metadata(ctx: Context, path: Path, package: str) -> tuple[Metadata | 
 
 
 def _backfill(
-    ctx: Context, path: Path, package: str, history: History, metadata: Metadata | None, stored: dict[str, Any]
+    ctx: Context, file: File, package: str, history: History, metadata: Metadata | None, stored: dict[str, Any]
 ) -> None:
     """A row for each earlier day since the file's first row that has no good row, from the history.
 
@@ -193,7 +193,7 @@ def _backfill(
         ctx.log.info("PyPI %s: backfilling %d earlier day(s) from pypistats history", package, len(missing))
     for day in missing:
         row = {"date": day.isoformat(), "package": package, "status": "ok", **_downloads(history, day)}
-        store.write_good(path, {**row, store.BACKFILLED: True}, ctx, spec.NAME)
+        store.write_good(file, {**row, store.BACKFILLED: True}, ctx, spec.NAME)
 
 
 def _downloads(history: History, day: date) -> dict[str, int | None]:

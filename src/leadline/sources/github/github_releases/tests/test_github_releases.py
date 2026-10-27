@@ -14,6 +14,7 @@ from typing import Any
 import port
 import pytest
 import scenarios
+from row_files import files_in
 from scenarios.builders.common import exchange, failed
 
 from leadline import trends
@@ -434,7 +435,7 @@ def test_an_excluded_release_is_in_no_chart_but_the_file_keeps_it(tmp_path: Path
         (tmp_path / file).write_text(text, encoding="utf-8")
     before = {file: (tmp_path / file).read_text(encoding="utf-8") for file in golden}
 
-    (built,) = trends.build(tmp_path, date(2026, 9, 24), [section], "health.jsonl")["sections"]
+    (built,) = trends.build(files_in(tmp_path), date(2026, 9, 24), [section], "health.jsonl")["sections"]
 
     assert built["fields"][0]["keys"] == ["0.9.0"]  # v1.0.0 is gone
     assert {file: (tmp_path / file).read_text(encoding="utf-8") for file in golden} == before
@@ -457,7 +458,7 @@ def test_the_charts_count_every_release_but_no_prerelease_from_the_golden_rows(t
     for file, text in golden.items():
         (tmp_path / file).write_text(text, encoding="utf-8")
 
-    (built,) = trends.build(tmp_path, date(2026, 9, 24), [section], "health.jsonl")["sections"]
+    (built,) = trends.build(files_in(tmp_path), date(2026, 9, 24), [section], "health.jsonl")["sections"]
 
     field, since = built["fields"]
     assert since["since"] is True

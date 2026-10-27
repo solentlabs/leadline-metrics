@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from pathlib import Path
 from typing import Any
 
 from leadline import store
@@ -11,6 +10,7 @@ from leadline.config import is_count
 from leadline.context import Context, Finding
 from leadline.http import HttpError, UnusableError, counts, read_json, unexpected
 from leadline.sources.discourse_topics import spec
+from leadline.storage import File
 
 ENV: tuple[str, ...] = ()  # a public forum: no credentials
 LAGGING = False
@@ -22,9 +22,9 @@ POSTS_CHUNK = 20  # the posts asked for by id in one request, the forum's own ch
 def collect(ctx: Context, cfg: Any) -> None:
     """Every entry's topics in turn; one topic's failure row doesn't stop the next."""
     for entry in cfg:
-        path = ctx.out_dir / spec.file_name(entry)
+        file = ctx.file(spec.file_name(entry))
         for topic in entry["topics"]:
-            _collect(ctx, entry["base_url"], topic, path)
+            _collect(ctx, entry["base_url"], topic, file)
 
 
 def check(ctx: Context, cfg: Any) -> list[Finding]:
@@ -106,7 +106,7 @@ def _tag(tag: Any) -> str:
     return name if isinstance(name, str) else ""
 
 
-def _collect(ctx: Context, base_url: str, topic: dict[str, Any], path: Path) -> None:
+def _collect(ctx: Context, base_url: str, topic: dict[str, Any], file: File) -> None:
     topic_id, label = topic["id"], topic["label"]
     row = {"date": ctx.date.isoformat(), "topic_id": topic_id, "label": label}
     ctx.log.info("Forum: fetching topic %s (%s)", topic_id, label)
@@ -117,16 +117,16 @@ def _collect(ctx: Context, base_url: str, topic: dict[str, Any], path: Path) -> 
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch forum topic %s: HTTP %s", topic_id, e.http_code)
         reason = f"{base_url}: HTTP {e.http_code} for topic {topic_id} ({label})"
-        ctx.record_unfixable(spec.NAME, path.name, e, reason)
+        ctx.record_unfixable(spec.NAME, file.name, e, reason)
         failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": "topic request failed"}
     except UnusableError as e:
         ctx.log.info("ERROR: Failed to parse forum data for topic %s: %s", topic_id, e)
         failure = {"status": "parse_failed", "reason": str(e)}
     else:
-        store.write_good(path, row, ctx, spec.NAME, store.SECOND_KEY)
-        _rebuild(ctx, base_url, topic, path, answer)
+        store.write_good(file, row, ctx, spec.NAME, store.SECOND_KEY)
+        _rebuild(ctx, base_url, topic, file, answer)
         return
-    store.write_failure(path, {**row, **failure}, ctx.now, store.SECOND_KEY)
+    store.write_failure(file, {**row, **failure}, ctx.now, store.SECOND_KEY)
 
 
 def _day(ctx: Context, when: Any) -> date:
@@ -137,17 +137,17 @@ def _day(ctx: Context, when: Any) -> date:
     return moment.astimezone(ctx.now.tzinfo).date()
 
 
-def _rebuild(ctx: Context, base_url: str, topic: dict[str, Any], path: Path, answer: dict[str, Any]) -> None:
+def _rebuild(ctx: Context, base_url: str, topic: dict[str, Any], file: File, answer: dict[str, Any]) -> None:
     """Write a row for each day from the topic's creation to the day before its first row (store.fill): its replies
     and last post by the end of that day, from each post's creation; null for its views and likes. The posts its answer
     leaves out are asked for only when a day lacks its row; nothing where they can't all be read."""
     topic_id = topic["id"]
     try:
-        days = store.rebuild_days(path, _day(ctx, answer.get("created_at")), ctx, {store.SECOND_KEY: topic_id})
+        days = store.rebuild_days(file, _day(ctx, answer.get("created_at")), ctx, {store.SECOND_KEY: topic_id})
     except ValueError:
         ctx.log.info("Not rebuilding past replies of topic %s: it has no creation time", topic_id)
         return
-    held = store.dated_rows(path, {store.SECOND_KEY: topic_id}).good
+    held = store.dated_rows(file, {store.SECOND_KEY: topic_id}).good
     if all(day.isoformat() in {row["date"] for row in held} for day in days):
         return
     try:
@@ -161,7 +161,7 @@ def _rebuild(ctx: Context, base_url: str, topic: dict[str, Any], path: Path, ans
         if made:
             row = {"date": day.isoformat(), store.SECOND_KEY: topic_id, "label": topic["label"], "views": None}
             rows.append({**row, "replies": len(made) - 1, "likes": None, "last_post": made[-1][:10]})
-    store.fill(path, rows, ctx, store.SECOND_KEY)
+    store.fill(file, rows, ctx, store.SECOND_KEY)
 
 
 def _posted(ctx: Context, base_url: str, topic_id: int, answer: dict[str, Any]) -> list[str]:

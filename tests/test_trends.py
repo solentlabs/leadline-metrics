@@ -16,6 +16,7 @@ from typing import Any, Iterable, Mapping
 
 import port
 import pytest
+from row_files import files_in
 
 from leadline import store, trends
 from leadline.config import Card, Hide, Note, Section, Shown, section_lines
@@ -42,7 +43,7 @@ def health_row(**fields: Any) -> dict[str, Any]:
 
 
 def built(folder: Path, *sections: Section, projects: Any = None) -> dict[str, Any]:
-    return trends.build(folder, date(2026, 9, 24), sections, HEALTH, projects)
+    return trends.build(files_in(folder), date(2026, 9, 24), sections, HEALTH, projects)
 
 
 # ---- trends.json ---------------------------------------------------------------------------------
@@ -1286,7 +1287,7 @@ def test_a_run_writes_trends_json_and_the_page_from_the_same_data(tmp_path: Path
         trends.write(ctx, sections, HEALTH)
 
     data = json.loads((tmp_path / "trends.json").read_text(encoding="utf-8"))
-    assert data == trends.build(tmp_path, ctx.date, sections, HEALTH)
+    assert data == trends.build(files_in(tmp_path), ctx.date, sections, HEALTH)
     (embedded,) = EMBEDDED.findall((tmp_path / "trends.html").read_text(encoding="utf-8"))
     assert json.loads(embedded) == data
     assert ctx.critical == []

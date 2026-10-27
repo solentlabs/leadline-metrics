@@ -17,11 +17,11 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import date, timedelta
-from pathlib import Path
 from typing import Any, Mapping, NamedTuple, Sequence
 
 from leadline import __version__, config, store
 from leadline.context import Context
+from leadline.storage import File
 
 FILE = config.HEALTH_FILE
 STALE_AFTER_DAYS = 1  # how far a file's newest row may be behind its expected date before it is stale
@@ -47,15 +47,11 @@ def write(
     """
     ctx.log.info("Checking metrics freshness...")
     today = ctx.date
-    statuses = {
-        path.name: _statuses(path)
-        for path in sorted(ctx.out_dir.iterdir())
-        if path.name.endswith(".jsonl") and path.name != FILE and path.is_file()
-    }
+    statuses = {name: _statuses(ctx.file(name)) for name in ctx.backend.files() if name != FILE}
     lagging = {name for name, file in written.items() if file.lagging}
     for name, file in written.items():
         if name in statuses:
-            _judge(ctx, name, file, statuses[name], _good_dates(ctx.out_dir / name))
+            _judge(ctx, name, file, statuses[name], _good_dates(ctx.file(name)))
     row = {
         "date": today.isoformat(),
         "script_version": __version__,
@@ -65,30 +61,30 @@ def write(
         "critical": [asdict(critical) for critical in ctx.critical],
         "corrections": [asdict(correction) for correction in ctx.corrections],
     }
-    store.upsert(ctx.out_dir / FILE, row, ctx.now)
+    store.upsert(ctx.file(FILE), row, ctx.now)
     _log(ctx, row)
 
 
-def _statuses(path: Path) -> dict[date, Any]:
+def _statuses(file: File) -> dict[date, Any]:
     """Each date's status in the file, the last line for a date winning, oldest date first.
 
     A line that isn't a row (it doesn't parse, isn't an object, or its `date` isn't a date) is
     skipped, as store keeps it (ADR: store never fails on a line it can't use).
     """
     found = {}
-    for day, row in store.rows_by_date(path).items():
+    for day, row in store.rows_by_date(file).items():
         parsed = store.parse_date(day)
         if parsed is not None:
             found[parsed] = row.get("status")
     return dict(sorted(found.items()))
 
 
-def _good_dates(path: Path) -> set[date]:
+def _good_dates(file: File) -> set[date]:
     """The dates the file has a good row for, on any of its series: a forum file holds a row a day for each
     topic, and a topic that fails doesn't make the others' good rows count for nothing."""
     days = {
         store.parse_date(row["date"])
-        for row in store.rows(path)
+        for row in store.rows(file)
         if isinstance(row.get("date"), str) and store.is_good(row)
     }
     return {day for day in days if day is not None}

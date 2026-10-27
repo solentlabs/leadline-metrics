@@ -39,6 +39,7 @@ from typing import Any, Mapping, Sequence
 import local_settings
 import pytest
 import script_harness
+from row_files import file_at
 
 from leadline import reports, store
 from leadline.context import Context
@@ -82,7 +83,7 @@ def _by_file(cfg: Sequence[Mapping[str, Any]]) -> dict[str, list[Mapping[str, An
 def _now(metrics: Path) -> str:
     """The run's frozen time: late on the newest date any row file holds, as the nightly run is."""
     newest = max(
-        (day for path in metrics.glob("*.jsonl") for day in store.rows_by_date(path) if store.parse_date(day)),
+        (day for path in metrics.glob("*.jsonl") for day in store.rows_by_date(file_at(path)) if store.parse_date(day)),
     )
     return f"{newest}T23:45:00"
 

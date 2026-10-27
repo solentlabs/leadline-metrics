@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from pathlib import Path
 from typing import Any
 
 from leadline import store
 from leadline.context import Context, Finding
 from leadline.http import HttpError
 from leadline.sources.home_assistant.ha_platform import spec
+from leadline.storage import File
 
 ENV: tuple[str, ...] = ()  # a public feed: no credentials
 LAGGING = False
@@ -35,24 +35,24 @@ class _UnreadableError(Exception):
 
 def collect(ctx: Context, cfg: Any) -> None:
     """One row, or failure row, for the run's date."""
-    path, day = ctx.out_dir / spec.file_name(cfg), ctx.date.isoformat()
+    file, day = ctx.file(spec.file_name(cfg)), ctx.date.isoformat()
     ctx.log.info("Collecting Home Assistant platform totals...")
     try:
         data = ctx.http.get_json(FEED)
         row = _row(data, day)
     except HttpError as e:
-        ctx.record_unfixable(spec.NAME, path.name, e, f"HTTP {e.http_code} from {ANALYTICS}")
+        ctx.record_unfixable(spec.NAME, file.name, e, f"HTTP {e.http_code} from {ANALYTICS}")
         failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": "analytics request failed"}
     except ValueError:
         failure = {"status": "parse_failed", "reason": "response was not JSON"}
     except _UnreadableError:
         failure = {"status": "parse_failed", "reason": UNEXPECTED}
     else:
-        store.write_good(path, row, ctx, spec.NAME)
-        _rebuild(ctx, path, data)
+        store.write_good(file, row, ctx, spec.NAME)
+        _rebuild(ctx, file, data)
         return
     ctx.log.info("ERROR: No Home Assistant platform totals: %s", failure["reason"])
-    store.write_failure(path, {"date": day, **failure}, ctx.now)
+    store.write_failure(file, {"date": day, **failure}, ctx.now)
 
 
 def check(ctx: Context, cfg: Any) -> list[Finding]:  # noqa: ARG001 (the contract's signature; nothing in cfg to check)
@@ -176,12 +176,12 @@ def _history(ctx: Context, data: Any) -> dict[date, dict[str, Any]]:
     return {day: fields for day, (_, fields) in last.items()}
 
 
-def _rebuild(ctx: Context, path: Path, data: Any) -> None:
+def _rebuild(ctx: Context, file: File, data: Any) -> None:
     """Write a row for each day from the feed's first entry with installations to the day before the file's first
     night (store.rebuild_days): the installations, their types and the core versions of the day's last entry. The
     fields it can't tell stay absent (store.fill; ADR: past values a source can rebuild are filled, never changed)."""
     history = _history(ctx, data)
     if not history:
         return
-    days = store.rebuild_days(path, min(history), ctx)
-    store.fill(path, [{"date": day.isoformat(), **history[day]} for day in days if day in history], ctx)
+    days = store.rebuild_days(file, min(history), ctx)
+    store.fill(file, [{"date": day.isoformat(), **history[day]} for day in days if day in history], ctx)

@@ -13,7 +13,6 @@ from __future__ import annotations
 from collections import Counter
 from datetime import date
 from itertools import groupby
-from pathlib import Path
 from typing import Any, Callable, NamedTuple
 
 from leadline import config, store
@@ -21,6 +20,7 @@ from leadline.context import Context
 from leadline.http import HttpError, UnusableError
 from leadline.sources.github import api as github
 from leadline.sources.github.github_issues import spec
+from leadline.storage import File
 
 PROFILE_LIMIT = 100  # the most profiles a run reads, for stars and forks together; a day's people are read whole
 NOTHING_KNOWN = date.min  # a `Counted.stop` before every day: no day's counts are known
@@ -63,7 +63,7 @@ def on(counted: dict[str, Counted], day: date) -> dict[str, dict[str, int]]:
 def count(
     ctx: Context,
     entry: dict[str, Any],
-    path: Path,
+    file: File,
     stats: dict[str, int],
     listed: Callable[[str], list[Listed]],
     limit: int,
@@ -80,19 +80,19 @@ def count(
     reader = _Profiles(ctx, entry["regions"])
     found = {}
     for field in spec.REGION_FIELDS:
-        anchor, base = _newest(ctx, path, spec.REGION_FIELDS[field])
+        anchor, base = _newest(ctx, file, spec.REGION_FIELDS[field])
         counted = Counted(anchor, base, [], None)
         if stats[field]:  # the list says who is new; a repo with none has no one to read
-            counted = _read(ctx, path, field, stats[field], counted, listed, limit, reader)
+            counted = _read(ctx, file, field, stats[field], counted, listed, limit, reader)
         found[field] = counted
     reader.say()
     return found
 
 
-def _newest(ctx: Context, path: Path, key: str) -> tuple[date | None, dict[str, int]]:
+def _newest(ctx: Context, file: File, key: str) -> tuple[date | None, dict[str, int]]:
     """The newest past day whose good row has `repo.<key>` counts, and the counts; none, and none counted."""
     best: tuple[date | None, dict[str, int]] = (None, {})
-    for row in store.rows(path):
+    for row in store.rows(file):
         day, found = store.parse_date(row.get("date")), store.value(row, f"repo.{key}")
         if day is None or day >= ctx.date or not store.is_good(row) or not _counts(found):
             continue
@@ -108,7 +108,7 @@ def _counts(found: Any) -> bool:
 
 def _read(
     ctx: Context,
-    path: Path,
+    file: File,
     field: str,
     total: int,
     counted: Counted,
@@ -118,7 +118,7 @@ def _read(
 ) -> Counted:
     """`counted` with the people of `field` dated after its anchor read, whole days from the oldest, while the
     profile limit allows; unchanged where the list or a profile can't be read, or the repo has too many to list."""
-    name = path.name
+    name = file.name
     try:
         if total > limit:
             raise UnusableError(f"{total} {field} are more than the {limit} it reads")

@@ -12,6 +12,7 @@ import port
 import pytest
 import scenarios
 import scratch_package
+from row_files import file_at
 from scenarios import Scenario
 from scenarios.builders.common import exchange, failed
 
@@ -48,7 +49,9 @@ class Fetcher:
         self.seen.append((ctx.now, os.environ.get("DUMMY_TOKEN"), os.environ.get("GITHUB_TOKEN")))
         for _ in range(self.times):
             got = ctx.http.request(URL, method=self.method, attempts=2).json()
-        store.write_good(ctx.out_dir / "fetcher.jsonl", {"date": ctx.date.isoformat(), "got": got}, ctx, self.NAME)
+        store.write_good(
+            file_at(ctx.out_dir / "fetcher.jsonl"), {"date": ctx.date.isoformat(), "got": got}, ctx, self.NAME
+        )
 
     def check(self, ctx: Context, cfg: Any) -> list[Finding]:
         return []

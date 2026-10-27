@@ -71,19 +71,19 @@ def _stats(answer: Any) -> dict[str, int]:
 
 def _collect(ctx: Context, entry: dict[str, Any]) -> None:
     base_url = entry["base_url"]
-    path = ctx.out_dir / spec.file_name(entry)
+    file = ctx.file(spec.file_name(entry))
     row: dict[str, Any] = {"date": ctx.date.isoformat(), "base_url": base_url}
     ctx.log.info("Forum: fetching the site statistics of %s", base_url)
     try:
         row.update(_read(ctx, base_url))
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch the site statistics of %s: HTTP %s", base_url, e.http_code)
-        ctx.record_unfixable(spec.NAME, path.name, e, f"{base_url}: HTTP {e.http_code} for about.json")
+        ctx.record_unfixable(spec.NAME, file.name, e, f"{base_url}: HTTP {e.http_code} for about.json")
         failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": "about request failed"}
     except UnusableError as e:
         ctx.log.info("ERROR: Failed to parse the site statistics of %s: %s", base_url, e)
         failure = {"status": "parse_failed", "reason": str(e)}
     else:
-        store.write_good(path, row, ctx, spec.NAME)
+        store.write_good(file, row, ctx, spec.NAME)
         return
-    store.write_failure(path, {**row, **failure}, ctx.now)
+    store.write_failure(file, {**row, **failure}, ctx.now)

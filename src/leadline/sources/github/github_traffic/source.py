@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from pathlib import Path
 from typing import Any, Callable
 
 from leadline import store
@@ -12,6 +11,7 @@ from leadline.context import Context, Finding
 from leadline.http import HttpError, Response, UnusableError, counts, read_json, unexpected
 from leadline.sources.github import api as github
 from leadline.sources.github.github_traffic import spec
+from leadline.storage import File
 
 ENV: tuple[str, ...] = (github.CREDENTIAL,)
 LAGGING = False
@@ -60,10 +60,10 @@ def _referrer(item: Any) -> dict[str, Any]:
 def _popular_path(item: Any) -> dict[str, Any]:
     if not isinstance(item, dict):
         raise unexpected("paths")
-    path, title, count, unique = item.get("path"), item.get("title"), item.get("count"), item.get("uniques")
-    if not (isinstance(path, str) and isinstance(title, str) and is_count(count) and is_count(unique)):
+    file, title, count, unique = item.get("path"), item.get("title"), item.get("count"), item.get("uniques")
+    if not (isinstance(file, str) and isinstance(title, str) and is_count(count) and is_count(unique)):
         raise unexpected("paths")
-    return {"path": path, "title": title, "count": count, "uniques": unique}
+    return {"path": file, "title": title, "count": count, "uniques": unique}
 
 
 def _ratio(total: int, unique: int) -> float:
@@ -94,7 +94,7 @@ def _row(
 
 
 def _popular(
-    ctx: Context, repo: str, path: Path, kind: str, parse: Callable[[Any], list[dict[str, Any]]]
+    ctx: Context, repo: str, file: File, kind: str, parse: Callable[[Any], list[dict[str, Any]]]
 ) -> tuple[list[dict[str, Any]] | None, str | None]:
     """The popular `kind` ("referrers" or "paths") parsed by `parse` and None, or, where they failed or can't be
     used, None and the reason: they are one part of the row (ADR: a partly failed row keeps its good parts)."""
@@ -103,7 +103,7 @@ def _popular(
         return parse(read_json(kind, answer)), None
     except HttpError as e:
         ctx.log.info("WARN: Failed to fetch GitHub %s for %s: HTTP %s", kind, repo, e.http_code)
-        ctx.record_unfixable(spec.NAME, path.name, e, f"{repo}: HTTP {e.http_code} from GitHub's traffic API")
+        ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: HTTP {e.http_code} from GitHub's traffic API")
         return None, f"{kind} request failed (HTTP {e.http_code})"
     except UnusableError as e:
         ctx.log.info("WARN: Failed to parse GitHub %s for %s: %s", kind, repo, e)
@@ -125,19 +125,19 @@ def _top_paths(found: Any) -> list[dict[str, Any]]:
 
 
 def _collect(ctx: Context, entry: Any) -> None:
-    repo, path, day = entry["repo"], ctx.out_dir / spec.file_name(entry), ctx.date.isoformat()
+    repo, file, day = entry["repo"], ctx.file(spec.file_name(entry)), ctx.date.isoformat()
     ctx.log.info("Collecting GitHub traffic for %s...", repo)
     answers: dict[str, Response] = {}
     try:
         for kind in ("views", "clones"):
             answers[kind] = ctx.http.request(f"{github.API}/repos/{repo}/traffic/{kind}", headers=github.headers())
-        referrers, why = _popular(ctx, repo, path, "referrers", _top_referrers)
-        paths, why_paths = _popular(ctx, repo, path, "paths", _top_paths)
+        referrers, why = _popular(ctx, repo, file, "referrers", _top_referrers)
+        paths, why_paths = _popular(ctx, repo, file, "paths", _top_paths)
         views, clones = read_json("views", answers["views"]), read_json("clones", answers["clones"])
         row = _row(views, clones, referrers, paths, day)
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch GitHub %s for %s: HTTP %s", kind, repo, e.http_code)
-        ctx.record_unfixable(spec.NAME, path.name, e, f"{repo}: HTTP {e.http_code} from GitHub's traffic API")
+        ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: HTTP {e.http_code} from GitHub's traffic API")
         failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": f"{kind} request failed"}
     except UnusableError as e:
         ctx.log.info("ERROR: Failed to parse GitHub traffic for %s: %s", repo, e)
@@ -145,8 +145,8 @@ def _collect(ctx: Context, entry: Any) -> None:
     else:
         failed = {reason: [field] for reason, field in ((why, "top_referrers"), (why_paths, "top_paths")) if reason}
         if failed:
-            store.write_partial(path, row, failed, ctx, spec.NAME)
+            store.write_partial(file, row, failed, ctx, spec.NAME)
         else:
-            store.write_good(path, row, ctx, spec.NAME)
+            store.write_good(file, row, ctx, spec.NAME)
         return
-    store.write_failure(path, {"date": day, **failure}, ctx.now)
+    store.write_failure(file, {"date": day, **failure}, ctx.now)

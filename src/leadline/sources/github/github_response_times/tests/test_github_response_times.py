@@ -15,6 +15,7 @@ from typing import Any
 import port
 import pytest
 import scenarios
+from row_files import files_in
 from scenarios.builders.common import exchange, failed
 
 from leadline import trends
@@ -480,7 +481,7 @@ def test_trends_hold_the_four_hours_and_the_count_from_the_golden_rows(tmp_path:
     for file, text in golden.items():
         (tmp_path / file).write_text(text, encoding="utf-8")
 
-    (built,) = trends.build(tmp_path, date(2026, 9, 24), [section], "health.jsonl")["sections"]
+    (built,) = trends.build(files_in(tmp_path), date(2026, 9, 24), [section], "health.jsonl")["sections"]
 
     assert [(f["field"], f["values"], f.get("chart")) for f in built["fields"]] == [
         ("median_hours", [17.5], "Hours to an answer"),

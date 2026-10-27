@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 from datetime import timedelta
-from pathlib import Path
 from typing import Any, Callable
 
 from leadline import store
@@ -13,6 +12,7 @@ from leadline.context import Context, Finding
 from leadline.http import HttpError, Response, UnusableError, counts, read_json, unexpected
 from leadline.sources.github import api as github
 from leadline.sources.github.github_repo_activity import spec
+from leadline.storage import File
 
 ENV: tuple[str, ...] = (github.CREDENTIAL,)
 LAGGING = False
@@ -133,44 +133,44 @@ def _read(kind: str, answer: Response | str, read: Callable[[Any], Any]) -> tupl
         return None, str(e)
 
 
-def _fetch(ctx: Context, repo: str, path: Path, kind: str, url: str) -> Response:
+def _fetch(ctx: Context, repo: str, file: File, kind: str, url: str) -> Response:
     """GET `url`; an error waiting can't fix is reported critical before the HttpError goes on."""
     try:
         return ctx.http.request(url, headers=github.headers())
     except HttpError as e:
-        _critical(ctx, repo, path, kind, e)
+        _critical(ctx, repo, file, kind, e)
         raise
 
 
-def _critical(ctx: Context, repo: str, path: Path, kind: str, e: HttpError) -> None:
+def _critical(ctx: Context, repo: str, file: File, kind: str, e: HttpError) -> None:
     """An error waiting can't fix is critical, named by its kind of request."""
-    ctx.record_unfixable(spec.NAME, path.name, e, f"{repo}: HTTP {e.http_code} from GitHub's {kind} API")
+    ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: HTTP {e.http_code} from GitHub's {kind} API")
 
 
-def _commit_pages(ctx: Context, repo: str, path: Path, since: str) -> list[Response]:
+def _commit_pages(ctx: Context, repo: str, file: File, since: str) -> list[Response]:
     """Every page of the week's commits; an error waiting can't fix is reported critical before it goes on."""
     try:
         return github.numbered_pages(ctx, f"{github.API}/repos/{repo}/commits?since={since}&per_page=100")
     except HttpError as e:
-        _critical(ctx, repo, path, "commits", e)
+        _critical(ctx, repo, file, "commits", e)
         raise
 
 
 def _collect(ctx: Context, entry: Any) -> None:
-    repo, label, path, day = entry["repo"], spec.label(entry), ctx.out_dir / spec.file_name(entry), ctx.date.isoformat()
+    repo, label, file, day = entry["repo"], spec.label(entry), ctx.file(spec.file_name(entry)), ctx.date.isoformat()
     since = f"{(ctx.date - WEEK).isoformat()}T00:00:00Z"
     base = f"{github.API}/repos/{repo}"
     ctx.log.info("Collecting repo activity for %s (%s)...", repo, label)
     failure_row = {"date": day, "label": label, "repo": repo}
     kind = "repository"
     try:
-        repository = _fetch(ctx, repo, path, kind, base)
+        repository = _fetch(ctx, repo, file, kind, base)
         kind = "commits"
-        commit_pages = _commit_pages(ctx, repo, path, since)
+        commit_pages = _commit_pages(ctx, repo, file, since)
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch GitHub %s for %s: HTTP %s", kind, repo, e.http_code)
         failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": f"{kind} request failed"}
-        store.write_failure(path, {**failure_row, **failure}, ctx.now)
+        store.write_failure(file, {**failure_row, **failure}, ctx.now)
         return
     lists = {
         "issues": f"{base}/issues?state=all&since={since}&per_page=100",
@@ -181,7 +181,7 @@ def _collect(ctx: Context, entry: Any) -> None:
     answers: dict[str, Response | str] = {}  # each list's answer, or why it failed
     for kind, url in lists.items():
         try:
-            answers[kind] = _fetch(ctx, repo, path, kind, url)
+            answers[kind] = _fetch(ctx, repo, file, kind, url)
         except HttpError as e:
             ctx.log.info("WARN: Failed to fetch GitHub %s for %s: HTTP %s", kind, repo, e.http_code)
             answers[kind] = f"{kind} request failed (HTTP {e.http_code})"
@@ -190,7 +190,7 @@ def _collect(ctx: Context, entry: Any) -> None:
         messages, authors = _commits([read_json("commits", page) for page in commit_pages])
     except UnusableError as e:
         ctx.log.info("ERROR: Failed to parse repo activity for %s: %s", repo, e)
-        store.write_failure(path, {**failure_row, "status": "parse_failed", "reason": str(e)}, ctx.now)
+        store.write_failure(file, {**failure_row, "status": "parse_failed", "reason": str(e)}, ctx.now)
         return
     readers: dict[str, Callable[[Any], Any]] = {
         "issues": lambda answer: _issues(answer, owner),
@@ -217,6 +217,6 @@ def _collect(ctx: Context, entry: Any) -> None:
     }
     if failed:
         ctx.log.info("WARN: Partial repo activity for %s: %s", repo, "; ".join(failed))
-        store.write_partial(path, row, failed, ctx, spec.NAME)
+        store.write_partial(file, row, failed, ctx, spec.NAME)
     else:
-        store.write_good(path, row, ctx, spec.NAME)
+        store.write_good(file, row, ctx, spec.NAME)

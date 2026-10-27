@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from pathlib import Path
 from typing import Any
 
 from leadline import config, store
@@ -11,6 +10,7 @@ from leadline.context import Context, Finding
 from leadline.http import HttpError, Response, UnusableError, read_json, unexpected
 from leadline.sources.github import api as github
 from leadline.sources.github.github_contributor_locations import comments, spec, timezones
+from leadline.storage import File
 
 ENV: tuple[str, ...] = (github.CREDENTIAL,)
 LAGGING = False
@@ -101,7 +101,7 @@ def _profile_disagreements(
     """Each rule a person's answer matched that gives another region than their profile location in the day's row,
     with the two regions, counted."""
     table = entry["regions"]
-    held = store.stored(ctx.out_dir / spec.file_name(entry), {"date": ctx.date.isoformat()})
+    held = store.stored(ctx.file(spec.file_name(entry)), {"date": ctx.date.isoformat()})
     people = held.get("contributors") if held is not None else None
     disagreeing: Counter[tuple[str, str, str]] = Counter()
     for person in people if isinstance(people, list) else []:
@@ -119,23 +119,23 @@ def _ordered(counted: Counter[Any]) -> list[tuple[Any, int]]:
 
 
 def _collect(ctx: Context, entry: Any) -> None:
-    repo, path = entry["repo"], ctx.out_dir / spec.file_name(entry)
+    repo, file = entry["repo"], ctx.file(spec.file_name(entry))
     row: dict[str, Any] = {"date": ctx.date.isoformat(), "repo": repo}
     ctx.log.info("Collecting contributor locations for %s...", repo)
     try:
         pages = github.numbered_pages(ctx, f"{github.API}/repos/{repo}/{KIND}?state=all&per_page=100")
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch issues for contributor locations of %s: HTTP %s", repo, e.http_code)
-        ctx.record_unfixable(spec.NAME, path.name, e, f"{repo}: HTTP {e.http_code} from GitHub's {KIND} API")
+        ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: HTTP {e.http_code} from GitHub's {KIND} API")
         failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": f"{KIND} request failed"}
-        store.write_failure(path, {**row, **failure}, ctx.now)
+        store.write_failure(file, {**row, **failure}, ctx.now)
         return
     ctx.log.info("Contributor locations: fetched %d page(s) of issues for %s", len(pages), repo)
     try:
         texts, firsts, forms, issues, attachments = _texts(pages, entry["regions"])
     except UnusableError as e:
         ctx.log.info("ERROR: Failed to collect contributor locations for %s: %s", repo, e)
-        store.write_failure(path, {**row, "status": "parse_failed", "reason": str(e)}, ctx.now)
+        store.write_failure(file, {**row, "status": "parse_failed", "reason": str(e)}, ctx.now)
         return
     locations: dict[str, str | None] = {}
     for login in sorted(texts):
@@ -143,14 +143,14 @@ def _collect(ctx: Context, entry: Any) -> None:
             locations[login] = github.profile_location(ctx, login)
         except HttpError as e:
             ctx.log.info("WARN: Failed to fetch the profile of %s: HTTP %s", login, e.http_code)
-            ctx.record_unfixable(spec.NAME, path.name, e, f"{repo}: HTTP {e.http_code} from GitHub's users API")
+            ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: HTTP {e.http_code} from GitHub's users API")
         except UnusableError as e:
             ctx.log.info("WARN: Could not read the profile of %s: %s", login, e)
     row["total_unique_creators"] = len(texts)
     people = [_person(entry["regions"], login, texts[login], forms[login], locations) for login in sorted(texts)]
     _log_known(ctx, entry["regions"], people, forms, locations)
     if any(person["source"] == UNREAD for person in people):
-        people = _merged(ctx, path, row, people)
+        people = _merged(ctx, file, row, people)
     remembered: dict[str, Any] = {}
     if config.REGION_ATTACHMENT in entry["regions"]:
         answered = {login for login, given in forms.items() if _decided_by_answer(entry["regions"], given)}
@@ -160,20 +160,20 @@ def _collect(ctx: Context, entry: Any) -> None:
             for p in people
             if p["source"] == spec.CONFIGURED or (p["login"] in answered and not p["location"])
         }
-        people, state = timezones.place(ctx, path, entry, people, attachments, eligible, checked)
+        people, state = timezones.place(ctx, file, entry, people, attachments, eligible, checked)
         remembered[timezones.STATE] = state
     if entry.get("comments"):
-        people, state = comments.place(ctx, path, entry, people, issues)
+        people, state = comments.place(ctx, file, entry, people, issues)
         remembered[comments.STATE] = state
     unread = sum(1 for person in people if person["source"] == UNREAD)
-    _recompute(ctx, path, row, people, firsts, unread)
+    _recompute(ctx, file, row, people, firsts, unread)
     missing = [f"{unread} of {len(people)} profiles could not be read"] if unread else []
-    store.write_merged(path, {**row, **_totals(people), **remembered}, missing, ctx, spec.NAME)
+    store.write_merged(file, {**row, **_totals(people), **remembered}, missing, ctx, spec.NAME)
 
 
 def _recompute(
     ctx: Context,
-    path: Path,
+    file: File,
     row: dict[str, Any],
     people: list[dict[str, Any]],
     firsts: dict[str, str],
@@ -192,10 +192,10 @@ def _recompute(
         ctx.log.info("Not recomputing past contributors for %s: an issue has no creation time", repo)
         return
     rows = []
-    for day in store.recompute_days(path, min(first.values(), default=None), ctx):
+    for day in store.recompute_days(file, min(first.values(), default=None), ctx):
         then = [person for person in people if first[person["login"]] <= day]
         rows.append({**row, "date": day.isoformat(), "total_unique_creators": len(then), **_totals(then)})
-    store.recompute(path, rows, ctx, spec.NAME)
+    store.recompute(file, rows, ctx, spec.NAME)
 
 
 def _decided_by_answer(table: dict[str, Any], forms: list[config.Form]) -> bool:
@@ -311,9 +311,9 @@ def _answered(table: dict[str, Any], forms: list[config.Form]) -> tuple[str, str
     return next(filter(None, (config.answer_rule(table, form.answer) for form in forms if form.answer)), None)
 
 
-def _merged(ctx: Context, path: Path, row: dict[str, Any], people: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _merged(ctx: Context, file: File, row: dict[str, Any], people: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """`people`, each one this run couldn't read replaced by their readable entry in the day's stored row."""
-    held = store.stored(path, row)
+    held = store.stored(file, row)
     earlier = held.get("contributors") if held is not None else None
     readable = {
         person["login"]: person
@@ -323,7 +323,7 @@ def _merged(ctx: Context, path: Path, row: dict[str, Any], people: list[dict[str
     kept = [person["login"] for person in people if person["source"] == UNREAD and person["login"] in readable]
     for login in kept:
         ctx.log.info(
-            "Kept the stored profile of %s, which this run failed to get", f"{login} for {row['date']} in {path.name}"
+            "Kept the stored profile of %s, which this run failed to get", f"{login} for {row['date']} in {file.name}"
         )
     return [readable[person["login"]] if person["login"] in kept else person for person in people]
 

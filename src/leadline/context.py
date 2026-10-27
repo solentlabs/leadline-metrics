@@ -19,6 +19,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterator, Mapping, Protocol
 
 from leadline.config import Config, ConfigError
+from leadline.storage import Backend, File
+from leadline.storage.jsonl import Jsonl
 
 if TYPE_CHECKING:  # the report path never loads http (docs/ARCHITECTURE.md, "Dependency rules")
     from leadline.http import Http
@@ -85,6 +87,8 @@ class Reporter(Protocol):
     @property
     def out_dir(self) -> Path: ...
 
+    def file(self, name: str) -> File: ...
+
     @property
     def log(self) -> logging.Logger: ...
 
@@ -110,6 +114,15 @@ class ReportContext:
     def date(self) -> date:
         return self.now.date()
 
+    @property
+    def backend(self) -> Backend:
+        """Where the run's row files are kept."""
+        return Jsonl(self.out_dir)
+
+    def file(self, name: str) -> File:
+        """The row file `name` of the run's backend."""
+        return File(self.backend, name)
+
     def record_critical(self, source: str, file: str | None, reason: str) -> None:
         """Record something critical; the command exits 1."""
         _record_critical(self.critical, self.log, source, file, reason)
@@ -132,6 +145,15 @@ class Context:
     def date(self) -> date:
         """The run date: the local date when the run started."""
         return self.now.date()
+
+    @property
+    def backend(self) -> Backend:
+        """Where the run's row files are kept."""
+        return Jsonl(self.out_dir)
+
+    def file(self, name: str) -> File:
+        """The row file `name` of the run's backend."""
+        return File(self.backend, name)
 
     def record_correction(
         self,

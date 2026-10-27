@@ -7,7 +7,6 @@ import os
 import re
 from collections import Counter
 from datetime import timedelta
-from pathlib import Path
 from typing import Any, Collection, Mapping, NamedTuple, Sequence
 
 from leadline import store
@@ -15,6 +14,7 @@ from leadline.config import is_count
 from leadline.context import Context, Finding
 from leadline.http import HttpError, UnusableError, read_json, unexpected
 from leadline.sources.goatcounter import spec
+from leadline.storage import File
 
 CREDENTIAL = "GOATCOUNTER_TOKEN"
 ENV: tuple[str, ...] = (CREDENTIAL,)
@@ -78,7 +78,7 @@ def check(ctx: Context, cfg: Any) -> list[Finding]:
 def _get(
     ctx: Context,
     site: str,
-    path: str,
+    file: str,
     *,
     limit: str = "",
     attempts: int = 1,
@@ -87,7 +87,7 @@ def _get(
 ) -> Any:
     """GET the API's `path` for the week before the run, with the token, as the script asks."""
     week_ago = (ctx.date - timedelta(days=WINDOW_DAYS)).isoformat()
-    url = f"https://{site}.goatcounter.com/api/v0/{path}?start={week_ago}&end={ctx.date.isoformat()}{limit}"
+    url = f"https://{site}.goatcounter.com/api/v0/{file}?start={week_ago}&end={ctx.date.isoformat()}{limit}"
     headers = {"Authorization": f"Bearer {os.environ[CREDENTIAL]}"}
     return ctx.http.request(url, headers=headers, attempts=attempts, require_body=require_body, recoverable=recoverable)
 
@@ -102,23 +102,23 @@ def _total(ctx: Context, site: str, recoverable: Collection[int] = RECOVERABLE) 
 
 
 def _collect(ctx: Context, entry: Any) -> None:
-    site, path = entry["site"], ctx.out_dir / spec.file_name(entry)
+    site, file = entry["site"], ctx.file(spec.file_name(entry))
     yesterday = (ctx.date - timedelta(days=1)).isoformat()
     ctx.log.info("Collecting GoatCounter metrics for %s...", site)
     try:
         hits = _get(ctx, site, "stats/hits", limit=f"&limit={PAGE_LIMIT}", attempts=ATTEMPTS, require_body=True)
     except HttpError as e:
         ctx.log.info("ERROR: GoatCounter hits for %s failed (HTTP %s)", site, e.http_code)
-        ctx.record_unfixable(spec.NAME, path.name, e, f"{site}: HTTP {e.http_code} from GoatCounter's API")
+        ctx.record_unfixable(spec.NAME, file.name, e, f"{site}: HTTP {e.http_code} from GoatCounter's API")
         failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": "hits request failed"}
-        store.write_failure(path, {"date": yesterday, **failure}, ctx.now)
+        store.write_failure(file, {"date": yesterday, **failure}, ctx.now)
         return
     failed: dict[str, list[str]] = {}  # each failure, as the reason names it, and the field it left null
     total: int | None = None
     try:
         total = _total(ctx, site)
     except HttpError as e:
-        failed[_request_failed(ctx, site, path, "total", e)] = ["window_total"]
+        failed[_request_failed(ctx, site, file, "total", e)] = ["window_total"]
     except UnusableError as e:
         ctx.log.info("WARN: Failed to parse GoatCounter total for %s: %s", site, e)
         failed[str(e)] = ["window_total"]
@@ -126,18 +126,18 @@ def _collect(ctx: Context, entry: Any) -> None:
         pages = _pages(read_json("hits", hits))  # read after the total is asked for, as the script reads it
     except UnusableError as e:
         ctx.log.info("ERROR: Failed to parse GoatCounter hits for %s: %s", site, e)
-        store.write_failure(path, {"date": yesterday, "status": "parse_failed", "reason": str(e)}, ctx.now)
+        store.write_failure(file, {"date": yesterday, "status": "parse_failed", "reason": str(e)}, ctx.now)
         return
-    referrers, reason = _referrers(ctx, site, path, pages)
+    referrers, reason = _referrers(ctx, site, file, pages)
     if reason is not None:
         failed[reason] = ["top_referrers"]
-    lists = {f"top_{kind}": _stats(ctx, site, path, kind, failed) if pages else [] for kind in STATS}
-    _write(ctx, path, pages, total, referrers, lists, failed)
+    lists = {f"top_{kind}": _stats(ctx, site, file, kind, failed) if pages else [] for kind in STATS}
+    _write(ctx, file, pages, total, referrers, lists, failed)
 
 
-def _request_failed(ctx: Context, site: str, path: Path, kind: str, error: HttpError) -> str:
+def _request_failed(ctx: Context, site: str, file: File, kind: str, error: HttpError) -> str:
     """An optional part's failed request, reported: the reason it gives a partial row."""
-    ctx.record_unfixable(spec.NAME, path.name, error, f"{site}: HTTP {error.http_code} from GoatCounter's API")
+    ctx.record_unfixable(spec.NAME, file.name, error, f"{site}: HTTP {error.http_code} from GoatCounter's API")
     return f"{kind} request failed (HTTP {error.http_code})"
 
 
@@ -183,10 +183,10 @@ def _pages(answer: Any) -> list[Page]:
 def _listing(hit: Mapping[str, Any]) -> dict[str, Any] | None:
     """A page's path, title (None unless text) and count over the window, for the top pages; None where the
     path isn't text or the count isn't one: that page is left out, never a failure."""
-    path, title, count = hit.get("path"), hit.get("title"), hit.get("count")
-    if not (isinstance(path, str) and is_count(count)):
+    file, title, count = hit.get("path"), hit.get("title"), hit.get("count")
+    if not (isinstance(file, str) and is_count(count)):
         return None
-    return {"path": path, "title": title if isinstance(title, str) else None, "count": count}
+    return {"path": file, "title": title if isinstance(title, str) else None, "count": count}
 
 
 def _top_pages(pages: list[Page]) -> list[dict[str, Any]]:
@@ -211,7 +211,7 @@ def _refs(kind: str, answer: Any) -> list[tuple[str, int]]:
     return found
 
 
-def _referrers(ctx: Context, site: str, path: Path, pages: list[Page]) -> tuple[list[Any] | None, str | None]:
+def _referrers(ctx: Context, site: str, file: File, pages: list[Page]) -> tuple[list[Any] | None, str | None]:
     """The top referrers of the first ten pages with an id whose referrers could be fetched, and None.
 
     Where a page's request fails (which doesn't count toward the ten) or its answer can't be used
@@ -230,7 +230,7 @@ def _referrers(ctx: Context, site: str, path: Path, pages: list[Page]) -> tuple[
         try:
             answer = _get(ctx, site, f"stats/hits/{page.id}", attempts=ATTEMPTS, require_body=True)
         except HttpError as e:
-            failure = failure or _request_failed(ctx, site, path, kind, e)
+            failure = failure or _request_failed(ctx, site, file, kind, e)
             continue
         fetched += 1
         try:
@@ -262,13 +262,13 @@ def _top_stats(kind: str, answer: Any) -> list[dict[str, Any]]:
     return sorted(found, key=lambda item: -item["count"])[:TOP_STATS]
 
 
-def _stats(ctx: Context, site: str, path: Path, kind: str, failed: dict[str, list[str]]) -> list[dict[str, Any]] | None:
+def _stats(ctx: Context, site: str, file: File, kind: str, failed: dict[str, list[str]]) -> list[dict[str, Any]] | None:
     """The week's top names of a stat (browsers, systems, locations); None, and its reason in `failed`, where the
     request fails or its answer can't be used."""
     try:
         return _top_stats(kind, read_json(kind, _get(ctx, site, f"stats/{kind}", attempts=ATTEMPTS, require_body=True)))
     except HttpError as e:
-        failed[_request_failed(ctx, site, path, kind, e)] = [f"top_{kind}"]
+        failed[_request_failed(ctx, site, file, kind, e)] = [f"top_{kind}"]
     except UnusableError as e:
         ctx.log.info("WARN: Failed to parse GoatCounter %s: %s", kind, e)
         failed[str(e)] = [f"top_{kind}"]
@@ -277,7 +277,7 @@ def _stats(ctx: Context, site: str, path: Path, kind: str, failed: dict[str, lis
 
 def _write(
     ctx: Context,
-    path: Path,
+    file: File,
     pages: list[Page],
     total: int | None,
     referrers: Any,
@@ -288,7 +288,7 @@ def _write(
     yesterday = (ctx.date - timedelta(days=1)).isoformat()
     stats = [stat for page in pages for stat in page.stats]
     held = {
-        day for day, row in store.rows_by_date(path).items() if store.is_good(row) or row["status"] == store.PARTIAL
+        day for day, row in store.rows_by_date(file).items() if store.is_good(row) or row["status"] == store.PARTIAL
     }
     for day in sorted({day for day, _ in stats if day and day <= yesterday}):
         if day in held and day != yesterday:
@@ -303,7 +303,7 @@ def _write(
             **{field: [] for field in lists},
         }
         if day != yesterday:
-            store.write_good(path, row, ctx, spec.NAME)
+            store.write_good(file, row, ctx, spec.NAME)
             continue
         row["top_referrers"] = referrers
         row["top_pages"] = _top_pages(pages)
@@ -313,6 +313,6 @@ def _write(
         row["paths_returned"] = len(pages)
         ctx.log.info("GoatCounter result: %s", json.dumps(row))
         if failed:
-            store.write_partial(path, row, failed, ctx, spec.NAME)
+            store.write_partial(file, row, failed, ctx, spec.NAME)
         else:
-            store.write_good(path, row, ctx, spec.NAME)
+            store.write_good(file, row, ctx, spec.NAME)
