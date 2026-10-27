@@ -19,6 +19,7 @@ CORE = {
     "leadline.places",
     "leadline.storage",
     "leadline.storage.jsonl",
+    "leadline.storage.sql",
     "leadline.storage.sqlite",
     "leadline.storage.tables",
     "leadline.store",

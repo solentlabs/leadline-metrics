@@ -139,7 +139,7 @@ The modules under `src/leadline/`, and what each owns.
 | `context.py` | `Context`: the run's clock and date, output folder, logger and HTTP client, and what sources report for health; `ReportContext`, the same without HTTP, for `report`; the logging of both. It loads `http` only when a run opens its context |
 | `http.py` | the `urllib` wrapper: timeouts, user agent, retries, pagination, GraphQL, answer reuse, reading an answer, saved responses ([CORE.md](CORE.md#http)) |
 | `store.py` | the rules for reading and writing row files; every file's atomic write ([CORE.md](CORE.md#store)) |
-| `storage/` | where row files are kept: the `Backend` contract and the `File` a source holds (`__init__.py`), the JSONL and SQLite backends (`jsonl.py`, `sqlite.py`) and the tables a SQL backend shares (`tables.py`), the one place that knows how rows are kept ([CORE.md](CORE.md#where-rows-are-kept)) |
+| `storage/` | where row files are kept: the `Backend` contract and the `File` a source holds (`__init__.py`), the JSONL and SQLite backends (`jsonl.py`, `sqlite.py`), and what a SQL backend shares: the tables and how a line becomes values (`tables.py`) and the queries (`sql.py`, where a backend says only how to run statements), the one place that knows how rows are kept ([CORE.md](CORE.md#where-rows-are-kept)) |
 | `runner.py` | one run: validation, sources in order with failures isolated, the retry pass, checks, health, then `build`; and `report`, which validates and runs `build` alone |
 | `health.py` | `health.jsonl`: freshness, critical sources, check findings, corrections |
 | `reports.py` | the report blocks in Markdown files ([REPORTS.md](REPORTS.md)) |
@@ -579,16 +579,16 @@ writes through a temporary file renamed over the file.
 
 The SQLite backend (`storage/sqlite.py`) keeps the files in normalized tables;
 `storage/tables.py` holds the layout and how a line becomes values and back,
-for any SQL backend to share.
+and `storage/sql.py` the queries, for any SQL backend to share.
 
 | Table | Columns | Holds |
 | ----- | ------- | ----- |
 | `schema_version` | `version` | the version of the structure the backend made or migrated to |
 | `file` | `id`, `name` (unique) | a reference table: one row for each file, made when it is first written |
 | `field` | `id`, `path` (unique) | a reference table: one row for each distinct field path (`issues.open`, `top_referrers[].ref`), made when it is first seen |
-| `line` | `file_id`, `seq`, `date` | one row of a file, in file order (`seq` is the line's place in the file) |
+| `line` | `file_id`, `seq`, `date`, `digest` | one row of a file, in file order (`seq` is the line's place in the file; `digest` is the SHA-256 of the line, so a write finds the first line that changed without reading any values) |
 | `value` | `file_id`, `seq`, `node`, `parent`, `ord`, `key`, `field_id`, `kind`, `num`, `text` | one JSON value of a row; `node` numbers a row's values (a parent before its children), `parent` is the node it is in (null for a member of the row), `ord` its place there and `key` its name in an object, so they give the nesting and the order of keys; `kind` is `int`, `float`, `bool`, `null`, `text`, `object` or `list`; `text` is a text's text and a number's exact JSON text (`1.0` stays `1.0`, `NaN` stays `NaN`), and `num` the number for a query, null where SQLite cannot keep it exactly |
-| `raw_line` | `file_id`, `seq`, `data` | a line not in the form leadline writes (a line the script wrote with other spacing, one that is not an object, a text that is not valid UTF-8), kept exactly as it came, as bytes |
+| `raw_line` | `file_id`, `seq`, `data`, `digest` | a line not in the form leadline writes (a line the script wrote with other spacing, one that is not an object, a text that is not valid UTF-8), kept exactly as it came, as bytes |
 
 A line in the form leadline writes (`json.dumps` of an object, a line end)
 is split into `line` and `value` and rebuilt by the same serializer into the

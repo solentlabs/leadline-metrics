@@ -117,6 +117,26 @@ def test_a_row_added_at_the_end_deletes_nothing(db: Path, monkeypatch: pytest.Mo
     assert len(query(db, "SELECT seq FROM line")) == 3
 
 
+def test_a_write_finds_what_changed_by_digest_and_reads_no_values(db: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    rows = [ROW, ROW.replace("09-21", "09-22")]
+    Sqlite(db).write_lines("a.jsonl", rows)
+    statements: list[str] = []
+    real = sqlite3.connect
+
+    def traced(*args: object, **kwargs: object) -> sqlite3.Connection:
+        conn: sqlite3.Connection = real(*args, **kwargs)  # type: ignore[call-overload]
+        conn.set_trace_callback(statements.append)
+        return conn
+
+    monkeypatch.setattr(sqlite3, "connect", traced)
+
+    Sqlite(db).write_lines("a.jsonl", [*rows, ROW.replace("09-21", "09-23")])
+
+    reads = [s for s in statements if s.lstrip().upper().startswith("SELECT") and "FROM value" in s]
+    assert reads == []
+    assert query(db, "SELECT count(*) FROM line WHERE digest IS NOT NULL") == [(3,)]
+
+
 def test_a_changed_row_rewrites_from_there_on(db: Path) -> None:
     backend = Sqlite(db)
     first, second = ROW, ROW.replace("09-21", "09-22")

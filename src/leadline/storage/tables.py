@@ -7,6 +7,7 @@ in it, and `rebuild` gives back the same line. `shred` returns None for any othe
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 from typing import Any, Iterable, NamedTuple
@@ -18,10 +19,10 @@ DDL = (
     "CREATE TABLE file (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE)",
     "CREATE TABLE field (id INTEGER PRIMARY KEY, path TEXT NOT NULL UNIQUE)",
     "CREATE TABLE line ("
-    "file_id INTEGER NOT NULL REFERENCES file(id), seq INTEGER NOT NULL, date TEXT, "
+    "file_id INTEGER NOT NULL REFERENCES file(id), seq INTEGER NOT NULL, date TEXT, digest TEXT NOT NULL, "
     "PRIMARY KEY (file_id, seq))",
     "CREATE TABLE raw_line ("
-    "file_id INTEGER NOT NULL REFERENCES file(id), seq INTEGER NOT NULL, data BLOB NOT NULL, "
+    "file_id INTEGER NOT NULL REFERENCES file(id), seq INTEGER NOT NULL, data BLOB NOT NULL, digest TEXT NOT NULL, "
     "PRIMARY KEY (file_id, seq))",
     "CREATE TABLE value ("
     "file_id INTEGER NOT NULL, seq INTEGER NOT NULL, node INTEGER NOT NULL, parent INTEGER, ord INTEGER NOT NULL, "
@@ -47,6 +48,11 @@ class Node(NamedTuple):
     kind: str  # object, list, text, int, float, bool or null
     num: Any  # the number, bool as 1 or 0, for a query; None where it has none that SQLite keeps exactly
     text: str | None  # a text's text; a number's exact JSON text
+
+
+def digest(line: str) -> str:
+    """A line's fingerprint, kept with it so a write finds what changed without reading the old values."""
+    return hashlib.sha256(line.encode("utf-8", "surrogateescape")).hexdigest()
 
 
 def shred(line: str) -> list[Node] | None:
