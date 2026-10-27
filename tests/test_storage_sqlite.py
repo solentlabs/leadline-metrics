@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -19,7 +20,7 @@ def db(tmp_path: Path) -> Path:
 
 
 def query(db: Path, sql: str, *args: object) -> list[tuple[object, ...]]:
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         return conn.execute(sql, args).fetchall()
 
 
@@ -139,7 +140,7 @@ def test_a_file_shortened_drops_its_rows(db: Path) -> None:
 
 def test_a_database_made_by_a_newer_leadline_stops_the_run(db: Path) -> None:
     Sqlite(db).read_lines("a.jsonl")
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn, conn:
         conn.execute("UPDATE schema_version SET version = ?", (tables.VERSION + 1,))
 
     with pytest.raises(StorageError, match="newer"):
@@ -169,7 +170,7 @@ def test_an_older_database_is_migrated_to_the_version_this_leadline_reads(
 
 def test_a_database_that_leadline_did_not_make_is_left_alone(tmp_path: Path) -> None:
     foreign = tmp_path / "other.db"
-    with sqlite3.connect(foreign) as conn:
+    with closing(sqlite3.connect(foreign)) as conn, conn:
         conn.execute("CREATE TABLE notes (x TEXT)")
 
     with pytest.raises(StorageError, match="did not make"):
