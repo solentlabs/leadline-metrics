@@ -47,7 +47,7 @@ def write(
     """
     ctx.log.info("Checking metrics freshness...")
     today = ctx.date
-    statuses = {name: _statuses(ctx.file(name)) for name in ctx.backend.files() if name != FILE}
+    statuses = {name: _statuses(ctx.file(name)) for name in ctx.storage().files() if name != FILE}
     lagging = {name for name, file in written.items() if file.lagging}
     for name, file in written.items():
         if name in statuses:

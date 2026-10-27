@@ -3,6 +3,13 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions
 follow [SemVer](https://semver.org/).
 
+## Unreleased
+
+- `storage` setting: the row files can be kept in a SQLite database, in
+  normalized tables, instead of `*.jsonl` files (`{"backend": "sqlite",
+  "path": "leadline.db"}`). Without the setting nothing changes.
+  `leadline import` copies existing files into the database.
+
 ## 0.8.10 - 2026-10-26
 
 - `cloudflare_web`: a list whose value Cloudflare gives as a boolean or a

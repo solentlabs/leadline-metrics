@@ -46,6 +46,7 @@ scalar setting can also be given as a flag, which overrides the file.
 | `reports` | none | the report blocks, in order ([REPORTS.md](REPORTS.md)); without it, [the default summary](REPORTS.md#the-default-summary); `[]` for none |
 | `projects` | none | the trends pages' groups of sections, in order ([Projects](#projects)); without it, a page doesn't group them |
 | `pages` | none | the trends pages, each a file, a title and its projects ([Pages](#pages)); without it, one `trends.html` |
+| `storage` | none | where the row files are kept ([Storage](#storage)); without it, jsonl files in `out_dir` |
 
 - `config.SETTINGS` lists the scalar settings and their flags;
   `config.SHARED` lists the sections of `shared`.
@@ -74,7 +75,37 @@ folder's files, and needs no credential:
 | `out_dir` / `--out` | used: the folder to read and write; it must exist |
 | `sources`, `shared` | used to validate each entry as `run` does, to find its files and to build its sections; nothing is collected, so an unset credential changes nothing |
 | `reports`, `projects`, `pages` | used |
+| `storage` | used: the row files are read from it |
 | `user_agent` / `--user-agent` | not used: no request is made |
+
+## Storage
+
+Where the row files are kept ([Storage](ARCHITECTURE.md#storage)). Without
+the setting, each is a `*.jsonl` file in `out_dir`. The reports, the pages and
+the log are files in `out_dir` either way.
+
+```json
+"storage": {"backend": "sqlite", "path": "leadline.db"}
+```
+
+| Key | Meaning |
+| --- | ------- |
+| `backend` | required: `jsonl` or `sqlite` |
+| `path` | the database file, required for `sqlite` and not allowed for `jsonl`; relative to the file's folder, like `out_dir`; its folder is made when it is missing |
+
+Keep the database out of a folder a sync service (OneDrive, Dropbox)
+watches: it can copy the file while a run is writing it, and a database
+copied half-written is damaged. The config and the output folder can stay
+synced.
+
+A database is opened, and its tables made, before the run starts; where it
+cannot be, the run stops with exit status 2. Python's `sqlite3` module must
+exist, which a `jsonl` run does not need.
+
+`leadline import --config P [--from DIR]` copies the `*.jsonl` row files in
+`DIR` (default `out_dir`) into the configured database, replacing the files
+of those names there, and checks each reads back as it was. It is how
+existing files move to a database; the files themselves are left as they are.
 
 ## History on first use
 

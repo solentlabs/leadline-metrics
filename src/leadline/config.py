@@ -9,7 +9,7 @@ import hashlib
 import json
 import re
 import string
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -64,6 +64,17 @@ class ConfigError(Exception):
     """The config (file, flags or source names) is unusable; the run doesn't start."""
 
 
+STORAGE_BACKENDS = ("jsonl", "sqlite")
+
+
+class Storage(NamedTuple):
+    """Where the row files are kept: the backend, and for a database its path (None for jsonl, which keeps them in
+    `out_dir`)."""
+
+    backend: str = "jsonl"
+    path: Path | None = None
+
+
 @dataclass(frozen=True)
 class Config:
     out_dir: Path
@@ -83,6 +94,8 @@ class Config:
     # The trends pages, each a file, a title and its projects, as the file gives them, which the runner validates
     # (leadline.trends); None when the file has none, and the run writes one trends.html.
     pages: Any = None
+    # Where the row files are kept (docs/CONFIGURATION.md, "Storage").
+    storage: Storage = field(default_factory=Storage)
 
 
 def load(path: Path, flags: Mapping[str, str | None]) -> Config:
@@ -96,7 +109,7 @@ def load(path: Path, flags: Mapping[str, str | None]) -> Config:
         raise ConfigError(f"{path} is not valid JSON: {e}") from e
     if not isinstance(data, dict):
         raise ConfigError(f"{path} must be a JSON object")
-    unknown = sorted(set(data) - set(SETTINGS) - {"sources", "shared", "reports", "projects", "pages"})
+    unknown = sorted(set(data) - set(SETTINGS) - {"sources", "shared", "reports", "projects", "pages", "storage"})
     if unknown:
         raise ConfigError(f"unknown settings: {', '.join(unknown)}")
 
@@ -127,7 +140,34 @@ def load(path: Path, flags: Mapping[str, str | None]) -> Config:
         reports=data.get("reports"),
         projects=data.get("projects"),
         pages=data.get("pages"),
+        storage=_storage(data.get("storage"), path.parent),
     )
+
+
+def _storage(value: Any, folder: Path) -> Storage:
+    """The `storage` setting: `{"backend": "jsonl"}`, or `{"backend": "sqlite", "path": ...}` with the database's path
+    relative to the config file; none at all is jsonl."""
+    if value is None:
+        return Storage()
+    if not isinstance(value, dict):
+        raise ConfigError("storage must be a JSON object")
+    unknown = sorted(set(value) - {"backend", "path"})
+    if unknown:
+        raise ConfigError(f"storage.{unknown[0]}: unknown key (the keys are backend, path)")
+    backend = value.get("backend")
+    if backend is None:
+        raise ConfigError(f"storage.backend is required (one of {', '.join(STORAGE_BACKENDS)})")
+    if backend not in STORAGE_BACKENDS:
+        raise ConfigError(f"storage.backend: {backend!r} is not one of {', '.join(STORAGE_BACKENDS)}")
+    if backend == "jsonl":
+        if "path" in value:
+            raise ConfigError("storage.path: jsonl keeps its files in out_dir")
+        return Storage("jsonl")
+    if "path" not in value:
+        raise ConfigError(f"storage.path is required for {backend}")
+    if not isinstance(value["path"], str) or not value["path"]:
+        raise ConfigError("storage.path must be a non-empty string")
+    return Storage(backend, folder / value["path"])
 
 
 def _no_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:

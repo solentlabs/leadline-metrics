@@ -15,6 +15,11 @@
   when the config has no `reports`, printed as a `reports` setting to
   paste into the config and change; exit status 2 when the config is
   unusable.
+- `leadline import --config P [--from DIR]`: copy the `*.jsonl` row files in
+  DIR (default: the output folder) into the config's `storage` database,
+  replacing the files of those names there, and check each reads back as it
+  was; exit status 2 when the storage is jsonl, DIR is not a folder, or the
+  config is unusable.
 - `leadline diff A B`: compare the row files in two folders, ignoring
   `captured_at`: one line per difference, then a count of them by file;
   exit status 0 when they match, 1 when they differ, 2 when either is not
@@ -29,9 +34,11 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
-from leadline import __version__, rowdiff, runner
+from leadline import __version__, rowdiff, runner, storage
 from leadline.config import SETTINGS, Config, ConfigError, load
 from leadline.sources import Registry, Source, Spec, default_reports, discover
+from leadline.storage import StorageError
+from leadline.storage.jsonl import Jsonl
 
 
 def _names(value: str) -> list[str]:
@@ -71,6 +78,9 @@ def main(argv: Sequence[str] | None = None, registry: Registry[Source] | None = 
     report.add_argument("--out", dest="out_dir", help=f"{SETTINGS['out_dir'][1]} (overrides out_dir in the config)")
     default = commands.add_parser("default-reports", help="print the default summary as a reports setting to paste")
     default.add_argument("--config", required=True, type=Path, help="the JSON config file")
+    copy = commands.add_parser("import", help="copy the jsonl row files of a folder into the configured database")
+    copy.add_argument("--config", required=True, type=Path, help="the JSON config file")
+    copy.add_argument("--from", dest="from_dir", type=Path, help="the folder of row files (default: out_dir)")
     diff = commands.add_parser("diff", help="compare the row files in two folders, ignoring captured_at")
     diff.add_argument("a", type=Path, help="the reference folder, e.g. the script's")
     diff.add_argument("b", type=Path, help="the folder to check against it, e.g. leadline's")
@@ -81,6 +91,8 @@ def main(argv: Sequence[str] | None = None, registry: Registry[Source] | None = 
     try:
         if args.command == "default-reports":
             return _default_reports(load(args.config, {}), registry)
+        if args.command == "import":
+            return _import(load(args.config, {}), args.from_dir)
         if args.command == "report":
             return runner.report(load(args.config, {"out_dir": args.out_dir}), registry=registry)
         config = load(args.config, {key: getattr(args, key) for key in SETTINGS})
@@ -94,6 +106,20 @@ def _default_reports(config: Config, registry: Registry[Spec] | None) -> int:
     registry = discover(specs_only=True) if registry is None else registry
     runner.validated(config, registry=registry)
     print(json.dumps({"reports": default_reports(config, registry)}, indent=2, ensure_ascii=False))
+    return 0
+
+
+def _import(config: Config, folder: Path | None) -> int:
+    if config.storage.backend == "jsonl":
+        raise ConfigError("storage is jsonl: set a database in the config's storage setting to import into it")
+    folder = config.out_dir if folder is None else folder
+    if not folder.is_dir():
+        raise ConfigError(f"not a folder: {folder}")
+    try:
+        files, lines = storage.copy_files(Jsonl(folder), storage.open_backend(config.storage, config.out_dir))
+    except StorageError as e:
+        raise ConfigError(f"storage: {e}") from e
+    print(f"Imported {files} file(s), {lines} line(s) from {folder} into {config.storage.path}")
     return 0
 
 

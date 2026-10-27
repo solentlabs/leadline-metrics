@@ -7,9 +7,7 @@ import os
 from pathlib import Path
 from typing import Iterable
 
-from leadline import config
-
-SUFFIX = ".jsonl"
+from leadline.storage import SUFFIX, check_name
 
 
 def write_text(path: Path, text: str) -> None:
@@ -55,9 +53,10 @@ class Jsonl:
     def files(self) -> list[str]:
         if not self.folder.is_dir():
             return []
-        return sorted(p.name for p in self.folder.iterdir() if config.plain_file(p.name, SUFFIX) and p.is_file())
+        return sorted(
+            p.name for p in self.folder.iterdir() if p.name.endswith(SUFFIX) and p.name != SUFFIX and p.is_file()
+        )
 
     def _path(self, file: str) -> Path:
-        if not config.plain_file(file, SUFFIX):
-            raise ValueError(f"file {file!r} must be a plain {SUFFIX} file name")
+        check_name(file)
         return self.folder / file

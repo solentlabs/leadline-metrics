@@ -13,10 +13,11 @@ import pytest
 
 from leadline.storage import Backend
 from leadline.storage.jsonl import Jsonl
+from leadline.storage.sqlite import Sqlite
 
 Make = Callable[[Path], Backend]
 
-BACKENDS: dict[str, Make] = {"jsonl": Jsonl}
+BACKENDS: dict[str, Make] = {"jsonl": Jsonl, "sqlite": lambda folder: Sqlite(folder / "leadline.db")}
 
 FILE = "example.jsonl"
 
@@ -28,7 +29,10 @@ LINES = [
     "[1, 2]\n",
     '{"date": "2026-09-23", "n": 3}   \n',  # trailing spaces, kept
     '{"date": "2026-09-24", "n": "\udcff"}\n',  # a byte that is not UTF-8, as the store reads it
-    '{"date": "2026-09-25", "n": 5}',  # no line end
+    '{"date": "2026-09-26", "n": "\\ud800"}\n',  # a lone surrogate, escaped: valid JSON, not valid UTF-8 as text
+    '{"date": "2026-09-27", "b": 1, "a": [{"x": 1.0, "y": null}, true, "t"], "big": 12345678901234567890}\n',
+    '{"date": "2026-09-28", "nan": NaN, "inf": Infinity, "small": 1e-07}\n',
+    '{"date": "2026-09-29", "n": 5}',  # no line end: only the last line can lack one
 ]
 
 

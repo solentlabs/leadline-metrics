@@ -219,8 +219,9 @@ Sources write only through `write_good`, `write_window`, `write_failure`,
 A row file is held by a backend (`leadline.storage`; ADR: storage is a
 backend behind one contract). A source takes its file from the context,
 `ctx.file(name)`, and passes it to `store`; it never builds a path to a row
-file. The backend is JSONL, a flat file of that name in `out_dir`. Its
-contract is the lines of a file, `read_lines(file)`, `write_lines(file,
+file. The backend is JSONL (a flat file of that name in `out_dir`) or SQLite,
+chosen by the `storage` setting ([CONFIGURATION.md](CONFIGURATION.md#storage)).
+Its contract is the lines of a file, `read_lines(file)`, `write_lines(file,
 lines)` and `files()`, and `tests/test_storage.py` is the suite a backend
 passes.
 

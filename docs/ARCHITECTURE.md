@@ -139,7 +139,7 @@ The modules under `src/leadline/`, and what each owns.
 | `context.py` | `Context`: the run's clock and date, output folder, logger and HTTP client, and what sources report for health; `ReportContext`, the same without HTTP, for `report`; the logging of both. It loads `http` only when a run opens its context |
 | `http.py` | the `urllib` wrapper: timeouts, user agent, retries, pagination, GraphQL, answer reuse, reading an answer, saved responses ([CORE.md](CORE.md#http)) |
 | `store.py` | the rules for reading and writing row files; every file's atomic write ([CORE.md](CORE.md#store)) |
-| `storage/` | where row files are kept: the `Backend` contract and the `File` a source holds (`__init__.py`), and the JSONL backend (`jsonl.py`), the one place that knows how rows are kept ([CORE.md](CORE.md#where-rows-are-kept)) |
+| `storage/` | where row files are kept: the `Backend` contract and the `File` a source holds (`__init__.py`), the JSONL and SQLite backends (`jsonl.py`, `sqlite.py`) and the tables a SQL backend shares (`tables.py`), the one place that knows how rows are kept ([CORE.md](CORE.md#where-rows-are-kept)) |
 | `runner.py` | one run: validation, sources in order with failures isolated, the retry pass, checks, health, then `build`; and `report`, which validates and runs `build` alone |
 | `health.py` | `health.jsonl`: freshness, critical sources, check findings, corrections |
 | `reports.py` | the report blocks in Markdown files ([REPORTS.md](REPORTS.md)) |
@@ -564,7 +564,9 @@ exactly as they are. A name is a plain `*.jsonl` file name. A source holds a
 `File` (a backend and a name), which the context opens with
 `ctx.file(name)`. `tests/test_storage.py` is the suite every backend passes.
 
-The context opens the JSONL backend, the only one that ships.
+The `storage` setting ([CONFIGURATION.md](CONFIGURATION.md#storage)) chooses
+the backend: JSONL without it, or SQLite. The context opens it before the run
+starts, so a database that cannot be used stops the run (exit status 2).
 
 ### JSONL
 
@@ -575,21 +577,25 @@ writes through a temporary file renamed over the file.
 
 ### Database backends
 
-No database backend ships yet. This is the layout the first, SQLite, makes
-and Cloudflare D1 shares: the files in normalized tables.
+The SQLite backend (`storage/sqlite.py`) keeps the files in normalized tables;
+`storage/tables.py` holds the layout and how a line becomes values and back,
+for any SQL backend to share.
 
 | Table | Columns | Holds |
 | ----- | ------- | ----- |
 | `schema_version` | `version` | the version of the structure the backend made or migrated to |
 | `file` | `id`, `name` (unique) | a reference table: one row for each file, made when it is first written |
 | `field` | `id`, `path` (unique) | a reference table: one row for each distinct field path (`issues.open`, `top_referrers[].ref`), made when it is first seen |
-| `line` | `file_id`, `seq`, `date`, `second_key` | one row of a file, in file order |
-| `value` | `file_id`, `seq`, `field_id`, `parent`, `ord`, `kind`, `num`, `text` | one JSON value of a row; `parent` and `ord` give its place and so the nesting and the order of keys, and `kind` (`int`, `float`, `bool`, `null`, `text`, `object`, `list`) gives its exact form |
-| `raw_line` | `file_id`, `seq`, `text` | a line not in the form leadline writes (a line the script wrote with other spacing, one that is not an object), kept exactly as it came |
+| `line` | `file_id`, `seq`, `date` | one row of a file, in file order (`seq` is the line's place in the file) |
+| `value` | `file_id`, `seq`, `node`, `parent`, `ord`, `key`, `field_id`, `kind`, `num`, `text` | one JSON value of a row; `node` numbers a row's values (a parent before its children), `parent` is the node it is in (null for a member of the row), `ord` its place there and `key` its name in an object, so they give the nesting and the order of keys; `kind` is `int`, `float`, `bool`, `null`, `text`, `object` or `list`; `text` is a text's text and a number's exact JSON text (`1.0` stays `1.0`, `NaN` stays `NaN`), and `num` the number for a query, null where SQLite cannot keep it exactly |
+| `raw_line` | `file_id`, `seq`, `data` | a line not in the form leadline writes (a line the script wrote with other spacing, one that is not an object, a text that is not valid UTF-8), kept exactly as it came, as bytes |
 
 A line in the form leadline writes (`json.dumps` of an object, a line end)
 is split into `line` and `value` and rebuilt by the same serializer into the
-same line; every other line is a `raw_line`. A new source or any config
+same line; every other line is a `raw_line`. A `field` path joins keys with
+`.` and marks a list item `[]`; it is a handle for queries, and rebuilding
+uses `parent`, `ord` and `key` alone. A write replaces a file from its first
+changed line on, so a night's new row writes one line. A new source or any config
 leadline accepts adds `file` and `field` rows and needs no migration, and a
 viewer can query one metric as `value` joined to `field`.
 

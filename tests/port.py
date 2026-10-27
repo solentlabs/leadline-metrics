@@ -36,6 +36,8 @@ from leadline.config import Config
 from leadline.context import Context
 from leadline.http import Http, SavedResponses
 from leadline.sources import Registry, Source
+from leadline.storage import Backend, copy_files
+from leadline.storage.jsonl import Jsonl
 
 USER_AGENT = "leadline-port-test"
 
@@ -62,10 +64,16 @@ def local_time(now: str, tz: str) -> datetime:
         time.tzset()
 
 
-def context(out_dir: Path, transport: SavedResponses, now: datetime, sleeps: list[float]) -> Context:
+def context(
+    out_dir: Path, transport: SavedResponses, now: datetime, sleeps: list[float], backend: Backend | None = None
+) -> Context:
     """A run's context with a frozen clock, the saved responses as HTTP, and waits recorded, not slept."""
     return Context(
-        now=now, out_dir=out_dir, log=logging.getLogger("leadline"), http=Http(USER_AGENT, transport, sleeps.append)
+        now=now,
+        out_dir=out_dir,
+        log=logging.getLogger("leadline"),
+        http=Http(USER_AGENT, transport, sleeps.append),
+        backend=backend,
     )
 
 
@@ -111,25 +119,34 @@ def credentials(env: Mapping[str, str], names: Sequence[str]) -> Iterator[None]:
         yield
 
 
-def run(source: Source, cfg: Any, scenario: Scenario, out_dir: Path) -> PortRun:
+def run(source: Source, cfg: Any, scenario: Scenario, out_dir: Path, backend: Backend | None = None) -> PortRun:
     """Run `source` with config `cfg` on `scenario`, through the runner's collection, writing to `out_dir`.
+
+    With a `backend`, the scenario's seed files are copied into it and the run keeps its row files there; the
+    result's `rows` and the files in `out_dir` are what it holds afterwards, exported as jsonl.
 
     Fails the test when the source makes a request the scenario has no response left for, or never
     reaches one of its responses, as the harness refuses the script's run.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
+    seeded = out_dir if backend is None else out_dir / "seed"
+    seeded.mkdir(exist_ok=True)
     for name, text in scenario.seed.items():
-        (out_dir / name).write_text(text, encoding="utf-8")
+        (seeded / name).write_text(text, encoding="utf-8")
+    if backend is not None:
+        copy_files(Jsonl(seeded), backend)
     transport = SavedResponses(scenario.responses)
     now = local_time(scenario.now, scenario.tz)
     sleeps: list[float] = []
 
     config = Config(out_dir, USER_AGENT, {source.NAME: cfg})
     names, by_name = runner.validated(config, registry=Registry({source.NAME: source}))
-    ctx = context(out_dir, transport, now, sleeps)
+    ctx = context(out_dir, transport, now, sleeps, backend)
     lines: list[str] = []
     with captured_log(lines), credentials(scenario.env, source.ENV):
         runner.collect(ctx, config, names, by_name)
+    if backend is not None:
+        copy_files(backend, Jsonl(out_dir))
     problems = [f"no saved response: {r}" for r in transport.unmatched]
     problems += [f"never served: {r}" for r in transport.never_served()]
     assert not problems, f"{scenario.name}: " + "; ".join(problems)

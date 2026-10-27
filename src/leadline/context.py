@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterator, Mapping, Protocol
 
 from leadline.config import Config, ConfigError
-from leadline.storage import Backend, File
+from leadline.storage import Backend, File, StorageError, open_backend
 from leadline.storage.jsonl import Jsonl
 
 if TYPE_CHECKING:  # the report path never loads http (docs/ARCHITECTURE.md, "Dependency rules")
@@ -109,19 +109,19 @@ class ReportContext:
     out_dir: Path
     log: logging.Logger
     critical: list[Critical] = field(default_factory=list)
+    backend: Backend | None = None  # where the row files are kept; None is jsonl files in out_dir
 
     @property
     def date(self) -> date:
         return self.now.date()
 
-    @property
-    def backend(self) -> Backend:
-        """Where the run's row files are kept."""
-        return Jsonl(self.out_dir)
+    def storage(self) -> Backend:
+        """Where the run's row files are kept: the backend it was given, or the jsonl files of `out_dir`."""
+        return self.backend or Jsonl(self.out_dir)
 
     def file(self, name: str) -> File:
         """The row file `name` of the run's backend."""
-        return File(self.backend, name)
+        return File(self.storage(), name)
 
     def record_critical(self, source: str, file: str | None, reason: str) -> None:
         """Record something critical; the command exits 1."""
@@ -140,20 +140,20 @@ class Context:
     # What the run reports for health, which writes both to health.jsonl.
     corrections: list[Correction] = field(default_factory=list)
     critical: list[Critical] = field(default_factory=list)
+    backend: Backend | None = None  # where the row files are kept; None is jsonl files in out_dir
 
     @property
     def date(self) -> date:
         """The run date: the local date when the run started."""
         return self.now.date()
 
-    @property
-    def backend(self) -> Backend:
-        """Where the run's row files are kept."""
-        return Jsonl(self.out_dir)
+    def storage(self) -> Backend:
+        """Where the run's row files are kept: the backend it was given, or the jsonl files of `out_dir`."""
+        return self.backend or Jsonl(self.out_dir)
 
     def file(self, name: str) -> File:
         """The row file `name` of the run's backend."""
-        return File(self.backend, name)
+        return File(self.storage(), name)
 
     def record_correction(
         self,
@@ -232,6 +232,7 @@ def open_context(config: Config) -> Iterator[Context]:
     from leadline import http  # here, not at the top: a report never loads it
 
     config.out_dir.mkdir(parents=True, exist_ok=True)
+    backend = _backend(config)
     handlers: list[logging.Handler] = [
         logging.StreamHandler(sys.stdout),
         logging.FileHandler(config.out_dir / LOG_FILE, "w", encoding="utf-8"),
@@ -240,7 +241,9 @@ def open_context(config: Config) -> Iterator[Context]:
         # Local time, whose date is the script's `date +%F` and whose stamp is its captured_at.
         now = datetime.now().astimezone()
         transport: http.Transport = http.urlopen
-        yield Context(now=now, out_dir=config.out_dir, log=log, http=http.Http(config.user_agent, transport))
+        yield Context(
+            now=now, out_dir=config.out_dir, log=log, http=http.Http(config.user_agent, transport), backend=backend
+        )
 
 
 @contextmanager
@@ -251,5 +254,13 @@ def open_report_context(config: Config) -> Iterator[ReportContext]:
     """
     if not config.out_dir.is_dir():
         raise ConfigError(f"the output folder {config.out_dir} does not exist")
+    backend = _backend(config)
     with _logging(logging.StreamHandler(sys.stdout)) as log:
-        yield ReportContext(now=datetime.now().astimezone(), out_dir=config.out_dir, log=log)
+        yield ReportContext(now=datetime.now().astimezone(), out_dir=config.out_dir, log=log, backend=backend)
+
+
+def _backend(config: Config) -> Backend:
+    try:
+        return open_backend(config.storage, config.out_dir)
+    except StorageError as e:
+        raise ConfigError(f"storage: {e}") from e
