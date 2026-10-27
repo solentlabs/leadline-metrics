@@ -18,9 +18,9 @@ Make = Callable[[Path], Backend]
 
 BACKENDS: dict[str, Make] = {"jsonl": Jsonl}
 
-STREAM = "example.jsonl"
+FILE = "example.jsonl"
 
-# Lines as a stream can hold them: a line leadline writes, the script's older forms, and what is not a row.
+# Lines as a file can hold them: a line leadline writes, the script's older forms, and what is not a row.
 LINES = [
     '{"date": "2026-09-21", "n": 1, "name": "caf\\u00e9"}\n',
     '{"date":"2026-09-22","n":2}\n',  # another spacing, kept as it is
@@ -37,47 +37,47 @@ def backend(request: pytest.FixtureRequest, tmp_path: Path) -> Backend:
     return BACKENDS[request.param](tmp_path)
 
 
-def test_a_stream_never_written_has_no_lines(backend: Backend) -> None:
-    assert backend.read_lines(STREAM) == []
+def test_a_file_never_written_has_no_lines(backend: Backend) -> None:
+    assert backend.read_lines(FILE) == []
 
 
 def test_every_line_reads_back_exactly_as_written(backend: Backend) -> None:
-    backend.write_lines(STREAM, LINES)
+    backend.write_lines(FILE, LINES)
 
-    assert backend.read_lines(STREAM) == LINES
+    assert backend.read_lines(FILE) == LINES
 
 
-def test_a_write_replaces_the_stream(backend: Backend) -> None:
-    backend.write_lines(STREAM, LINES)
-    backend.write_lines(STREAM, LINES[:2])
+def test_a_write_replaces_the_file(backend: Backend) -> None:
+    backend.write_lines(FILE, LINES)
+    backend.write_lines(FILE, LINES[:2])
 
-    assert backend.read_lines(STREAM) == LINES[:2]
+    assert backend.read_lines(FILE) == LINES[:2]
 
 
 def test_the_order_and_repeats_of_lines_are_kept(backend: Backend) -> None:
     lines = ['{"date": "2026-09-22"}\n', '{"date": "2026-09-21"}\n', '{"date": "2026-09-22"}\n']
-    backend.write_lines(STREAM, lines)
+    backend.write_lines(FILE, lines)
 
-    assert backend.read_lines(STREAM) == lines
-
-
-def test_a_stream_written_with_no_lines_exists_and_is_empty(backend: Backend) -> None:
-    backend.write_lines(STREAM, [])
-
-    assert backend.read_lines(STREAM) == []
-    assert backend.streams() == [STREAM]
+    assert backend.read_lines(FILE) == lines
 
 
-def test_streams_names_each_written_stream_in_order(backend: Backend) -> None:
-    assert backend.streams() == []
+def test_a_file_written_with_no_lines_exists_and_is_empty(backend: Backend) -> None:
+    backend.write_lines(FILE, [])
+
+    assert backend.read_lines(FILE) == []
+    assert backend.files() == [FILE]
+
+
+def test_files_names_each_written_file_in_order(backend: Backend) -> None:
+    assert backend.files() == []
 
     backend.write_lines("b.jsonl", ["{}\n"])
     backend.write_lines("a.jsonl", ["{}\n"])
 
-    assert backend.streams() == ["a.jsonl", "b.jsonl"]
+    assert backend.files() == ["a.jsonl", "b.jsonl"]
 
 
-def test_streams_are_independent(backend: Backend) -> None:
+def test_files_are_independent(backend: Backend) -> None:
     backend.write_lines("a.jsonl", ['{"date": "2026-09-21"}\n'])
     backend.write_lines("b.jsonl", ['{"date": "2026-09-22"}\n'])
 
@@ -85,22 +85,22 @@ def test_streams_are_independent(backend: Backend) -> None:
     assert backend.read_lines("b.jsonl") == ['{"date": "2026-09-22"}\n']
 
 
-def test_a_write_that_fails_part_way_leaves_the_stream_as_it_was(backend: Backend) -> None:
-    backend.write_lines(STREAM, LINES[:2])
+def test_a_write_that_fails_part_way_leaves_the_file_as_it_was(backend: Backend) -> None:
+    backend.write_lines(FILE, LINES[:2])
 
     def failing() -> object:
         yield LINES[2]
         raise RuntimeError("the source of lines failed")
 
     with pytest.raises(RuntimeError):
-        backend.write_lines(STREAM, failing())  # type: ignore[arg-type]
+        backend.write_lines(FILE, failing())  # type: ignore[arg-type]
 
-    assert backend.read_lines(STREAM) == LINES[:2]
+    assert backend.read_lines(FILE) == LINES[:2]
 
 
 @pytest.mark.parametrize("name", ["", "a/b.jsonl", "../a.jsonl", "a.txt", ".jsonl", "a\\b.jsonl"])
-def test_a_stream_name_is_a_plain_row_file_name(backend: Backend, name: str) -> None:
-    with pytest.raises(ValueError, match="stream"):
+def test_a_file_name_is_a_plain_row_file_name(backend: Backend, name: str) -> None:
+    with pytest.raises(ValueError, match="file"):
         backend.read_lines(name)
-    with pytest.raises(ValueError, match="stream"):
+    with pytest.raises(ValueError, match="file"):
         backend.write_lines(name, [])

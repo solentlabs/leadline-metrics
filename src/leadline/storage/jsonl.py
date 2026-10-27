@@ -1,5 +1,6 @@
-"""The JSONL backend: a stream is a flat file of that name in the output folder, as the script wrote them."""
+"""The JSONL backend: a file is a flat file of that name in the output folder, as the script wrote them."""
 
+# cspell:ignore getpid
 from __future__ import annotations
 
 import os
@@ -30,33 +31,33 @@ def write_text(path: Path, text: str) -> None:
 
 
 class Jsonl:
-    """The streams of a folder."""
+    """The files of a folder."""
 
     def __init__(self, folder: Path) -> None:
         self.folder = folder
 
-    def read_lines(self, stream: str) -> list[str]:
+    def read_lines(self, file: str) -> list[str]:
         """The file's non-blank lines. A byte that is not valid UTF-8 comes as a surrogate escape, which
         `write_lines` writes back as the same byte, so a line kept in a rewrite is never changed (the script drops
         such bytes). A CRLF line end reads as LF, as the script reads it."""
-        path = self._path(stream)
+        path = self._path(file)
         if not path.exists():
             return []
         with path.open(encoding="utf-8", errors="surrogateescape") as f:
             return [line for line in f if line.strip()]
 
-    def write_lines(self, stream: str, lines: Iterable[str]) -> None:
-        path = self._path(stream)
+    def write_lines(self, file: str, lines: Iterable[str]) -> None:
+        path = self._path(file)
         text = "".join(lines)  # a source of lines that fails does so before the file is touched
         self.folder.mkdir(parents=True, exist_ok=True)
         write_text(path, text)
 
-    def streams(self) -> list[str]:
+    def files(self) -> list[str]:
         if not self.folder.is_dir():
             return []
         return sorted(p.name for p in self.folder.iterdir() if config.plain_file(p.name, SUFFIX) and p.is_file())
 
-    def _path(self, stream: str) -> Path:
-        if not config.plain_file(stream, SUFFIX):
-            raise ValueError(f"stream {stream!r} must be a plain {SUFFIX} file name")
-        return self.folder / stream
+    def _path(self, file: str) -> Path:
+        if not config.plain_file(file, SUFFIX):
+            raise ValueError(f"file {file!r} must be a plain {SUFFIX} file name")
+        return self.folder / file

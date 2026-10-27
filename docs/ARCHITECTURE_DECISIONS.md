@@ -1493,21 +1493,23 @@ dimension is one entry in the source's list of dimensions.
 ## Storage is a backend behind one contract
 
 **Decision:** Where rows are kept is a backend, chosen by the optional
-`storage` section of the config. Without it, the backend is JSONL: one flat
-file per stream in `out_dir`, as before. A stream is a row file, named as it
-is today (`cloudflare-web-example.jsonl`). The backends and their contract
-live in `leadline/storage/`, the one place that knows how rows are kept.
+`storage` section of the config. Without it, the backend is JSONL: each file
+is a flat file of that name in `out_dir`, as before. A file is a source
+entry's rows, named as the config names it
+(`cloudflare-web-example.jsonl`). The backends and their contract live in
+`leadline/storage/`, the one place that knows how rows are kept.
 `store` keeps every rule (upsert, a failure never replacing good data,
-merges, windows, backfills) and reaches a stream only through the contract:
-`read_lines(stream)` returns the stream's lines in order, `write_lines(stream,
-lines)` replaces them atomically, and `streams()` names the streams that
-exist. The unit is the line, because `store` keeps the lines it does not
+merges, windows, backfills) and reaches a file only through the contract:
+`read_lines(file)` returns the file's lines in order, `write_lines(file,
+lines)` replaces them atomically, and `files()` names the files that exist.
+A database backend keeps a file as rows in its tables, keyed by the file's
+name. The unit is the line, because `store` keeps the lines it does not
 change exactly as they are. A backend returns each line exactly as it was
 written, including a line that is not an object. One conformance suite, which
 every backend passes, tests that round trip on the goldens.
 
-A database backend normalizes: reference tables for streams and for field
-paths, created the first time a stream or a field is written, and tables for
+A database backend normalizes: reference tables for files and for field
+paths, created the first time a file or a field is written, and tables for
 the rows and their values. A line in the form leadline writes is split into
 those tables and rebuilt, with the same serializer, into the same line. Any
 other line (one the original script wrote, or one that is not an object) is
@@ -1518,13 +1520,13 @@ stops with a message that names what is missing when it cannot. A backend's
 credentials come from environment variables, never from the config or the
 log.
 
-**Rationale:** A flat file per stream suits one box and stays readable by any
+**Rationale:** A flat file per source entry suits one box and stays readable by any
 tool, so it remains the default. A shared or hosted store, such as SQLite or
 Cloudflare D1, needs the data in tables, and normalized tables let a viewer
 query a metric without the program. Keeping the rules in `store` means a
 backend cannot change what a run writes: the same run gives the same rows on
-every backend. A contract of whole streams keeps a backend small, and a
-stream is a line a day, so a database backend writes only the lines that
+every backend. A contract of whole files keeps a backend small, and a
+file is a line a day, so a database backend writes only the lines that
 changed. SQLite (`sqlite3`) and an HTTPS API (`urllib`) are in the standard
 library, so the runtime stays stdlib-only. A backend that needs a driver is
 an optional extra, decided when it is proposed.
