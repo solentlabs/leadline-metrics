@@ -72,7 +72,7 @@ def _collect(ctx: Context, entry: Any) -> None:
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch GitHub %s for daily for %s: HTTP %s", kind, repo, e.http_code)
         ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: HTTP {e.http_code} from GitHub's traffic API")
-        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": f"{kind} request failed"}
+        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": e.failed(kind)}
     except UnusableError as e:
         ctx.log.info("ERROR: Failed to parse GitHub daily traffic for %s: %s", repo, e)
         failure = {"status": "parse_failed", "reason": str(e)}

@@ -368,14 +368,18 @@ def test_an_unreadable_referrers_answer_counts_toward_the_ten_pages(tmp_path: Pa
 def test_three_failed_attempts_are_a_fetch_failed_row_for_yesterday(tmp_path: Path) -> None:
     done = port.run(source, CONFIG, port.scenario(NAME, "three_failed_attempts_write_nothing"), tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "hits request failed", "429")}
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", "hits request failed (HTTP 429, rate limited)", "429")
+    }
     assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
 
 
 def test_three_empty_answers_are_a_fetch_failed_row_for_yesterday(tmp_path: Path) -> None:
     done = port.run(source, CONFIG, port.scenario(NAME, "three_empty_answers_write_nothing"), tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "hits request failed", "200")}
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", "hits request failed (HTTP 200, empty body)", "200")
+    }
     assert (done.status, done.ctx.critical) == (0, [])
 
 
@@ -444,7 +448,18 @@ def test_a_pages_404_is_retried_and_recoverable(tmp_path: Path) -> None:
     failures are critical): the pages' request is retried, as the script retries it, and is not critical."""
     done = run(tmp_path, *[exchange(gc.HITS, "", status=404)] * 3, seed=EARLIER)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "hits request failed", "404")}
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", "hits request failed (HTTP 404, empty body)", "404")
+    }
+    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
+
+
+def test_a_bot_challenge_is_a_fetch_failed_row_that_names_it(tmp_path: Path) -> None:
+    challenge = "<!DOCTYPE html><html><head><title>Just a moment...</title></head></html>"
+    done = run(tmp_path, *[exchange(gc.HITS, challenge, status=403)] * 3, seed=EARLIER)
+
+    reason = "hits request failed (HTTP 403, bot challenge)"
+    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", reason, "403")}
     assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
 
 
@@ -473,8 +488,10 @@ def test_a_failed_request_logs_its_cause(tmp_path: Path) -> None:
 def test_an_error_waiting_cant_fix_is_not_retried_and_critical_at_once(tmp_path: Path, code: int) -> None:
     done = run(tmp_path, exchange(gc.HITS, "", status=code), seed=EARLIER)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "hits request failed", str(code))}
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{SITE}: HTTP {code} from GoatCounter's API")]
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", f"hits request failed (HTTP {code}, empty body)", str(code))
+    }
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{SITE}: HTTP {code} from GoatCounter's API; empty body")]
     assert (done.status, done.sleeps) == (1, [])
 
 
@@ -490,7 +507,9 @@ def test_a_failure_keeps_yesterdays_good_row(tmp_path: Path) -> None:
 
 def test_a_day_with_only_a_failure_row_is_backfilled(tmp_path: Path) -> None:
     """A failure row isn't a day the file has: the next good run fills it."""
-    seed = BEFORE.replace(gc.row("2026-09-20", 1), failure_row("fetch_failed", "hits request failed", "503"))
+    seed = BEFORE.replace(
+        gc.row("2026-09-20", 1), failure_row("fetch_failed", "hits request failed (HTTP 503, empty body)", "503")
+    )
 
     done = run(tmp_path, *three_pages(), seed=seed)
 
@@ -521,7 +540,7 @@ def test_a_failed_total_and_referrers_are_null_in_a_partial_row(tmp_path: Path) 
     done = run_scenario(scenario, tmp_path)
 
     script = golden_lines(scenario.name)
-    reason = "total request failed (HTTP 500); path 2 referrers request failed (HTTP 500)"
+    reason = "total request failed (HTTP 500, empty body); path 2 referrers request failed (HTTP 500, JSON body)"
     row = {**json.loads(script[-1]), "top_referrers": None}
     del row["captured_at"]
     written = json.dumps({**row, "status": "partial", "reason": reason, "captured_at": NOW}) + "\n"
@@ -596,7 +615,7 @@ def test_a_failed_stats_request_is_null_in_a_partial_row_and_recoverable(
 ) -> None:
     done = run(tmp_path, *with_stats(kind, [gc.stats(kind, "", status)] * 3))
 
-    reason = f"{kind} request failed (HTTP {status})"
+    reason = f"{kind} request failed (HTTP {status}, empty body)"
     assert done.rows[FILE].splitlines(keepends=True)[-1] == partial(reason, **{f"top_{kind}": None})
     assert (done.status, done.ctx.critical) == (0, [])
 
@@ -643,9 +662,9 @@ def test_the_stats_are_the_ten_with_the_most_visitors_whatever_order_the_api_giv
 def test_a_rejected_stats_request_is_critical_with_its_partial_row(tmp_path: Path, code: int) -> None:
     done = run(tmp_path, *with_stats("locations", gc.stats("locations", "", code)))  # not retried
 
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{SITE}: HTTP {code} from GoatCounter's API")]
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{SITE}: HTTP {code} from GoatCounter's API; empty body")]
     assert done.rows[FILE].splitlines(keepends=True)[-1] == partial(
-        f"locations request failed (HTTP {code})", top_locations=None
+        f"locations request failed (HTTP {code}, empty body)", top_locations=None
     )
     assert done.status == 1
 
@@ -654,9 +673,9 @@ def test_a_rejected_stats_request_is_critical_with_its_partial_row(tmp_path: Pat
 def test_a_rejected_optional_request_is_critical_with_its_partial_row(tmp_path: Path, code: int) -> None:
     done = run(tmp_path, *three_pages(total=exchange(gc.TOTAL, "", status=code)))
 
-    reason = f"total request failed (HTTP {code})"
+    reason = f"total request failed (HTTP {code}, empty body)"
     assert done.rows[FILE].splitlines(keepends=True)[-1] == partial(reason, window_total=None)
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{SITE}: HTTP {code} from GoatCounter's API")]
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{SITE}: HTTP {code} from GoatCounter's API; empty body")]
     assert done.status == 1
 
 
@@ -665,11 +684,11 @@ def test_a_rejected_optional_request_is_critical_with_its_partial_row(tmp_path: 
     [
         (
             three_pages(total=exchange(gc.TOTAL, "", status=404)),
-            partial("total request failed (HTTP 404)", window_total=None),
+            partial("total request failed (HTTP 404, empty body)", window_total=None),
         ),
         (
             three_pages(refs=[*[exchange(gc.refs_url(1), "", status=404)] * 3, *gc.REFERRERS[1:]]),
-            partial("path 1 referrers request failed (HTTP 404)", top_referrers=None),
+            partial("path 1 referrers request failed (HTTP 404, empty body)", top_referrers=None),
         ),
     ],
     ids=["total", "referrers"],
@@ -698,7 +717,7 @@ def test_a_failed_part_keeps_the_value_an_earlier_run_got(tmp_path: Path) -> Non
 
 
 def test_a_partial_row_is_filled_by_a_later_run_and_becomes_good(tmp_path: Path) -> None:
-    earlier = partial("total request failed (HTTP 500)", window_total=None)
+    earlier = partial("total request failed (HTTP 500, empty body)", window_total=None)
 
     done = run(tmp_path, *three_pages(), seed=BEFORE + earlier)
 
@@ -706,7 +725,7 @@ def test_a_partial_row_is_filled_by_a_later_run_and_becomes_good(tmp_path: Path)
 
 
 def test_a_failure_keeps_a_partial_row(tmp_path: Path) -> None:
-    earlier = partial("total request failed (HTTP 500)", window_total=None)
+    earlier = partial("total request failed (HTTP 500, empty body)", window_total=None)
 
     done = run(tmp_path, *[failed(gc.HITS)] * 3, seed=EARLIER + earlier)
 
@@ -716,7 +735,7 @@ def test_a_failure_keeps_a_partial_row(tmp_path: Path) -> None:
 
 def test_a_past_days_partial_row_is_not_backfilled_over(tmp_path: Path) -> None:
     """A partial row for a past day holds the values its night got; a backfill row would erase them."""
-    past = partial("total request failed (HTTP 500)", window_total=None).replace("2026-09-22", "2026-09-21")
+    past = partial("total request failed (HTTP 500, empty body)", window_total=None).replace("2026-09-22", "2026-09-21")
     seed = BEFORE.replace(gc.row("2026-09-21", 1), past)
 
     done = run(tmp_path, *three_pages(), seed=seed)

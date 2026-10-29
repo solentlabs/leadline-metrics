@@ -52,7 +52,7 @@ def _traffic(ctx: Context, repo: str, file: File, kind: str) -> tuple[dict[str, 
     except HttpError as e:
         ctx.log.info("WARN: Failed to fetch GitHub %s for %s: HTTP %s", kind, repo, e.http_code)
         ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: HTTP {e.http_code} from GitHub's traffic API")
-        reason = f"{kind} request failed (HTTP {e.http_code})"
+        reason = e.failed(kind)
     except UnusableError as e:
         ctx.log.info("WARN: Failed to parse GitHub %s for %s: %s", kind, repo, e)
         reason = str(e)
@@ -67,7 +67,7 @@ def _collect(ctx: Context, entry: Any) -> None:
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch the repository %s: HTTP %s", repo, e.http_code)
         ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: HTTP {e.http_code} from GitHub's repository API")
-        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": "repository request failed"}
+        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": e.failed("repository")}
         store.write_failure(file, {"date": day, "repo": repo, **failure}, ctx.now)
         return
     row: dict[str, Any] = {"date": day, "repo": repo}

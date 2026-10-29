@@ -77,7 +77,7 @@ def _collect(ctx: Context, entry: Any) -> None:
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch releases for %s: HTTP %s", repo, e.http_code)
         ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: HTTP {e.http_code} from GitHub's releases API")
-        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": "releases request failed"}
+        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": e.failed("releases")}
     except ValueError:
         failure = {"status": "parse_failed", "reason": "response was not JSON"}
     except _UnreadableError as e:

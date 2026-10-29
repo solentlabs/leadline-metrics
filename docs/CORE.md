@@ -28,7 +28,17 @@ the configured user agent and a 60-second timeout.
     rows);
   - `headers`: the response's headers, names lower-cased;
   - `http_code`: `code` as a failure row gives it, curl's three digits in
-    the script: `"503"`, or `"000"` for no response.
+    the script: `"503"`, or `"000"` for no response;
+  - `cause`: the kind of failure in a few words: `bot challenge`, `rate
+    limited`, `HTML page`, `JSON body`, `text body`, `empty body`, or with
+    no response `timed out`, `connection refused`, `DNS failure`,
+    `connection reset`, `TLS error`, `connection error`;
+  - `failed(kind)`: a failure row's reason, `topic request failed (HTTP 403,
+    bot challenge)`. A source writes it for every failed request, in a
+    `fetch_failed` row and in a partial row's failures, because the log is
+    overwritten each night and a row is what is left to read. An error
+    waiting can't fix is recorded critical with its cause after the
+    source's reason (`...; HTML page`), so health keeps it for its 14 days.
 - **Retries.** Three attempts unless the source gives another number
   (`attempts=1` where a second try can't help: a probe whose failure is the
   answer; ADR "A request is tried up to three times unless its source says
@@ -356,8 +366,8 @@ didn't get):
 - **Input.** `row` is the source's row, its fields in the source's order,
   each failed part null, and no `status` (or `ok` where the source's good
   rows carry one, as `pypi`'s do; `partial` replaces it in place). `failed`
-  maps each failure, as the reason names it (`views request failed (HTTP
-  503)`), to the fields of the part it left null; it names at least one.
+  maps each failure, as `HttpError.failed` names it (`views request failed
+  (HTTP 503, empty body)`), to the fields of the part it left null; it names at least one.
 - **Merge.** Store reads the stored row for the key (the last good or
   partial line) and fills each failed part whose every field that row
   knows: a good row's value, null included, or a partial row's non-null

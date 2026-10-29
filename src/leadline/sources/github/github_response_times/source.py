@@ -71,7 +71,7 @@ def _collect(ctx: Context, entry: Any) -> None:
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch issue page %d for %s: HTTP %s", len(pages) + 1, repo, e.http_code)
         ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: HTTP {e.http_code} from GitHub's GraphQL API")
-        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": f"{KIND} request failed"}
+        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": e.failed(KIND)}
     except github.GraphqlError as e:
         ctx.log.info("ERROR: Failed to page issues for %s: %s", repo, e)
         ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: GitHub's GraphQL API answered: {e}")

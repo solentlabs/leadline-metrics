@@ -5,13 +5,19 @@ follow [SemVer](https://semver.org/).
 
 ## Unreleased
 
-- Every request is tried up to three times (waiting 10, then 20 seconds) unless its
-  source asks for one, where it was one try before: the GitHub sources, the Home
-  Assistant feeds, `discourse_topics`, `discourse_forum`, `pypi`'s metadata and
-  `cloudflare_web`'s site list. A night a service refuses for a moment (a bot
-  challenge, a stray 404, a reset connection) no longer leaves a gap that can't
-  be backfilled. Errors waiting can't fix (a rejected credential, a missing
-  thing) are still tried once; a rate limit is retried like any other failure.
+- Every request is tried up to three times (waiting 10, then 20 seconds)
+  unless its source asks for one, where it was one try before: the GitHub
+  sources, the Home Assistant feeds, `discourse_topics`, `discourse_forum`,
+  `pypi`'s metadata and `cloudflare_web`'s site list. A night a service
+  refuses for a moment (a bot challenge, a stray 404, a reset connection) no
+  longer leaves a gap that can't be backfilled. Errors waiting can't fix (a
+  rejected credential, a missing thing) are still tried once; a rate limit
+  is retried like any other failure.
+- A failure row's `reason` names the kind of failure along with the status,
+  `topic request failed (HTTP 403, bot challenge)` or `... (HTTP 404, HTML
+  page)`, where it said only `topic request failed`. A critical entry in
+  `health.jsonl` ends with the same cause. The nightly log is overwritten
+  each run, so a row is what is left to read.
 
 ## 0.9.0 - 2026-10-28
 

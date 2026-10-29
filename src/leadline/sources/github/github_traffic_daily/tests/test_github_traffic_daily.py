@@ -30,7 +30,9 @@ FILE = gd.FILE
 REPO = gd.REPO
 EARLIER = gd.row("2026-09-21", 5)  # the seed without yesterday's row, so a failure row can be written
 NOW = "2026-09-23T23:31:05+00:00"  # the scenarios' clock as captured_at gives it
-CRITICAL = {"failed_views_write_nothing": [Critical(NAME, FILE, f"{REPO}: HTTP 403 from GitHub's traffic API")]}
+CRITICAL = {
+    "failed_views_write_nothing": [Critical(NAME, FILE, f"{REPO}: HTTP 403 from GitHub's traffic API; JSON body")]
+}
 
 
 # --- the contract ---
@@ -188,7 +190,9 @@ def without_yesterday(name: str, **changes: Any) -> Any:
 def test_failed_views_are_a_fetch_failed_row_for_yesterday_and_critical_without_push_access(tmp_path: Path) -> None:
     done = port.run(source, CONFIG, without_yesterday("failed_views_write_nothing"), tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "views request failed", "403")}
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", "views request failed (HTTP 403, JSON body)", "403")
+    }
     assert done.ctx.critical == CRITICAL["failed_views_write_nothing"]
     assert done.status == 1
 
@@ -199,7 +203,9 @@ def test_failed_clones_are_a_fetch_failed_row_for_yesterday(tmp_path: Path) -> N
 
     done = port.run(source, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "clones request failed", "000")}
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", "clones request failed (HTTP 000, connection refused)", "000")
+    }
     assert (done.status, done.ctx.critical) == (0, [])
 
 
@@ -330,8 +336,10 @@ def test_an_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int
 
     done = port.run(source, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "views request failed", str(code))}
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP {code} from GitHub's traffic API")]
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", f"views request failed (HTTP {code}, empty body)", str(code))
+    }
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP {code} from GitHub's traffic API; empty body")]
     assert done.status == 1
 
 
@@ -346,8 +354,22 @@ def test_a_rate_limit_is_tried_three_times_and_recoverable(tmp_path: Path, code:
 
     done = port.run(source, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "views request failed", str(code))}
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", f"views request failed (HTTP {code}, rate limited)", str(code))
+    }
     assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
+
+
+def test_an_error_page_names_its_kind_in_the_reason(tmp_path: Path) -> None:
+    scenario = without_yesterday(
+        "failed_views_write_nothing", responses=thrice(exchange(gd.VIEWS, "<html>Bad Gateway</html>", status=502))
+    )
+
+    done = port.run(source, CONFIG, scenario, tmp_path)
+
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", "views request failed (HTTP 502, HTML page)", "502")
+    }
 
 
 def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
@@ -361,7 +383,9 @@ def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
 
     done = port.run(source, [*CONFIG, {"repo": "a/other"}], scenario, tmp_path)
 
-    assert done.rows[FILE] == EARLIER + failure_row("fetch_failed", "views request failed", "000")
+    assert done.rows[FILE] == EARLIER + failure_row(
+        "fetch_failed", "views request failed (HTTP 000, connection refused)", "000"
+    )
     assert done.rows["github-traffic-daily-other.jsonl"].startswith('{"date": "2026-09-22", "views": 4, ')
 
 

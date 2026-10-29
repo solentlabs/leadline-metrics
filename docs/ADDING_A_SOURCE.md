@@ -291,7 +291,7 @@ def _collect(ctx: Context, entry: Any) -> None:
     except HttpError as e:
         # Critical when waiting can't fix it: rejected, or not there.
         ctx.record_unfixable(NAME, file.name, e, f"{package}: HTTP {e.http_code} from NuGet")
-        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": "search request failed"}
+        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": e.failed("search")}
     except ValueError:  # not JSON, or not a search result
         failure = {"status": "parse_failed", "reason": "response was not a search result"}
     else:

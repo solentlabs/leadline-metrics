@@ -176,7 +176,7 @@ def test_a_failed_referrers_fetch_is_a_partial_row_with_the_views_and_clones(tmp
 
     done = run(replace(scenario, responses=retried(scenario.responses)), tmp_path)
 
-    assert done.rows == {FILE: partial_row("referrers request failed (HTTP 500)")}
+    assert done.rows == {FILE: partial_row("referrers request failed (HTTP 500, empty body)")}
     assert f"WARN: Failed to fetch GitHub referrers for {REPO}: HTTP 500" in done.log
     assert (done.status, done.ctx.critical) == (0, [])
 
@@ -253,7 +253,7 @@ def paths_failed(tmp_path: Path, *answers: Any) -> Any:
 def test_a_failed_paths_fetch_is_a_partial_row_with_the_views_clones_and_referrers(tmp_path: Path) -> None:
     done = paths_failed(tmp_path, *thrice(exchange(gt.PATHS, "", status=500)))
 
-    assert done.rows == {FILE: partial_row("paths request failed (HTTP 500)", referrers=False, paths=True)}
+    assert done.rows == {FILE: partial_row("paths request failed (HTTP 500, empty body)", referrers=False, paths=True)}
     assert f"WARN: Failed to fetch GitHub paths for {REPO}: HTTP 500" in done.log
     assert (done.status, done.ctx.critical) == (0, [])
 
@@ -266,10 +266,14 @@ def test_paths_the_token_may_not_read_are_critical_and_a_rate_limit_is_tried_thr
         tmp_path / "limited", *thrice(exchange(gt.PATHS, "", status=403, headers={"X-RateLimit-Remaining": "0"}))
     )
 
-    assert forbidden.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP 403 from GitHub's traffic API")]
-    assert forbidden.rows == {FILE: partial_row("paths request failed (HTTP 403)", referrers=False, paths=True)}
+    assert forbidden.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP 403 from GitHub's traffic API; JSON body")]
+    assert forbidden.rows == {
+        FILE: partial_row("paths request failed (HTTP 403, JSON body)", referrers=False, paths=True)
+    }
     assert limited.ctx.critical == []
-    assert limited.rows == {FILE: partial_row("paths request failed (HTTP 403)", referrers=False, paths=True)}
+    assert limited.rows == {
+        FILE: partial_row("paths request failed (HTTP 403, rate limited)", referrers=False, paths=True)
+    }
     assert (limited.status, limited.sleeps) == (0, [10, 20])  # tried three times
 
 
@@ -287,7 +291,9 @@ def test_referrers_and_paths_that_both_fail_say_so_in_one_reason(tmp_path: Path)
 
     row = json.loads(done.rows[FILE])
     assert row["status"] == "partial"
-    assert row["reason"] == "referrers request failed (HTTP 500); paths request failed (HTTP 502)"
+    assert (
+        row["reason"] == "referrers request failed (HTTP 500, empty body); paths request failed (HTTP 502, empty body)"
+    )
     assert (row["top_referrers"], row["top_paths"]) == (None, None)
 
 
@@ -375,8 +381,10 @@ def test_failed_views_are_a_fetch_failed_row_and_critical_without_push_access(tm
     """GitHub answers 403 to a token without push access, which waiting can't fix."""
     done = run(port.scenario(NAME, "failed_views_write_nothing"), tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "views request failed", "403")}
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP 403 from GitHub's traffic API")]
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", "views request failed (HTTP 403, JSON body)", "403")
+    }
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP 403 from GitHub's traffic API; JSON body")]
     assert done.status == 1
 
 
@@ -385,7 +393,9 @@ def test_failed_clones_are_a_fetch_failed_row(tmp_path: Path) -> None:
 
     done = run(replace(scenario, responses=retried(scenario.responses)), tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "clones request failed", "000")}
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", "clones request failed (HTTP 000, connection refused)", "000")
+    }
     assert (done.status, done.ctx.critical) == (0, [])  # recoverable: the next run writes the day
 
 
@@ -518,8 +528,10 @@ def test_an_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int
 
     done = run(scenario, tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "views request failed", str(code))}
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP {code} from GitHub's traffic API")]
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", f"views request failed (HTTP {code}, empty body)", str(code))
+    }
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP {code} from GitHub's traffic API; empty body")]
     assert done.status == 1
 
 
@@ -536,8 +548,21 @@ def test_a_rate_limit_is_tried_three_times_and_recoverable(tmp_path: Path, code:
 
     done = run(scenario, tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "clones request failed", str(code))}
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", f"clones request failed (HTTP {code}, rate limited)", str(code))
+    }
     assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
+
+
+def test_an_error_page_names_its_kind_in_the_reason(tmp_path: Path) -> None:
+    page = exchange(gt.VIEWS, "<html>Bad Gateway</html>", status=502)
+    scenario = replace(port.scenario(NAME, "failed_views_write_nothing"), responses=thrice(page))
+
+    done = run(scenario, tmp_path)
+
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", "views request failed (HTTP 502, HTML page)", "502")
+    }
 
 
 def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
@@ -552,7 +577,9 @@ def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
 
     done = run_with(scenario, tmp_path)
 
-    assert done.rows[FILE] == EARLIER + failure_row("fetch_failed", "views request failed", "000")
+    assert done.rows[FILE] == EARLIER + failure_row(
+        "fetch_failed", "views request failed (HTTP 000, connection refused)", "000"
+    )
     assert (
         '"top_referrers": [{"ref": "github.com", "count": 2, "unique": 1}]' in done.rows["github-traffic-other.jsonl"]
     )

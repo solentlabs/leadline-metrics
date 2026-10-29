@@ -21,6 +21,10 @@ and corrects its last 30 days); the script never reads the week's top lists, so 
 `top_countries`, `top_devices`, `top_paths`, `top_browsers`, `top_systems` and `top_bots` besides, and the
 scenarios that write a row are in DIVERGENCES for it (more data is captured than the script did); `lists`
 gives leadline's six more responses.
+
+A failure row's `reason` names the cause (ADR: a failure names its cause in the row), where the script writes
+"graphql request failed", so the scenarios that end in a failure row (`three_failed_attempts_record_the_last_status`,
+`an_empty_body_is_a_failure`) carry reviewed `expected` rows in place of the script's calls.
 """
 
 from __future__ import annotations
@@ -187,6 +191,13 @@ def fetch_failed(when: date) -> str:
     return json.dumps({**row, "reason": "graphql request failed"}) + "\n"
 
 
+def failure_row(http_code: str, cause: str) -> str:
+    """The failure row leadline writes for yesterday when its request fails with `cause`, as captured at the run."""
+    row = {"date": YESTERDAY.isoformat(), "site": LABEL, "status": "fetch_failed", "http_code": http_code}
+    reason = f"graphql request failed (HTTP {http_code}, {cause})"
+    return json.dumps({**row, "reason": reason, "captured_at": "2026-09-23T23:31:05+00:00"}) + "\n"
+
+
 def stored_month(first: int = 0, instead: dict[int, str] | None = None) -> str:
     """MONTH's days `first` to 28 (the day before yesterday) as earlier runs read them, under SITE;
     `instead` gives the text for a day, by its number, in place of its row ("" for no row)."""
@@ -279,9 +290,10 @@ SCENARIOS = [
     Scenario("retries_after_an_empty_body", CALLS, [answer(""), answer(WEEK)]),
     Scenario(
         "three_failed_attempts_record_the_last_status",
-        CALLS,
+        [],
         [answer('{"errors": [{"message": "busy"}]}', status=500), answer("", status=429), answer("", status=503)],
         seed={FILE: OLDER_ROW},
+        expected={FILE: OLDER_ROW + failure_row("503", "empty body")},
     ),
     Scenario(
         "a_failure_replaces_a_good_row",
@@ -289,7 +301,12 @@ SCENARIOS = [
         [failure()] * 3,  # each of the three attempts
         seed={FILE: OLDER_ROW + GOOD_ROW},
     ),
-    Scenario("an_empty_body_is_a_failure", CALLS, [answer("")] * 3),  # each of the three attempts
+    Scenario(
+        "an_empty_body_is_a_failure",
+        [],
+        [answer("")] * 3,  # each of the three attempts
+        expected={FILE: failure_row("200", "empty body")},
+    ),
     Scenario(
         "graphql_errors_in_a_success",
         CALLS,

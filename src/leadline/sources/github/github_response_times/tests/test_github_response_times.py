@@ -166,7 +166,9 @@ def test_a_failed_later_page_is_a_fetch_failed_row(tmp_path: Path) -> None:
 
     done = port.run(github_response_times, CONFIG, replace(scenario, responses=retried(scenario.responses)), tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "issues request failed", "502")}
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", "issues request failed (HTTP 502, empty body)", "502")
+    }
     assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
     assert f"ERROR: Failed to fetch issue page 2 for {REPO}: HTTP 502" in done.log
 
@@ -316,8 +318,10 @@ def test_an_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int
 
     done = port.run(github_response_times, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "issues request failed", str(code))}
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP {code} from GitHub's GraphQL API")]
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", f"issues request failed (HTTP {code}, empty body)", str(code))
+    }
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP {code} from GitHub's GraphQL API; empty body")]
     assert done.status == 1
 
 
@@ -332,7 +336,7 @@ def test_a_graphql_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path) ->
     )
 
     assert done.rows == {FILE: EARLIER + failure_row("graphql_error", "Could not resolve")}
-    reason = f"{REPO}: GitHub's GraphQL API answered: Could not resolve"
+    reason = f"{REPO}: GitHub's GraphQL API answered: Could not resolve; GraphQL NOT_FOUND"
     assert (done.status, done.ctx.critical) == (1, [Critical(NAME, FILE, reason)])
 
 
@@ -358,8 +362,23 @@ def test_no_connection_is_recorded_as_000_and_is_recoverable(tmp_path: Path) -> 
 
     done = port.run(github_response_times, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "issues request failed", "000")}
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", "issues request failed (HTTP 000, connection refused)", "000")
+    }
     assert done.status == 0
+
+
+def test_a_bot_challenge_is_named_in_the_failed_row(tmp_path: Path) -> None:
+    challenge = exchange(
+        GITHUB_GRAPHQL, "<html><title>Just a moment...</title></html>", method="POST", sent=FIRST_SENT, status=403
+    )
+    scenario = replace(port.scenario(NAME, "graphql_errors_write_nothing"), responses=thrice(challenge))
+
+    done = port.run(github_response_times, CONFIG, scenario, tmp_path)
+
+    reason = "issues request failed (HTTP 403, bot challenge)"
+    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", reason, "403")}
+    assert (done.status, done.ctx.critical) == (0, [])
 
 
 def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
@@ -371,7 +390,9 @@ def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
 
     done = port.run(github_response_times, [*CONFIG, other], scenario, tmp_path)
 
-    assert done.rows[FILE] == EARLIER + failure_row("fetch_failed", "issues request failed", "502")
+    assert done.rows[FILE] == EARLIER + failure_row(
+        "fetch_failed", "issues request failed (HTTP 502, empty body)", "502"
+    )
     assert '"issues_scanned": 0' in done.rows["github-response-times-other.jsonl"]
 
 

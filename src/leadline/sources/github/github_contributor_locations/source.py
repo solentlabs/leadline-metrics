@@ -127,7 +127,7 @@ def _collect(ctx: Context, entry: Any) -> None:
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch issues for contributor locations of %s: HTTP %s", repo, e.http_code)
         ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: HTTP {e.http_code} from GitHub's {KIND} API")
-        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": f"{KIND} request failed"}
+        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": e.failed(KIND)}
         store.write_failure(file, {**row, **failure}, ctx.now)
         return
     ctx.log.info("Contributor locations: fetched %d page(s) of issues for %s", len(pages), repo)

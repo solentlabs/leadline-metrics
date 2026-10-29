@@ -94,7 +94,7 @@ def _collect(ctx: Context, entry: Any) -> None:
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch GitHub %s for %s: HTTP %s", kind, repo, e.http_code)
         ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: HTTP {e.http_code} from GitHub's {kind} API")
-        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": f"{kind} request failed"}
+        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": e.failed(kind)}
         store.write_failure(file, {"date": day, **failure}, ctx.now)
         return
     try:

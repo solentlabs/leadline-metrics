@@ -79,6 +79,9 @@ class RequestError(Protocol):
     @property
     def unfixable(self) -> bool: ...
 
+    @property
+    def cause(self) -> str: ...
+
 
 class Reporter(Protocol):
     """What the report step (reports, trends) needs of a context: the clock's date, the folder, the log, and
@@ -180,12 +183,13 @@ class Context:
         _record_critical(self.critical, self.log, source, file, reason)
 
     def record_unfixable(self, source: str, file: str | None, error: RequestError, reason: str) -> None:
-        """Record `error` critical, with `reason`, when waiting can't fix it (`error.unfixable`); else nothing.
+        """Record `error` critical, with `reason` and the error's cause, when waiting can't fix it
+        (`error.unfixable`); else nothing.
 
         Every source calls it for each failed request, so the rule lives here once.
         """
         if error.unfixable:
-            self.record_critical(source, file, reason)
+            self.record_critical(source, file, f"{reason}; {error.cause}")
 
 
 def _record_critical(critical: list[Critical], log: logging.Logger, source: str, file: str | None, reason: str) -> None:

@@ -1268,8 +1268,10 @@ def test_a_repo_not_found_is_a_fetch_failed_row_and_critical(tmp_path: Path) -> 
 
     done = port.run(source, gi.leadline_config(scenario), scenario, tmp_path)
 
-    assert done.rows == {FILE: gi.YESTERDAY + failure_row("fetch_failed", "repository request failed", "404")}
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP 404 from GitHub's repository API")]
+    assert done.rows == {
+        FILE: gi.YESTERDAY + failure_row("fetch_failed", "repository request failed (HTTP 404, JSON body)", "404")
+    }
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP 404 from GitHub's repository API; JSON body")]
     assert done.status == 1
 
 
@@ -1279,7 +1281,9 @@ def test_a_failed_open_page_is_a_fetch_failed_row(tmp_path: Path) -> None:
 
     done = port.run(source, gi.leadline_config(scenario), scenario, tmp_path)
 
-    assert done.rows == {FILE: gi.YESTERDAY + failure_row("fetch_failed", "open issues request failed", "500")}
+    assert done.rows == {
+        FILE: gi.YESTERDAY + failure_row("fetch_failed", "open issues request failed (HTTP 500, empty body)", "500")
+    }
     assert (done.status, done.ctx.critical) == (0, [])
 
 
@@ -1289,7 +1293,10 @@ def test_a_failed_later_page_is_a_fetch_failed_row(tmp_path: Path) -> None:
 
     done = port.run(source, gi.leadline_config(scenario), scenario, tmp_path)
 
-    assert done.rows == {FILE: gi.YESTERDAY + failure_row("fetch_failed", "all issues request failed", "000")}
+    assert done.rows == {
+        FILE: gi.YESTERDAY
+        + failure_row("fetch_failed", "all issues request failed (HTTP 000, connection refused)", "000")
+    }
     assert "ERROR: Failed to fetch GitHub all issues for solentlabs/example: HTTP 000" in done.log
 
 
@@ -1322,8 +1329,10 @@ def test_an_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int
 
     done = run(tmp_path, responses)
 
-    assert done.rows == {FILE: gi.YESTERDAY + failure_row("fetch_failed", f"{kind} request failed", str(code))}
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP {code} from GitHub's {kind} API")]
+    assert done.rows == {
+        FILE: gi.YESTERDAY + failure_row("fetch_failed", f"{kind} request failed (HTTP {code}, empty body)", str(code))
+    }
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP {code} from GitHub's {kind} API; empty body")]
     assert done.status == 1
 
 
@@ -1339,7 +1348,10 @@ def test_a_rate_limit_is_a_recoverable_fetch_failed_row(tmp_path: Path, code: in
 
     done = run(tmp_path, responses)
 
-    assert done.rows == {FILE: gi.YESTERDAY + failure_row("fetch_failed", "all issues request failed", str(code))}
+    assert done.rows == {
+        FILE: gi.YESTERDAY
+        + failure_row("fetch_failed", f"all issues request failed (HTTP {code}, rate limited)", str(code))
+    }
     assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
 
 
@@ -1434,6 +1446,18 @@ def test_a_failure_keeps_a_good_row(tmp_path: Path) -> None:
     assert f"WARN: kept the good row for 2026-09-23 in {FILE}; fetch_failed not recorded" in done.log
 
 
+def test_a_bot_challenge_is_named_in_the_failed_row(tmp_path: Path) -> None:
+    challenge = lambda url: exchange(url, "<html><title>Just a moment...</title></html>", status=403)  # noqa: E731
+    responses = failing_at(gi.responses(gi.SMALL), gi.REPO_URL, challenge)
+    responses = [*responses[:-1], *thrice(responses[-1])]
+
+    done = run(tmp_path, responses)
+
+    reason = "repository request failed (HTTP 403, bot challenge)"
+    assert done.rows == {FILE: gi.YESTERDAY + failure_row("fetch_failed", reason, "403")}
+    assert (done.status, done.ctx.critical) == (0, [])
+
+
 def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
     other = f"{GITHUB_API}/repos/a/other"
     responses = [
@@ -1445,7 +1469,9 @@ def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
 
     done = run(tmp_path, responses, cfg=[ENTRY, {"repo": "a/other"}])
 
-    assert done.rows[FILE] == gi.YESTERDAY + failure_row("fetch_failed", "repository request failed", "000")
+    assert done.rows[FILE] == gi.YESTERDAY + failure_row(
+        "fetch_failed", "repository request failed (HTTP 000, connection refused)", "000"
+    )
     assert done.rows["github-issues-other.jsonl"].startswith(
         '{"date": "2026-09-23", "repo": {"stars": 2, "forks": 0, "watchers": 0}, "issues": {"open": 0, '
     )

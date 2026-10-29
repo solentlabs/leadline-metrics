@@ -160,7 +160,7 @@ def _fetch_metadata(ctx: Context, file: File, package: str) -> tuple[Metadata | 
     except HttpError as e:
         ctx.log.info("WARN: Failed to fetch PyPI metadata for %s (HTTP %s)", package, e.http_code)
         ctx.record_unfixable(spec.NAME, file.name, e, f"{package}: HTTP {e.http_code} from PyPI")
-        return None, f"metadata request failed (HTTP {e.http_code})"
+        return None, e.failed("metadata")
     except UnusableError as e:
         ctx.log.info("WARN: Failed to parse PyPI metadata for %s: %s", package, e)
         return None, str(e)

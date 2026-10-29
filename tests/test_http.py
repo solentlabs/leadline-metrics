@@ -417,6 +417,62 @@ def test_a_403_page_that_is_not_a_challenge_is_still_unfixable() -> None:
     assert HttpError("u", 403, "<title>Forbidden</title>", {"cf-mitigated": "block"}).unfixable
 
 
+@pytest.mark.parametrize(
+    ("code", "body", "headers", "cause"),
+    [
+        (403, CHALLENGE, {}, "bot challenge"),
+        (503, "", {"cf-mitigated": "challenge"}, "bot challenge"),
+        (429, "slow down", {}, "rate limited"),
+        (403, "{}", {"retry-after": "60"}, "rate limited"),
+        (404, "<!DOCTYPE html><html><body>Not Found</body></html>", {}, "HTML page"),
+        (502, "  <html><head></head></html>", {}, "HTML page"),
+        (404, '{"error":"no such thing"}', {}, "JSON body"),
+        (500, "Internal Server Error", {}, "text body"),
+        (500, "", {}, "empty body"),
+        (200, http.EMPTY_BODY, {}, "empty body"),
+    ],
+    ids=[
+        "challenge page",
+        "challenge header",
+        "429",
+        "403 limit",
+        "HTML 404",
+        "HTML 502",
+        "JSON",
+        "text",
+        "empty",
+        "200",
+    ],
+)
+def test_a_failure_names_its_cause(code: int, body: str, headers: dict[str, str], cause: str) -> None:
+    """Live 2026-10-21 and 2026-10-23: a row said only "request failed" for a challenge page and for an HTML 404."""
+    assert HttpError("u", code, body, headers).cause == cause
+
+
+@pytest.mark.parametrize(
+    ("text", "cause"),
+    [
+        ("<urlopen error timed out>", "timed out"),
+        ("timed out", "timed out"),
+        ("<urlopen error [Errno 111] Connection refused>", "connection refused"),
+        ("<urlopen error [Errno -2] Name or service not known>", "DNS failure"),
+        ("<urlopen error [Errno -3] Temporary failure in name resolution>", "DNS failure"),
+        ("[Errno 104] Connection reset by peer", "connection reset"),
+        ("<urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed>", "TLS error"),
+        ("something else", "connection error"),
+        ("no saved response (offline)", "connection error"),
+    ],
+)
+def test_a_connection_that_failed_names_its_cause(text: str, cause: str) -> None:
+    assert HttpError("u", 0, text).cause == cause
+
+
+def test_a_failed_request_reads_as_its_kind_status_and_cause() -> None:
+    """A failure row's reason: what was asked, and what went wrong, where the row's `http_code` says only 403."""
+    assert HttpError("u", 403, CHALLENGE).failed("topic") == "topic request failed (HTTP 403, bot challenge)"
+    assert HttpError("u", 0, "timed out").failed("views") == "views request failed (HTTP 000, timed out)"
+
+
 @pytest.mark.parametrize("code", [0, 200, 500, 502, 503])
 def test_other_failures_are_neither(code: int) -> None:
     error = HttpError("u", code, "x", {"retry-after": "5"})

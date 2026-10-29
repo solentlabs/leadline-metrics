@@ -351,6 +351,12 @@ def test_any_other_graphql_error_is_recoverable(error: dict[str, str]) -> None:
     assert not github.GraphqlError([error]).unfixable
 
 
+def test_a_graphql_error_names_its_types_as_its_cause() -> None:
+    error = github.GraphqlError([{"type": "RATE_LIMITED", "message": "a"}, {"type": "NOT_FOUND"}, {"message": "c"}])
+
+    assert error.cause == "GraphQL NOT_FOUND, RATE_LIMITED, error"
+
+
 def test_an_owner_and_name_are_the_query_variables() -> None:
     assert github.owner_and_name(REPO) == {"o": "example-org", "n": "example-app"}
 

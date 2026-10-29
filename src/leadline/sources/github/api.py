@@ -100,6 +100,12 @@ class GraphqlError(Exception):
         self.errors, self.data = errors, data
         self.unfixable = any(e.get("type") in GRAPHQL_UNFIXABLE for e in errors)
 
+    @property
+    def cause(self) -> str:
+        """The errors' types, as `GraphQL NOT_FOUND`."""
+        types = sorted({str(e.get("type", "error")) for e in self.errors[:GRAPHQL_REASONS]})
+        return "GraphQL " + ", ".join(types)
+
 
 def owner_and_name(repo: str) -> dict[str, str]:
     """A repo's owner and name as a query's variables, `o` and `n`, as the scripts send them."""

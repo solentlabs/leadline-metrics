@@ -110,7 +110,7 @@ def _collect(ctx: Context, entry: Any) -> None:
     except HttpError as e:
         ctx.log.info("ERROR: GoatCounter hits for %s failed (HTTP %s)", site, e.http_code)
         ctx.record_unfixable(spec.NAME, file.name, e, f"{site}: HTTP {e.http_code} from GoatCounter's API")
-        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": "hits request failed"}
+        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": e.failed("hits")}
         store.write_failure(file, {"date": yesterday, **failure}, ctx.now)
         return
     failed: dict[str, list[str]] = {}  # each failure, as the reason names it, and the field it left null
@@ -138,7 +138,7 @@ def _collect(ctx: Context, entry: Any) -> None:
 def _request_failed(ctx: Context, site: str, file: File, kind: str, error: HttpError) -> str:
     """An optional part's failed request, reported: the reason it gives a partial row."""
     ctx.record_unfixable(spec.NAME, file.name, error, f"{site}: HTTP {error.http_code} from GoatCounter's API")
-    return f"{kind} request failed (HTTP {error.http_code})"
+    return error.failed(kind)
 
 
 def _objects(kind: str, value: Any) -> list[dict[str, Any]]:

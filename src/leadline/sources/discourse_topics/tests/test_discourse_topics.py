@@ -329,7 +329,10 @@ def test_a_row_whose_topic_id_is_a_string_is_a_line_without_a_usable_key(tmp_pat
 
     done = run(tmp_path, *thrice(failed(dt.topic_url(1001))), seed=stray)
 
-    assert done.rows == {FILE: stray + failure_row(1001, "main", "fetch_failed", "topic request failed", "000")}
+    assert done.rows == {
+        FILE: stray
+        + failure_row(1001, "main", "fetch_failed", "topic request failed (HTTP 000, connection refused)", "000")
+    }
 
 
 # --- ADR: a failure is recorded as a failure, per topic ---
@@ -357,13 +360,13 @@ def test_each_topic_that_fails_writes_its_own_failure_row(tmp_path: Path) -> Non
 
     good = with_added(scenarios.load_golden(NAME)[scenario.name]["rows"][FILE])
     assert done.rows == {
-        FILE: failure_row(1001, "main", "fetch_failed", "topic request failed", "000")
+        FILE: failure_row(1001, "main", "fetch_failed", "topic request failed (HTTP 000, connection refused)", "000")
         + failure_row(1002, "other-thread", "parse_failed", "topic response was not JSON")
         + good
-        + failure_row(1004, "gone", "fetch_failed", "topic request failed", "404")
+        + failure_row(1004, "gone", "fetch_failed", "topic request failed (HTTP 404, JSON body)", "404")
         + failure_row(1005, "no-posts-count", "parse_failed", "topic response had an unexpected shape")
     }
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{BASE}: HTTP 404 for topic 1004 (gone)")]
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{BASE}: HTTP 404 for topic 1004 (gone); JSON body")]
     assert done.status == 1  # the topic doesn't exist: waiting can't fix it
 
 
@@ -392,8 +395,10 @@ def test_a_topic_it_cant_use_is_a_parse_failed_row(tmp_path: Path, body: Any) ->
 def test_an_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int) -> None:
     done = run(tmp_path, exchange(dt.topic_url(1001), "", status=code))
 
-    assert done.rows == {FILE: failure_row(1001, "main", "fetch_failed", "topic request failed", str(code))}
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{BASE}: HTTP {code} for topic 1001 (main)")]
+    assert done.rows == {
+        FILE: failure_row(1001, "main", "fetch_failed", f"topic request failed (HTTP {code}, empty body)", str(code))
+    }
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{BASE}: HTTP {code} for topic 1001 (main); empty body")]
     assert done.status == 1
 
 
@@ -404,7 +409,9 @@ def test_a_bot_challenge_is_recoverable_not_critical(tmp_path: Path) -> None:
     """Live 2026-10-21: the forum's host challenged the NAS; one failed night recovers (ADR)."""
     done = run(tmp_path, *thrice(exchange(dt.topic_url(1001), CHALLENGE, status=403)))
 
-    assert done.rows == {FILE: failure_row(1001, "main", "fetch_failed", "topic request failed", "403")}
+    assert done.rows == {
+        FILE: failure_row(1001, "main", "fetch_failed", "topic request failed (HTTP 403, bot challenge)", "403")
+    }
     assert (done.status, done.ctx.critical) == (0, [])
 
 
@@ -423,14 +430,18 @@ def test_three_challenged_attempts_are_a_recoverable_failure_row(tmp_path: Path)
 
     done = run(tmp_path, *thrice(exchange(url, CHALLENGE, status=403)))
 
-    assert done.rows == {FILE: failure_row(1001, "main", "fetch_failed", "topic request failed", "403")}
+    assert done.rows == {
+        FILE: failure_row(1001, "main", "fetch_failed", "topic request failed (HTTP 403, bot challenge)", "403")
+    }
     assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
 
 
 def test_a_rate_limit_is_recoverable(tmp_path: Path) -> None:
     done = run(tmp_path, *thrice(exchange(dt.topic_url(1001), "", status=429)))
 
-    assert done.rows == {FILE: failure_row(1001, "main", "fetch_failed", "topic request failed", "429")}
+    assert done.rows == {
+        FILE: failure_row(1001, "main", "fetch_failed", "topic request failed (HTTP 429, rate limited)", "429")
+    }
     assert (done.status, done.ctx.critical) == (0, [])
 
 
@@ -443,7 +454,7 @@ def test_a_failure_keeps_the_topics_good_row(tmp_path: Path) -> None:
 
 
 def test_a_good_row_replaces_the_topics_failure_row(tmp_path: Path) -> None:
-    earlier = failure_row(1001, "main", "fetch_failed", "topic request failed", "503")
+    earlier = failure_row(1001, "main", "fetch_failed", "topic request failed (HTTP 503, empty body)", "503")
 
     done = run(tmp_path, dt.topic(1001, 5400, 61, 88), seed=earlier)
 
@@ -455,7 +466,10 @@ def test_another_topics_good_row_keeps_no_failure_row_out(tmp_path: Path) -> Non
 
     done = run(tmp_path, *thrice(failed(dt.topic_url(1001))), seed=other)
 
-    assert done.rows == {FILE: other + failure_row(1001, "main", "fetch_failed", "topic request failed", "000")}
+    assert done.rows == {
+        FILE: other
+        + failure_row(1001, "main", "fetch_failed", "topic request failed (HTTP 000, connection refused)", "000")
+    }
 
 
 # --- check() ---

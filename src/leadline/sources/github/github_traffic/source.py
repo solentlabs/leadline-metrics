@@ -104,7 +104,7 @@ def _popular(
     except HttpError as e:
         ctx.log.info("WARN: Failed to fetch GitHub %s for %s: HTTP %s", kind, repo, e.http_code)
         ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: HTTP {e.http_code} from GitHub's traffic API")
-        return None, f"{kind} request failed (HTTP {e.http_code})"
+        return None, e.failed(kind)
     except UnusableError as e:
         ctx.log.info("WARN: Failed to parse GitHub %s for %s: %s", kind, repo, e)
         return None, str(e)
@@ -138,7 +138,7 @@ def _collect(ctx: Context, entry: Any) -> None:
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch GitHub %s for %s: HTTP %s", kind, repo, e.http_code)
         ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: HTTP {e.http_code} from GitHub's traffic API")
-        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": f"{kind} request failed"}
+        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": e.failed(kind)}
     except UnusableError as e:
         ctx.log.info("ERROR: Failed to parse GitHub traffic for %s: %s", repo, e)
         failure = {"status": "parse_failed", "reason": str(e)}

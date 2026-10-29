@@ -226,7 +226,7 @@ def test_a_failure_keeps_a_good_row(tmp_path: Path) -> None:
     assert done.status == 0
     result = (
         'Cloudflare example result: {"date": "2026-09-22", "site": "example", "status": "fetch_failed", '
-        '"http_code": "000", "reason": "graphql request failed"}'
+        '"http_code": "000", "reason": "graphql request failed (HTTP 000, connection refused)"}'
     )
     kept = f"WARN: kept the good row for 2026-09-22 in {FILE}; fetch_failed not recorded"
     assert done.log[done.log.index(result) + 1] == kept
@@ -241,7 +241,7 @@ def test_a_failure_row_replaces_a_failure_row(tmp_path: Path) -> None:
 
     assert done.rows[FILE] == (
         '{"date": "2026-09-22", "site": "example", "status": "fetch_failed", "http_code": "503", '
-        f'"reason": "graphql request failed", "captured_at": "{NOW}"}}\n'
+        f'"reason": "graphql request failed (HTTP 503, empty body)", "captured_at": "{NOW}"}}\n'
     )
 
 
@@ -537,7 +537,7 @@ def test_a_list_request_that_fails_leaves_that_list_null_in_a_partial_row(tmp_pa
 
     done = run(replace(scenario, responses=responses), tmp_path, lists=False)
 
-    assert done.rows == {FILE: partial("top_countries request failed (HTTP 500)", countries=True)}
+    assert done.rows == {FILE: partial("top_countries request failed (HTTP 500, empty body)", countries=True)}
     assert "WARN: Cloudflare top_countries request failed (HTTP 500)" in done.log
     assert (done.status, done.ctx.critical) == (0, [])
 
@@ -596,7 +596,9 @@ def test_both_lists_failing_are_one_partial_row_with_both_reasons(tmp_path: Path
 
     row = json.loads(done.rows[FILE])
     assert (row["status"], row["top_countries"], row["top_devices"]) == ("partial", None, None)
-    assert row["reason"] == "top_countries request failed (HTTP 500); top_devices request failed (HTTP 502)"
+    assert row["reason"] == (
+        "top_countries request failed (HTTP 500, empty body); top_devices request failed (HTTP 502, empty body)"
+    )
 
 
 def test_a_failed_list_keeps_the_list_an_earlier_run_got(tmp_path: Path) -> None:
@@ -616,7 +618,7 @@ def test_lists_the_token_may_not_read_are_critical_and_a_rate_limit_is_not(tmp_p
     denied = [cf.list_answer("countryName", '{"success": false}', status=403), *cf.lists(None, cf.DEVICES)]
     done = run(replace(scenario, responses=[*scenario.responses, *denied]), tmp_path / "denied", lists=False)
 
-    assert done.ctx.critical == [Critical(NAME, FILE, "example: HTTP 403 from Cloudflare's GraphQL API")]
+    assert done.ctx.critical == [Critical(NAME, FILE, "example: HTTP 403 from Cloudflare's GraphQL API; JSON body")]
     assert done.status == 1
     limited = exchange(
         CLOUDFLARE_GRAPHQL,
@@ -643,11 +645,21 @@ def test_rejected_credentials_are_not_retried_and_are_critical_at_once(tmp_path:
 
     assert done.rows[FILE] == (
         f'{{"date": "2026-09-22", "site": "example", "status": "fetch_failed", "http_code": "{code}", '
-        f'"reason": "graphql request failed", "captured_at": "{NOW}"}}\n'
+        f'"reason": "graphql request failed (HTTP {code}, JSON body)", "captured_at": "{NOW}"}}\n'
     )
     assert done.sleeps == []
-    assert done.ctx.critical == [Critical(NAME, FILE, f"example: HTTP {code} from Cloudflare's GraphQL API")]
+    assert done.ctx.critical == [Critical(NAME, FILE, f"example: HTTP {code} from Cloudflare's GraphQL API; JSON body")]
     assert done.status == 1
+
+
+def test_a_bot_challenge_is_a_failure_row_that_names_it(tmp_path: Path) -> None:
+    challenge = "<!DOCTYPE html><html><head><title>Just a moment...</title></head></html>"
+    scenario = replace(port.scenario(NAME, "quiet_week"), responses=[cf.answer(challenge, status=403)] * 3)
+
+    done = run(scenario, tmp_path, lists=False)
+
+    assert json.loads(done.rows[FILE])["reason"] == "graphql request failed (HTTP 403, bot challenge)"
+    assert (done.status, done.ctx.critical) == (0, [])
 
 
 def test_a_failure_that_waiting_can_fix_is_not_critical(tmp_path: Path) -> None:

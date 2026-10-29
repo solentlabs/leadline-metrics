@@ -244,7 +244,7 @@ def stored(when: date, backfilled: bool = False, **fields: Any) -> str:
 def failure_row(when: date, captured: bool = False) -> str:
     """The failure row for a daily request that failed to connect; `captured` for the one this run writes."""
     fields = {"date": when.isoformat(), "zone": LABEL, "status": "fetch_failed", "http_code": "000"}
-    fields["reason"] = "graphql request failed"
+    fields["reason"] = "graphql request failed (HTTP 000, connection refused)"
     return json.dumps({**fields, **({"captured_at": NOW} if captured else {})}) + "\n"
 
 
@@ -255,7 +255,7 @@ def partial_row(when: date, **fields: Any) -> str:
     full = json.loads(row(when))
     merged = {key: ordered.get(key, full[key]) for key in full if key != "captured_at"}
     merged["status"] = "partial"
-    merged["reason"] = "paths request failed (HTTP 000)"
+    merged["reason"] = "paths request failed (HTTP 000, connection refused)"
     merged["captured_at"] = NOW
     return json.dumps(merged) + "\n"
 

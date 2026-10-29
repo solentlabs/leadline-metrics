@@ -311,8 +311,10 @@ def failure_row(status: str, reason: str, http_code: str | None = None) -> str:
 def test_a_repo_or_ref_not_found_is_a_fetch_failed_row_and_critical(tmp_path: Path) -> None:
     done = port.run(github_tree_counts, CONFIG, port.scenario(NAME, "failed_fetch_writes_nothing"), tmp_path)
 
-    assert done.rows == {FILE: tc.EARLIER + failure_row("fetch_failed", "tree request failed", "404")}
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP 404 from GitHub's git trees API")]
+    assert done.rows == {
+        FILE: tc.EARLIER + failure_row("fetch_failed", "tree request failed (HTTP 404, JSON body)", "404")
+    }
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP 404 from GitHub's git trees API; JSON body")]
     assert done.status == 1
 
 
@@ -375,7 +377,8 @@ def test_a_failure_keeps_a_good_row(tmp_path: Path) -> None:
 
 
 def test_a_good_row_replaces_a_failure_row(tmp_path: Path) -> None:
-    failure = '{"date": "2026-09-23", "status": "fetch_failed", "http_code": "503", "reason": "tree request failed"}\n'
+    reason = "tree request failed (HTTP 503, empty body)"
+    failure = f'{{"date": "2026-09-23", "status": "fetch_failed", "http_code": "503", "reason": "{reason}"}}\n'
     scenario = replace(port.scenario(NAME, "counts_configurations_models_and_vendors"), seed={FILE: failure})
 
     port.run(github_tree_counts, CONFIG, scenario, tmp_path)
@@ -394,8 +397,10 @@ def test_an_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int
 
     done = port.run(github_tree_counts, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: tc.EARLIER + failure_row("fetch_failed", "tree request failed", str(code))}
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP {code} from GitHub's git trees API")]
+    assert done.rows == {
+        FILE: tc.EARLIER + failure_row("fetch_failed", f"tree request failed (HTTP {code}, empty body)", str(code))
+    }
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP {code} from GitHub's git trees API; empty body")]
     assert done.status == 1
 
 
@@ -410,7 +415,9 @@ def test_a_rate_limit_is_recoverable_and_tried_three_times(tmp_path: Path, code:
 
     done = port.run(github_tree_counts, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: tc.EARLIER + failure_row("fetch_failed", "tree request failed", str(code))}
+    assert done.rows == {
+        FILE: tc.EARLIER + failure_row("fetch_failed", f"tree request failed (HTTP {code}, rate limited)", str(code))
+    }
     assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
 
 
@@ -419,8 +426,21 @@ def test_no_connection_is_recorded_as_000_and_is_recoverable(tmp_path: Path) -> 
 
     done = port.run(github_tree_counts, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: tc.EARLIER + failure_row("fetch_failed", "tree request failed", "000")}
+    assert done.rows == {
+        FILE: tc.EARLIER + failure_row("fetch_failed", "tree request failed (HTTP 000, connection refused)", "000")
+    }
     assert (done.status, done.sleeps) == (0, [10, 20])  # three attempts
+
+
+def test_an_error_page_names_its_kind_in_the_reason(tmp_path: Path) -> None:
+    page = exchange(tc.TREE_URL, "<html>Bad Gateway</html>", status=502)
+    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), responses=thrice(page))
+
+    done = port.run(github_tree_counts, CONFIG, scenario, tmp_path)
+
+    assert done.rows == {
+        FILE: tc.EARLIER + failure_row("fetch_failed", "tree request failed (HTTP 502, HTML page)", "502")
+    }
 
 
 def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
@@ -430,7 +450,9 @@ def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
 
     done = port.run(github_tree_counts, [*CONFIG, {**GENERIC, "repo": "a/other"}], scenario, tmp_path)
 
-    assert done.rows[FILE] == tc.EARLIER + failure_row("fetch_failed", "tree request failed", "502")
+    assert done.rows[FILE] == tc.EARLIER + failure_row(
+        "fetch_failed", "tree request failed (HTTP 502, empty body)", "502"
+    )
     assert '"items": 4, "files": 5' in done.rows["github-tree-counts-other.jsonl"]
 
 
@@ -722,7 +744,7 @@ def test_a_blob_that_cant_be_read_is_a_failed_part_not_a_count(tmp_path: Path) -
 
     row = last_row(done)
     assert (row["configs"], row["by_status"], row["status"]) == (5, None, "partial")
-    assert row["reason"] == "blob request failed (HTTP 503)"
+    assert row["reason"] == "blob request failed (HTTP 503, empty body)"
     assert list(row)[-4:] == ["by_status_blobs", "status", "reason", "captured_at"]
     assert row["by_status_blobs"] == json.loads(tc.read_by_status(awaiting=[tc.AWAITING], confirmed=[tc.NEW_X100]))
     assert (done.status, done.ctx.critical) == (0, [])  # recoverable
@@ -737,7 +759,7 @@ def test_an_unreadable_blob_waiting_cant_fix_is_critical_at_once(tmp_path: Path)
     done = content_run(tmp_path, responses)
 
     assert last_row(done)["status"] == "partial"
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP 404 from GitHub's git blobs API")]
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP 404 from GitHub's git blobs API; JSON body")]
     assert done.status == 1
 
 
@@ -816,7 +838,8 @@ def test_a_count_a_past_row_has_stays_and_the_others_are_filled(tmp_path: Path) 
 
 
 def test_a_failure_row_in_the_history_is_left_as_it_is_and_asks_for_nothing(tmp_path: Path) -> None:
-    failure = '{"date": "2026-09-22", "status": "fetch_failed", "http_code": "502", "reason": "tree request failed"}\n'
+    reason = "tree request failed (HTTP 502, empty body)"
+    failure = f'{{"date": "2026-09-22", "status": "fetch_failed", "http_code": "502", "reason": "{reason}"}}\n'
     seed = ALL_TODAY.replace(tc.NIGHT.format(day=22, more=tc.BY_STATUS_19TH), failure)
 
     done = content_run(

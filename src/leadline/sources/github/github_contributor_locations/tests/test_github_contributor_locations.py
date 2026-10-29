@@ -197,7 +197,9 @@ def test_a_failed_issues_page_is_a_fetch_failed_row(tmp_path: Path) -> None:
 
     done = port.run(source, CONFIG, replace(scenario, responses=retried(scenario.responses)), tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "issues request failed", "000")}
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", "issues request failed (HTTP 000, connection refused)", "000")
+    }
     assert (done.status, done.ctx.critical) == (0, [])  # recoverable: the next run writes the day
 
 
@@ -205,9 +207,21 @@ def test_a_failed_issues_page_is_a_fetch_failed_row(tmp_path: Path) -> None:
 def test_an_issues_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int) -> None:
     done = run(tmp_path, exchange(ISSUES, "", status=code))
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "issues request failed", str(code))}
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP {code} from GitHub's issues API")]
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", f"issues request failed (HTTP {code}, empty body)", str(code))
+    }
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP {code} from GitHub's issues API; empty body")]
     assert done.status == 1
+
+
+def test_a_bot_challenge_is_named_in_the_failed_row(tmp_path: Path) -> None:
+    challenge = exchange(ISSUES, "<html><title>Just a moment...</title></html>", status=403)
+
+    done = run(tmp_path, *thrice(challenge))
+
+    reason = "issues request failed (HTTP 403, bot challenge)"
+    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", reason, "403")}
+    assert (done.status, done.ctx.critical) == (0, [])  # recoverable: the next run writes the day
 
 
 @pytest.mark.parametrize(
@@ -250,7 +264,9 @@ def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
         cfg=[*CONFIG, {"repo": "a/other", "regions": gcl.REGIONS}],
     )
 
-    assert done.rows[FILE] == EARLIER + failure_row("fetch_failed", "issues request failed", "502")
+    assert done.rows[FILE] == EARLIER + failure_row(
+        "fetch_failed", "issues request failed (HTTP 502, empty body)", "502"
+    )
     assert '"repo": "a/other", "total_unique_creators": 0' in done.rows["github-contributor-locations-other.jsonl"]
 
 
@@ -306,7 +322,7 @@ def test_a_rejected_profile_request_is_critical_at_once(tmp_path: Path, code: in
     done = run(tmp_path, *issues(*gcl.FAILED_PROFILE), gcl.profile("oscar-user", "Zedland, Germany"), rejected)
 
     assert done.rows == {FILE: EARLIER + partial_row(OSCAR, PAPA_UNREAD, **ONE_UNREAD)}
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP {code} from GitHub's users API")]
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP {code} from GitHub's users API; empty body")]
     assert done.status == 1
 
 
@@ -579,7 +595,7 @@ def test_comments_it_cant_read_are_that_issues_alone(tmp_path: Path) -> None:
 def test_a_rejected_comments_request_is_critical_at_once(tmp_path: Path) -> None:
     done = commenting(tmp_path, [gcl.opened(1, "alpha-user")], exchange(comments_url(1), "", status=403))
 
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP 403 from GitHub's comments API")]
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP 403 from GitHub's comments API; empty body")]
 
 
 def test_a_person_whose_profile_was_not_read_is_not_asked_about(tmp_path: Path) -> None:

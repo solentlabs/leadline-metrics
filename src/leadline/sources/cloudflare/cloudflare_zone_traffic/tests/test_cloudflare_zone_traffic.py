@@ -261,8 +261,21 @@ def test_a_rejected_token_is_critical_and_not_retried(tmp_path: Path, code: int)
 
     assert read(tmp_path)[0]["http_code"] == str(code)
     assert done.sleeps == []
-    assert done.ctx.critical == [Critical(NAME, FILE, f"example: HTTP {code} from Cloudflare's GraphQL API")]
+    assert done.ctx.critical == [
+        Critical(NAME, FILE, f"example: HTTP {code} from Cloudflare's GraphQL API; empty body")
+    ]
     assert done.status == 1
+
+
+def test_a_bot_challenge_is_a_failure_row_that_names_it(tmp_path: Path) -> None:
+    challenge = "<!DOCTYPE html><html><head><title>Just a moment...</title></head></html>"
+    base = port.scenario(NAME, "three_failed_attempts_write_a_failure_row")
+    scenario = replace(base, responses=[cz.daily_answer(challenge, status=403)] * 3)
+
+    done = port.run(cloudflare_zone_traffic, CONFIG, scenario, tmp_path)
+
+    assert read(tmp_path)[0]["reason"] == "graphql request failed (HTTP 403, bot challenge)"
+    assert (done.status, done.ctx.critical) == (0, [])
 
 
 def test_a_list_the_token_may_not_read_is_critical_once_and_leaves_the_row_partial(tmp_path: Path) -> None:
@@ -282,10 +295,12 @@ def test_a_list_the_token_may_not_read_is_critical_once_and_leaves_the_row_parti
 
     done = port.run(cloudflare_zone_traffic, CONFIG, scenario, tmp_path)
 
-    assert done.ctx.critical == [Critical(NAME, FILE, "example: HTTP 403 from Cloudflare's GraphQL API")]
+    assert done.ctx.critical == [Critical(NAME, FILE, "example: HTTP 403 from Cloudflare's GraphQL API; empty body")]
     last = read(tmp_path)[-1]
     assert (last["status"], last["paths"], last["user_agents"]) == ("partial", None, None)
-    assert last["reason"] == "paths request failed (HTTP 403); user_agents request failed (HTTP 403)"
+    assert last["reason"] == (
+        "paths request failed (HTTP 403, empty body); user_agents request failed (HTTP 403, empty body)"
+    )
 
 
 @pytest.mark.parametrize(

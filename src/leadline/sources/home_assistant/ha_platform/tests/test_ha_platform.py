@@ -332,7 +332,9 @@ def failure_row(status: str, reason: str, http_code: str | None = None) -> str:
 def test_a_failed_fetch_is_a_fetch_failed_row(tmp_path: Path) -> None:
     done = port.run(ha_platform, CONFIG, failing(), tmp_path)
 
-    assert done.rows == {FILE: hp.EARLIER + failure_row("fetch_failed", "analytics request failed", "503")}
+    assert done.rows == {
+        FILE: hp.EARLIER + failure_row("fetch_failed", "analytics request failed (HTTP 503, text body)", "503")
+    }
     assert (done.status, done.ctx.critical) == (0, [])  # recoverable: the next run writes the day
 
 
@@ -415,8 +417,12 @@ def test_an_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int
 
     done = port.run(ha_platform, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: hp.EARLIER + failure_row("fetch_failed", "analytics request failed", str(code))}
-    assert done.ctx.critical == [Critical(NAME, FILE, f"HTTP {code} from Home Assistant's platform analytics")]
+    assert done.rows == {
+        FILE: hp.EARLIER + failure_row("fetch_failed", f"analytics request failed (HTTP {code}, empty body)", str(code))
+    }
+    assert done.ctx.critical == [
+        Critical(NAME, FILE, f"HTTP {code} from Home Assistant's platform analytics; empty body")
+    ]
     assert done.status == 1
 
 
@@ -427,7 +433,24 @@ def test_a_rate_limit_is_recoverable_not_critical(tmp_path: Path) -> None:
 
     done = port.run(ha_platform, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: hp.EARLIER + failure_row("fetch_failed", "analytics request failed", "403")}
+    assert done.rows == {
+        FILE: hp.EARLIER + failure_row("fetch_failed", "analytics request failed (HTTP 403, rate limited)", "403")
+    }
+    assert (done.status, done.ctx.critical) == (0, [])
+
+
+def test_a_bot_challenge_page_is_named_in_the_failure_row(tmp_path: Path) -> None:
+    challenge = "<!DOCTYPE html><html><head><title>Just a moment...</title></head><body></body></html>"
+    scenario = replace(
+        port.scenario(NAME, "failed_fetch_writes_nothing"),
+        responses=thrice(exchange(HA_PLATFORM_URL, challenge, status=403)),
+    )
+
+    done = port.run(ha_platform, CONFIG, scenario, tmp_path)
+
+    assert done.rows == {
+        FILE: hp.EARLIER + failure_row("fetch_failed", "analytics request failed (HTTP 403, bot challenge)", "403")
+    }
     assert (done.status, done.ctx.critical) == (0, [])
 
 
@@ -436,7 +459,9 @@ def test_no_connection_is_recorded_as_000_and_is_recoverable(tmp_path: Path) -> 
 
     done = port.run(ha_platform, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: hp.EARLIER + failure_row("fetch_failed", "analytics request failed", "000")}
+    assert done.rows == {
+        FILE: hp.EARLIER + failure_row("fetch_failed", "analytics request failed (HTTP 000, connection refused)", "000")
+    }
     assert (done.status, done.sleeps) == (0, [10, 20])  # three tries, waiting between them
 
 

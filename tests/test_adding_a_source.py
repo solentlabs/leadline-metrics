@@ -75,8 +75,17 @@ def test_the_example_records_a_failed_fetch_as_a_recoverable_failure_row(tmp_pat
 
     assert done.rows == {
         FILE: f'{DAY}, "status": "fetch_failed", "http_code": "503", '
-        f'"reason": "search request failed", "captured_at": "{NOW}"}}\n'
+        f'"reason": "search request failed (HTTP 503, text body)", "captured_at": "{NOW}"}}\n'
     }
+    assert (done.status, done.ctx.critical) == (0, [])
+
+
+def test_the_example_names_a_bot_challenge_in_the_failure_row(tmp_path: Path) -> None:
+    done = run(
+        tmp_path, "<!DOCTYPE html><html><head><title>Just a moment...</title></head><body></body></html>", status=503
+    )
+
+    assert '"reason": "search request failed (HTTP 503, bot challenge)"' in done.rows[FILE]
     assert (done.status, done.ctx.critical) == (0, [])
 
 
@@ -85,7 +94,7 @@ def test_the_example_marks_an_error_waiting_cant_fix_critical(tmp_path: Path, co
     done = run(tmp_path, "no", status=code)
 
     assert f'"status": "fetch_failed", "http_code": "{code}"' in done.rows[FILE]
-    assert [c.reason for c in done.ctx.critical] == [f"Example.Package: HTTP {code} from NuGet"]
+    assert [c.reason for c in done.ctx.critical] == [f"Example.Package: HTTP {code} from NuGet; text body"]
     assert done.status == 1
 
 

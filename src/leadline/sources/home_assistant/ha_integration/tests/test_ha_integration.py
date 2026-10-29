@@ -202,7 +202,9 @@ def failure_row(status: str, reason: str, http_code: str | None = None) -> str:
 def test_a_failed_fetch_is_a_fetch_failed_row(tmp_path: Path) -> None:
     done = port.run(ha_integration, CONFIG, failing(), tmp_path)
 
-    assert done.rows == {FILE: ha.EARLIER + failure_row("fetch_failed", "analytics request failed", "503")}
+    assert done.rows == {
+        FILE: ha.EARLIER + failure_row("fetch_failed", "analytics request failed (HTTP 503, text body)", "503")
+    }
     assert (done.status, done.ctx.critical) == (0, [])  # recoverable: the next run writes the day
 
 
@@ -279,7 +281,8 @@ def test_a_failure_keeps_a_good_row(tmp_path: Path) -> None:
 
 def test_a_good_row_replaces_a_failure_row(tmp_path: Path) -> None:
     failed = (
-        '{"date": "2026-09-23", "status": "fetch_failed", "http_code": "000", "reason": "analytics request failed"}\n'
+        '{"date": "2026-09-23", "status": "fetch_failed", "http_code": "000", '
+        '"reason": "analytics request failed (HTTP 000, connection refused)"}\n'
     )
     scenario = replace(port.scenario(NAME, "rerun_replaces_the_days_row"), seed={FILE: ha.EARLIER + failed})
 
@@ -318,7 +321,9 @@ def test_one_entry_it_cant_read_does_not_stop_the_next(tmp_path: Path) -> None:
 def test_a_failed_fetch_is_a_failure_row_for_every_entry(tmp_path: Path) -> None:
     done = port.run(ha_integration, [*CONFIG, OTHER], failing(), tmp_path)
 
-    assert done.rows["other.jsonl"] == failure_row("fetch_failed", "analytics request failed", "503")
+    assert done.rows["other.jsonl"] == failure_row(
+        "fetch_failed", "analytics request failed (HTTP 503, text body)", "503"
+    )
 
 
 # --- errors waiting can't fix ---
@@ -332,9 +337,13 @@ def test_an_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int
 
     done = port.run(ha_integration, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: ha.EARLIER + failure_row("fetch_failed", "analytics request failed", str(code))}
+    assert done.rows == {
+        FILE: ha.EARLIER + failure_row("fetch_failed", f"analytics request failed (HTTP {code}, empty body)", str(code))
+    }
     assert done.ctx.critical == [
-        Critical(NAME, FILE, f"{ha.INTEGRATION}: HTTP {code} from Home Assistant's custom integrations analytics")
+        Critical(
+            NAME, FILE, f"{ha.INTEGRATION}: HTTP {code} from Home Assistant's custom integrations analytics; empty body"
+        )
     ]
     assert done.status == 1
 
@@ -346,7 +355,24 @@ def test_a_rate_limit_is_recoverable_not_critical(tmp_path: Path) -> None:
 
     done = port.run(ha_integration, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: ha.EARLIER + failure_row("fetch_failed", "analytics request failed", "403")}
+    assert done.rows == {
+        FILE: ha.EARLIER + failure_row("fetch_failed", "analytics request failed (HTTP 403, rate limited)", "403")
+    }
+    assert (done.status, done.ctx.critical) == (0, [])
+
+
+def test_a_bot_challenge_page_is_named_in_the_failure_row(tmp_path: Path) -> None:
+    challenge = "<!DOCTYPE html><html><head><title>Just a moment...</title></head><body></body></html>"
+    scenario = replace(
+        port.scenario(NAME, "failed_fetch_writes_nothing"),
+        responses=thrice(exchange(HA_INTEGRATIONS_URL, challenge, status=403)),
+    )
+
+    done = port.run(ha_integration, CONFIG, scenario, tmp_path)
+
+    assert done.rows == {
+        FILE: ha.EARLIER + failure_row("fetch_failed", "analytics request failed (HTTP 403, bot challenge)", "403")
+    }
     assert (done.status, done.ctx.critical) == (0, [])
 
 
@@ -357,7 +383,9 @@ def test_no_connection_is_recorded_as_000_and_is_recoverable(tmp_path: Path) -> 
 
     done = port.run(ha_integration, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: ha.EARLIER + failure_row("fetch_failed", "analytics request failed", "000")}
+    assert done.rows == {
+        FILE: ha.EARLIER + failure_row("fetch_failed", "analytics request failed (HTTP 000, connection refused)", "000")
+    }
     assert (done.status, done.sleeps) == (0, [10, 20])  # three tries, waiting between them
 
 

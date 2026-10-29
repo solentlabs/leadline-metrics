@@ -118,7 +118,7 @@ def _collect(ctx: Context, base_url: str, topic: dict[str, Any], file: File) -> 
         ctx.log.info("ERROR: Failed to fetch forum topic %s: HTTP %s", topic_id, e.http_code)
         reason = f"{base_url}: HTTP {e.http_code} for topic {topic_id} ({label})"
         ctx.record_unfixable(spec.NAME, file.name, e, reason)
-        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": "topic request failed"}
+        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": e.failed("topic")}
     except UnusableError as e:
         ctx.log.info("ERROR: Failed to parse forum data for topic %s: %s", topic_id, e)
         failure = {"status": "parse_failed", "reason": str(e)}

@@ -169,7 +169,7 @@ def _collect(ctx: Context, entry: Any) -> None:
         commit_pages = _commit_pages(ctx, repo, file, since)
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch GitHub %s for %s: HTTP %s", kind, repo, e.http_code)
-        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": f"{kind} request failed"}
+        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": e.failed(kind)}
         store.write_failure(file, {**failure_row, **failure}, ctx.now)
         return
     lists = {
@@ -184,7 +184,7 @@ def _collect(ctx: Context, entry: Any) -> None:
             answers[kind] = _fetch(ctx, repo, file, kind, url)
         except HttpError as e:
             ctx.log.info("WARN: Failed to fetch GitHub %s for %s: HTTP %s", kind, repo, e.http_code)
-            answers[kind] = f"{kind} request failed (HTTP {e.http_code})"
+            answers[kind] = e.failed(kind)
     try:
         fields, owner = _repository(read_json("repository", repository))
         messages, authors = _commits([read_json("commits", page) for page in commit_pages])

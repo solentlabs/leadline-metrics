@@ -270,7 +270,9 @@ def test_a_failed_repository_is_a_fetch_failed_row(tmp_path: Path) -> None:
 
     done = port.run(source, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "repository request failed", "502")}
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", "repository request failed (HTTP 502, empty body)", "502")
+    }
     assert (done.status, done.ctx.critical) == (0, [])  # recoverable: the next run writes the day
 
 
@@ -296,8 +298,10 @@ def test_a_repository_it_cant_use_is_a_parse_failed_row(tmp_path: Path, body: An
 def test_a_repository_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int) -> None:
     done = run(tmp_path, exchange(grs.REPO_URL, "", status=code))
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "repository request failed", str(code))}
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP {code} from GitHub's repository API")]
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", f"repository request failed (HTTP {code}, empty body)", str(code))
+    }
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP {code} from GitHub's repository API; empty body")]
     assert done.status == 1
 
 
@@ -324,10 +328,10 @@ def test_failed_traffic_is_null_in_a_partial_row_never_zero(tmp_path: Path) -> N
 
     done = port.run(source, CONFIG, scenario, tmp_path)
 
-    reason = "views request failed (HTTP 403); clones request failed (HTTP 000)"
+    reason = "views request failed (HTTP 403, JSON body); clones request failed (HTTP 000, connection refused)"
     assert done.rows == {FILE: partial_row(reason, **NO_VIEWS, **NO_CLONES)}
     # A 403 without a rate limit is no push access, which waiting can't fix.
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP 403 from GitHub's traffic API")]
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP 403 from GitHub's traffic API; JSON body")]
     assert done.status == 1
 
 
@@ -348,7 +352,7 @@ def test_clones_without_their_counts_are_null_in_a_partial_row_naming_them_not_z
 def test_failed_clones_alone_are_null_in_a_partial_row(tmp_path: Path) -> None:
     done = run(tmp_path, REPOSITORY, VIEWS, *thrice(exchange(grs.CLONES, "", status=500)))
 
-    assert done.rows == {FILE: EARLIER + partial_row("clones request failed (HTTP 500)", **NO_CLONES)}
+    assert done.rows == {FILE: EARLIER + partial_row("clones request failed (HTTP 500, empty body)", **NO_CLONES)}
     assert (done.status, done.ctx.critical) == (0, [])
 
 
@@ -374,7 +378,7 @@ def test_rate_limited_traffic_is_partial_and_recoverable(tmp_path: Path, code: i
 
     done = run(tmp_path, REPOSITORY, *thrice(limited), CLONES)
 
-    assert done.rows == {FILE: EARLIER + partial_row(f"views request failed (HTTP {code})", **NO_VIEWS)}
+    assert done.rows == {FILE: EARLIER + partial_row(f"views request failed (HTTP {code}, rate limited)", **NO_VIEWS)}
     assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
 
 
@@ -395,7 +399,7 @@ def test_failed_views_keep_a_good_rows_views_and_the_row_stays_good(tmp_path: Pa
 
 
 def test_a_partial_row_is_filled_by_a_later_run_and_becomes_good(tmp_path: Path) -> None:
-    partial = partial_row("clones request failed (HTTP 500)", **STORED_VIEWS, **NO_CLONES)
+    partial = partial_row("clones request failed (HTTP 500, empty body)", **STORED_VIEWS, **NO_CLONES)
 
     done = run(tmp_path, REPOSITORY, *thrice(exchange(grs.VIEWS, "", status=500)), CLONES, seed=EARLIER + partial)
 
@@ -404,15 +408,19 @@ def test_a_partial_row_is_filled_by_a_later_run_and_becomes_good(tmp_path: Path)
 
 
 def test_what_no_run_got_stays_null_named_by_this_runs_failure(tmp_path: Path) -> None:
-    partial = partial_row("views request failed (HTTP 502); clones request failed (HTTP 502)", **NO_VIEWS, **NO_CLONES)
+    partial = partial_row(
+        "views request failed (HTTP 502, empty body); clones request failed (HTTP 502, empty body)",
+        **NO_VIEWS,
+        **NO_CLONES,
+    )
 
     done = run(tmp_path, REPOSITORY, *thrice(exchange(grs.VIEWS, "", status=500)), CLONES, seed=EARLIER + partial)
 
-    assert done.rows == {FILE: EARLIER + partial_row("views request failed (HTTP 500)", **NO_VIEWS)}
+    assert done.rows == {FILE: EARLIER + partial_row("views request failed (HTTP 500, empty body)", **NO_VIEWS)}
 
 
 def test_a_failure_keeps_a_partial_row(tmp_path: Path) -> None:
-    partial = partial_row("views request failed (HTTP 500)", **NO_VIEWS)
+    partial = partial_row("views request failed (HTTP 500, empty body)", **NO_VIEWS)
 
     done = run(tmp_path, *thrice(exchange(grs.REPO_URL, "", status=502)), seed=EARLIER + partial)
 
@@ -421,13 +429,20 @@ def test_a_failure_keeps_a_partial_row(tmp_path: Path) -> None:
 
 
 def test_a_good_row_replaces_a_partial_row(tmp_path: Path) -> None:
-    partial = partial_row("views request failed (HTTP 500)", **NO_VIEWS)
+    partial = partial_row("views request failed (HTTP 500, empty body)", **NO_VIEWS)
     scenario = replace(port.scenario(NAME, "repository_and_its_traffic"), seed={FILE: partial})
 
     done = port.run(source, CONFIG, scenario, tmp_path)
 
     assert added("repository_and_its_traffic", tmp_path) == []
     assert done.ctx.corrections == []
+
+
+def test_an_error_page_names_its_kind_in_the_reason(tmp_path: Path) -> None:
+    done = run(tmp_path, *thrice(exchange(grs.REPO_URL, "<html>Bad Gateway</html>", status=502)))
+
+    expected = failure_row("fetch_failed", "repository request failed (HTTP 502, HTML page)", "502")
+    assert done.rows == {FILE: EARLIER + expected}
 
 
 def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
@@ -441,7 +456,9 @@ def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
         cfg=[*CONFIG, {"repo": "a/other"}],
     )
 
-    assert done.rows[FILE] == EARLIER + failure_row("fetch_failed", "repository request failed", "502")
+    assert done.rows[FILE] == EARLIER + failure_row(
+        "fetch_failed", "repository request failed (HTTP 502, empty body)", "502"
+    )
     assert '"repo": "a/other", "stars": 2' in done.rows["github-repo-stats-other.jsonl"]
 
 

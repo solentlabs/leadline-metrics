@@ -120,7 +120,16 @@ def test_a_failed_request_waiting_cant_fix_is_recorded_critical(tmp_path: Path, 
     with open_context(config(tmp_path)) as ctx:
         ctx.record_unfixable("web", "web-a.jsonl", error, f"HTTP {error.http_code} from Example")
 
-    assert ctx.critical == [Critical("web", "web-a.jsonl", f"HTTP {code} from Example")]
+    assert ctx.critical == [Critical("web", "web-a.jsonl", f"HTTP {code} from Example; empty body")]
+
+
+def test_a_critical_reason_names_the_cause_of_the_failure(tmp_path: Path) -> None:
+    """Health keeps this line for 14 days, and the log is overwritten, so the cause has to be in it."""
+    error = HttpError("https://example.com/x", 404, "<!DOCTYPE html><html></html>")
+    with open_context(config(tmp_path)) as ctx:
+        ctx.record_unfixable("web", "web-a.jsonl", error, "HTTP 404 from Example")
+
+    assert ctx.critical == [Critical("web", "web-a.jsonl", "HTTP 404 from Example; HTML page")]
 
 
 @pytest.mark.parametrize(

@@ -255,7 +255,7 @@ def _collect(ctx: Context, entry: Any) -> None:
     except HttpError as e:
         ctx.log.info("ERROR: Cloudflare %s failed (HTTP %s)", label, e.http_code)
         ctx.record_unfixable(spec.NAME, file.name, e, f"{label}: HTTP {e.http_code} from Cloudflare's GraphQL API")
-        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": "graphql request failed"}
+        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": e.failed("graphql")}
         _write_failure(ctx, file, {"date": yesterday.isoformat(), "zone": label, **failure})
         return
     except _FailureRowError as e:
@@ -310,7 +310,7 @@ def _read_part(ctx: Context, name: str, dimension: str | None, query: str, top: 
         return {day: {name: counts} for day, counts in _read_list(answer, dimension, top).items()}
     except HttpError as e:
         ctx.log.info("WARN: Cloudflare %s request failed (HTTP %s)", name, e.http_code)
-        raise _PartError(f"{name} request failed (HTTP {e.http_code})", e) from e
+        raise _PartError(e.failed(name), e) from e
     except _FailureRowError as e:
         raise _PartError(f"{name} query failed: {e.fields['reason']}") from e
     except _UnreadableError as e:

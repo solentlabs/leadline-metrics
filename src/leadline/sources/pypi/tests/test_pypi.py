@@ -336,7 +336,7 @@ def test_a_package_not_found_is_not_asked_again_and_is_critical(tmp_path: Path) 
 
     reason = "pypistats overall endpoint unavailable"  # the script's reason for any status but 429
     assert done.rows == {FILE: failure(PACKAGE, "fetch_failed", reason, "404")}
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{PACKAGE}: HTTP 404 from pypistats")]
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{PACKAGE}: HTTP 404 from pypistats; JSON body")]
     assert (done.status, done.sleeps) == (1, [])
     assert "PyPI retry pass: nothing to retry" in done.log
 
@@ -350,7 +350,7 @@ def test_a_missing_package_is_asked_once_and_writes_the_scripts_rows(tmp_path: P
 
     assert port.golden_differences(NAME, scenario.name, tmp_path) == []
     missing_file = f"pypi-{sc.MISSING}.jsonl"
-    assert done.ctx.critical == [Critical(NAME, missing_file, f"{sc.MISSING}: HTTP 404 from pypistats")]
+    assert done.ctx.critical == [Critical(NAME, missing_file, f"{sc.MISSING}: HTTP 404 from pypistats; JSON body")]
     assert done.status == 1
 
 
@@ -364,7 +364,7 @@ def test_a_rejected_request_is_not_retried_and_is_critical(tmp_path: Path, code:
 
     reason = "pypistats overall endpoint unavailable"
     assert done.rows == {FILE: failure(PACKAGE, "fetch_failed", reason, str(code))}
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{PACKAGE}: HTTP {code} from pypistats")]
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{PACKAGE}: HTTP {code} from pypistats; empty body")]
 
 
 # --- ADR: a failure never replaces good data ---
@@ -496,9 +496,9 @@ def test_without_metadata_the_version_is_null_in_a_partial_row_and_the_backfill_
     done = port.run(source, config(scenario), scenario, tmp_path)
 
     script = golden_lines(scenario.name)
-    reason = "metadata request failed (HTTP 404)"
+    reason = "metadata request failed (HTTP 404, text body)"
     assert bare(done.rows[FILE]) == "".join(script[:2]) + partial(script[2], reason) + "".join(script[3:])
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{PACKAGE}: HTTP 404 from PyPI")]
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{PACKAGE}: HTTP 404 from PyPI; text body")]
     assert done.status == 1
 
 
@@ -507,9 +507,20 @@ def test_a_recoverable_metadata_failure_is_a_partial_row_tried_three_times_and_n
 
     done = run_scenario("downloads_for_the_day_week_and_month", tmp_path, responses=responses, seed={})
 
-    assert done.rows == {FILE: partial(GOOD, "metadata request failed (HTTP 000)")}
+    assert done.rows == {FILE: partial(GOOD, "metadata request failed (HTTP 000, connection refused)")}
     assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
     assert "PyPI retry pass: nothing to retry" in done.log
+
+
+def test_a_bot_challenge_on_the_metadata_is_a_partial_row_that_names_it(tmp_path: Path) -> None:
+    challenge = "<!DOCTYPE html><html><head><title>Just a moment...</title></head></html>"
+    metadata = exchange(sc.project_url(PACKAGE), challenge, status=403)
+    responses = [sc.downloads(PACKAGE, sc.RECENT), *thrice(metadata)]
+
+    done = run_scenario("downloads_for_the_day_week_and_month", tmp_path, responses=responses, seed={})
+
+    assert done.rows == {FILE: partial(GOOD, "metadata request failed (HTTP 403, bot challenge)")}
+    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
 
 
 @pytest.mark.parametrize(
@@ -554,7 +565,7 @@ def test_failed_metadata_keeps_the_version_an_earlier_run_got_and_the_row_is_goo
 def test_a_past_days_partial_row_is_backfilled(tmp_path: Path) -> None:
     """A partial row's only values are its downloads, which the history re-reads whole: backfilled as
     a failed day is, as the script backfills any day not ok."""
-    past = partial(GOOD, "metadata request failed (HTTP 503)").replace("2026-09-23", "2026-09-22")
+    past = partial(GOOD, "metadata request failed (HTTP 503, empty body)").replace("2026-09-23", "2026-09-22")
     seed = {FILE: sc.row("2026-09-21") + past}
 
     done = run_scenario("downloads_for_the_day_week_and_month", tmp_path, seed=seed)

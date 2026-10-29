@@ -233,7 +233,7 @@ def test_graphql_errors_are_a_graphql_error_row(tmp_path: Path) -> None:
     done = port.run(github_discussions, CONFIG, port.scenario(NAME, "graphql_errors_write_nothing"), tmp_path)
 
     assert done.rows == {FILE: EARLIER + failure_row("graphql_error", "Could not resolve to a Repository")}
-    reason = f"{REPO}: GitHub's GraphQL API answered: Could not resolve to a Repository"
+    reason = f"{REPO}: GitHub's GraphQL API answered: Could not resolve to a Repository; GraphQL NOT_FOUND"
     assert done.ctx.critical == [Critical(NAME, FILE, reason)]
     assert done.status == 1
 
@@ -257,7 +257,9 @@ def test_a_failed_fetch_is_a_fetch_failed_row(tmp_path: Path) -> None:
 
     done = port.run(github_discussions, CONFIG, replace(scenario, responses=retried(scenario.responses)), tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "discussions request failed", "502")}
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", "discussions request failed (HTTP 502, empty body)", "502")
+    }
     assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])  # recoverable, three attempts
 
 
@@ -350,8 +352,10 @@ def test_an_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int
 
     done = port.run(github_discussions, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "discussions request failed", str(code))}
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP {code} from GitHub's GraphQL API")]
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", f"discussions request failed (HTTP {code}, empty body)", str(code))
+    }
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP {code} from GitHub's GraphQL API; empty body")]
     assert done.status == 1
 
 
@@ -366,7 +370,10 @@ def test_an_http_rate_limit_is_recoverable(tmp_path: Path, code: int, headers: d
 
     done = port.run(github_discussions, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "discussions request failed", str(code))}
+    assert done.rows == {
+        FILE: EARLIER
+        + failure_row("fetch_failed", f"discussions request failed (HTTP {code}, rate limited)", str(code))
+    }
     assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])  # tried three times like any failure
 
 
@@ -393,8 +400,23 @@ def test_no_connection_is_recorded_as_000_and_is_recoverable(tmp_path: Path) -> 
 
     done = port.run(github_discussions, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "discussions request failed", "000")}
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", "discussions request failed (HTTP 000, connection refused)", "000")
+    }
     assert done.status == 0
+
+
+def test_a_bot_challenge_is_named_in_the_failed_row(tmp_path: Path) -> None:
+    challenge = exchange(
+        GITHUB_GRAPHQL, "<html><title>Just a moment...</title></html>", method="POST", sent=gd.SENT, status=403
+    )
+    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), responses=thrice(challenge))
+
+    done = port.run(github_discussions, CONFIG, scenario, tmp_path)
+
+    reason = "discussions request failed (HTTP 403, bot challenge)"
+    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", reason, "403")}
+    assert (done.status, done.ctx.critical) == (0, [])
 
 
 def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
@@ -407,7 +429,9 @@ def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
 
     done = port.run(github_discussions, [*CONFIG, other], scenario, tmp_path)
 
-    assert done.rows[FILE] == EARLIER + failure_row("fetch_failed", "discussions request failed", "502")
+    assert done.rows[FILE] == EARLIER + failure_row(
+        "fetch_failed", "discussions request failed (HTTP 502, empty body)", "502"
+    )
     assert '"total": 0' in done.rows["github-discussions-other.jsonl"]
 
 

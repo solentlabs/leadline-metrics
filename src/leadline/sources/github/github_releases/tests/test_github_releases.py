@@ -167,7 +167,9 @@ def test_a_failed_fetch_is_a_fetch_failed_row(tmp_path: Path) -> None:
 
     done = port.run(github_releases, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "releases request failed", "500")}
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", "releases request failed (HTTP 500, empty body)", "500")
+    }
     assert (done.status, done.ctx.critical) == (0, [])  # recoverable: the next run writes the day
 
 
@@ -286,8 +288,10 @@ def test_an_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int
 
     done = port.run(github_releases, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "releases request failed", str(code))}
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP {code} from GitHub's releases API")]
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", f"releases request failed (HTTP {code}, empty body)", str(code))
+    }
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP {code} from GitHub's releases API; empty body")]
     assert done.status == 1
 
 
@@ -302,7 +306,9 @@ def test_a_rate_limit_is_retried_and_is_recoverable(tmp_path: Path, code: int, h
 
     done = port.run(github_releases, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "releases request failed", str(code))}
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", f"releases request failed (HTTP {code}, rate limited)", str(code))
+    }
     assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
 
 
@@ -311,8 +317,21 @@ def test_no_connection_is_recorded_as_000_and_is_recoverable(tmp_path: Path) -> 
 
     done = port.run(github_releases, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "releases request failed", "000")}
+    assert done.rows == {
+        FILE: EARLIER + failure_row("fetch_failed", "releases request failed (HTTP 000, connection refused)", "000")
+    }
     assert (done.status, done.sleeps) == (0, [10, 20])  # three tries
+
+
+def test_a_bot_challenge_is_named_in_the_failed_row(tmp_path: Path) -> None:
+    challenge = exchange(URL, "<html><title>Just a moment...</title></html>", status=403)
+    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), responses=thrice(challenge))
+
+    done = port.run(github_releases, CONFIG, scenario, tmp_path)
+
+    reason = "releases request failed (HTTP 403, bot challenge)"
+    assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", reason, "403")}
+    assert (done.status, done.ctx.critical) == (0, [])
 
 
 def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
@@ -323,7 +342,9 @@ def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
 
     done = port.run(github_releases, [*CONFIG, {"repo": "a/other"}], scenario, tmp_path)
 
-    assert done.rows[FILE] == EARLIER + failure_row("fetch_failed", "releases request failed", "502")
+    assert done.rows[FILE] == EARLIER + failure_row(
+        "fetch_failed", "releases request failed (HTTP 502, empty body)", "502"
+    )
     assert '"repo": "a/other", "releases": []' in done.rows["github-releases-other.jsonl"]
 
 

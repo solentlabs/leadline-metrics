@@ -236,7 +236,10 @@ def test_a_failed_repository_is_a_fetch_failed_row(tmp_path: Path) -> None:
 
     done = port.run(source, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: gra.EARLIER + failure_row("fetch_failed", "repository request failed", "000")}
+    assert done.rows == {
+        FILE: gra.EARLIER
+        + failure_row("fetch_failed", "repository request failed (HTTP 000, connection refused)", "000")
+    }
     assert (done.status, done.ctx.critical) == (0, [])
 
 
@@ -246,7 +249,9 @@ def test_a_failed_commits_page_is_a_fetch_failed_row(tmp_path: Path) -> None:
 
     done = port.run(source, CONFIG, scenario, tmp_path)
 
-    assert done.rows == {FILE: gra.EARLIER + failure_row("fetch_failed", "commits request failed", "502")}
+    assert done.rows == {
+        FILE: gra.EARLIER + failure_row("fetch_failed", "commits request failed (HTTP 502, empty body)", "502")
+    }
     assert (done.status, done.ctx.critical) == (0, [])
 
 
@@ -260,8 +265,10 @@ def test_a_required_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, c
 
     done = run(tmp_path, responses)
 
-    assert done.rows == {FILE: gra.EARLIER + failure_row("fetch_failed", f"{kind} request failed", str(code))}
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP {code} from GitHub's {kind} API")]
+    assert done.rows == {
+        FILE: gra.EARLIER + failure_row("fetch_failed", f"{kind} request failed (HTTP {code}, empty body)", str(code))
+    }
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP {code} from GitHub's {kind} API; empty body")]
     assert done.status == 1
 
 
@@ -374,14 +381,14 @@ def test_failed_lists_are_null_in_a_partial_row_never_none(tmp_path: Path) -> No
     done = port.run(source, CONFIG, scenario, tmp_path)
 
     reason = (
-        "issues request failed (HTTP 500); contributors request failed (HTTP 500); "
-        "releases request failed (HTTP 404); languages request failed (HTTP 000)"
+        "issues request failed (HTTP 500, empty body); contributors request failed (HTTP 500, empty body); "
+        "releases request failed (HTTP 404, JSON body); languages request failed (HTTP 000, connection refused)"
     )
     velocity = {"commits": 0, "authors": 0, "fixes": 0, "fix_ratio": 0.0, "redesigns": 0}
     nulls = {"codebase_bytes": None, "issues_7d": None, "contributors": None, "latest_release": None}
     assert done.rows == {FILE: partial_row(reason, velocity_7d=velocity, **nulls)}
     # A 404 is an error waiting can't fix, on an optional list too.
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP 404 from GitHub's releases API")]
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP 404 from GitHub's releases API; JSON body")]
     assert done.status == 1
 
 
@@ -451,7 +458,7 @@ def test_a_rate_limited_list_is_partial_and_recoverable(tmp_path: Path, code: in
 
     done = run(tmp_path, week(**{gra.RELEASES_URL: thrice(limited)}))
 
-    reason = f"releases request failed (HTTP {code})"
+    reason = f"releases request failed (HTTP {code}, rate limited)"
     assert done.rows == {FILE: gra.EARLIER + partial_row(reason, latest_release=None)}
     assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
 
@@ -471,7 +478,9 @@ def test_a_failed_list_keeps_a_good_rows_value_and_the_row_stays_good(tmp_path: 
 
 def test_a_partial_row_is_filled_by_a_later_run_and_becomes_good(tmp_path: Path) -> None:
     earlier_release = {"tag": "v3.8.0", "date": "2026-09-01"}
-    partial = partial_row("languages request failed (HTTP 000)", codebase_bytes=None, latest_release=earlier_release)
+    partial = partial_row(
+        "languages request failed (HTTP 000, connection refused)", codebase_bytes=None, latest_release=earlier_release
+    )
 
     done = run(tmp_path, week(**{gra.RELEASES_URL: thrice(failed(gra.RELEASES_URL))}), seed=gra.EARLIER + partial)
 
@@ -479,7 +488,7 @@ def test_a_partial_row_is_filled_by_a_later_run_and_becomes_good(tmp_path: Path)
 
 
 def test_a_failure_keeps_a_partial_row(tmp_path: Path) -> None:
-    partial = partial_row("languages request failed (HTTP 000)", codebase_bytes=None)
+    partial = partial_row("languages request failed (HTTP 000, connection refused)", codebase_bytes=None)
 
     done = run(tmp_path, thrice(failed(gra.REPO_URL)), seed=gra.EARLIER + partial)
 
@@ -488,12 +497,22 @@ def test_a_failure_keeps_a_partial_row(tmp_path: Path) -> None:
 
 
 def test_a_good_row_replaces_a_partial_row(tmp_path: Path) -> None:
-    partial = partial_row("languages request failed (HTTP 000)", codebase_bytes=None)
+    partial = partial_row("languages request failed (HTTP 000, connection refused)", codebase_bytes=None)
 
     done = run(tmp_path, week(), seed=gra.EARLIER + partial)
 
     assert done.rows == {FILE: gra.EARLIER + row(**WEEK)}
     assert done.ctx.corrections == []
+
+
+def test_an_error_page_names_its_kind_in_the_reason(tmp_path: Path) -> None:
+    page = exchange(gra.REPO_URL, "<html>Bad Gateway</html>", status=502)
+
+    done = run(tmp_path, thrice(page))
+
+    assert done.rows == {
+        FILE: gra.EARLIER + failure_row("fetch_failed", "repository request failed (HTTP 502, HTML page)", "502")
+    }
 
 
 def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
@@ -511,7 +530,9 @@ def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
 
     done = run(tmp_path, responses, cfg=[*CONFIG, {"repo": "a/other"}])
 
-    assert done.rows[FILE] == gra.EARLIER + failure_row("fetch_failed", "repository request failed", "000")
+    assert done.rows[FILE] == gra.EARLIER + failure_row(
+        "fetch_failed", "repository request failed (HTTP 000, connection refused)", "000"
+    )
     assert '"label": "other", "repo": "a/other", "stars": 2' in done.rows["github-repo-activity-other.jsonl"]
 
 

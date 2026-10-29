@@ -1622,3 +1622,25 @@ waits 30 seconds, so a service that is down costs its requests that long on
 that night's run, which no one is waiting for. A rate limit that lasts an hour
 is not cleared by 30 seconds, and the retries spend a few requests of its
 budget, which is small against the data a transient failure saves.
+
+## A failure names its cause in the row, and health keeps it
+
+**Decision:** A failure row's `reason` says what was asked, the status and the
+kind of failure, `topic request failed (HTTP 403, bot challenge)`, from one
+core function (`HttpError.failed`), and an error waiting can't fix is
+recorded critical with the same kind after the source's reason. The kinds are
+few and fixed: a bot challenge, a rate limit, an HTML page, a JSON body, a
+text body, an empty body, and with no response a timeout, a refused or reset
+connection, a DNS or TLS failure. The row keeps no new field and no response
+body; `reason` is free text already.
+
+**Rationale:** The log that records why a request failed is overwritten each
+night, and a row's `reason` said only "request failed". A night lost to a
+bot challenge looked the same as one lost to a missing page, so the cause of a
+gap could not be found afterwards, and without the cause the gaps can't be
+made fewer. The kind is cheap to keep and carries what separates the cases
+(an HTML page where an API answer was due is a host in front of the API; a
+JSON body is the API itself), where the whole body is large, may hold
+anything the host sends, and is cut by every source differently. Putting it
+in `reason` leaves every file readable as it was, and one function keeps the
+words the same across sources.

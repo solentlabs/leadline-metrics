@@ -168,7 +168,7 @@ def _collect(ctx: Context, entry: Any) -> None:
     except HttpError as e:
         ctx.log.info("ERROR: Cloudflare %s failed (HTTP %s)", label, e.http_code)
         ctx.record_unfixable(spec.NAME, file.name, e, f"{label}: HTTP {e.http_code} from Cloudflare's GraphQL API")
-        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": "graphql request failed"}
+        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": e.failed("graphql")}
         _write_failure(ctx, file, {"date": yesterday, "site": label, **failure})
         return
     except _FailureRowError as e:
@@ -306,7 +306,7 @@ def _read_lists(
             found[field] = _top(_account(_json(_post(ctx, query).body)), dimension)
         except HttpError as e:
             ctx.log.info("WARN: Cloudflare %s request failed (HTTP %s)", field, e.http_code)
-            failed[f"{field} request failed (HTTP {e.http_code})"] = [field]
+            failed[e.failed(field)] = [field]
             if e.unfixable and unfixable is None:
                 unfixable = e
         except _FailureRowError as e:

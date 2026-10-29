@@ -39,6 +39,17 @@ CHALLENGE_CODES = frozenset({403, 503})  # the statuses a bot challenge comes wi
 
 # What a failure's log line keeps of it: the body's first characters, and these response headers.
 CAUSE_CHARS = 200
+EMPTY_BODY = "empty response body"  # the reason of a 2xx answer with no body where one was required
+# How a failed connection's text reads, as its kind: the first fragment found (lower case) names it.
+CONNECTION_CAUSES = (
+    ("timed out", "timed out"),
+    ("refused", "connection refused"),
+    ("name or service not known", "DNS failure"),
+    ("name resolution", "DNS failure"),
+    ("reset", "connection reset"),
+    ("ssl", "TLS error"),
+    ("certificate", "TLS error"),
+)
 IDENTIFYING_HEADERS = ("server", "cf-ray", "date", "retry-after", "content-type")
 
 _NEXT_LINK = re.compile(r'<([^>]*)>\s*;\s*rel="next"', re.IGNORECASE)
@@ -88,6 +99,35 @@ class HttpError(Exception):
         """
         recoverable = self.rate_limited or self.challenged or self.code in self.recoverable
         return self.code in UNFIXABLE and not recoverable
+
+    @property
+    def cause(self) -> str:
+        """What kind of failure this was, in a few words, for a failure row's reason and for health: `bot
+        challenge`, `rate limited`, `HTML page` (an error page where an API answer was due), `JSON body`,
+        `text body`, `empty body`; with no response, `timed out`, `connection refused`, and the like.
+
+        The row's `http_code` says which status; the response is not kept, and the log is overwritten.
+        """
+        if self.code == 0:
+            text = self.reason.lower()
+            for fragment, kind in CONNECTION_CAUSES:
+                if fragment in text:
+                    return kind
+            return "connection error"
+        if self.challenged:
+            return "bot challenge"
+        if self.rate_limited:
+            return "rate limited"
+        body = self.reason.strip()
+        if not body or body == EMPTY_BODY:
+            return "empty body"
+        if body.lower().startswith(("<!doctype", "<html")):
+            return "HTML page"
+        return "JSON body" if body[0] in "{[" else "text body"
+
+    def failed(self, kind: str) -> str:
+        """A failure row's reason: `topic request failed (HTTP 403, bot challenge)`."""
+        return f"{kind} request failed (HTTP {self.http_code}, {self.cause})"
 
     @property
     def detail(self) -> str:
@@ -316,7 +356,7 @@ class Http:
             try:
                 response = self._transport(request, TIMEOUT_S)
                 if require_body and _empty(response):
-                    raise HttpError(url, response.status, "empty response body")
+                    raise HttpError(url, response.status, EMPTY_BODY)
                 if key is not None:
                     self._kept[key] = response
                 return response

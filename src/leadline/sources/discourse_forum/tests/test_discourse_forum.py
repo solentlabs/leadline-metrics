@@ -160,7 +160,9 @@ def test_it_needs_no_credentials(tmp_path: Path) -> None:
 def test_a_forum_that_does_not_answer_is_a_fetch_failed_row(tmp_path: Path) -> None:
     done = run(tmp_path, *thrice(failed(URL)))
 
-    assert done.rows == {FILE: failure_row("fetch_failed", "about request failed", "000")}
+    assert done.rows == {
+        FILE: failure_row("fetch_failed", "about request failed (HTTP 000, connection refused)", "000")
+    }
     assert (done.status, done.ctx.critical) == (0, [])
 
 
@@ -180,23 +182,25 @@ def test_a_failed_about_request_is_tried_up_to_three_times(tmp_path: Path) -> No
 def test_an_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int) -> None:
     done = run(tmp_path, exchange(URL, "", status=code))
 
-    assert done.rows == {FILE: failure_row("fetch_failed", "about request failed", str(code))}
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{BASE}: HTTP {code} for about.json")]
+    assert done.rows == {
+        FILE: failure_row("fetch_failed", f"about request failed (HTTP {code}, empty body)", str(code))
+    }
+    assert done.ctx.critical == [Critical(NAME, FILE, f"{BASE}: HTTP {code} for about.json; empty body")]
     assert done.status == 1
 
 
-@pytest.mark.parametrize("code", [429, 500])
-def test_a_rate_limit_or_a_server_error_is_recoverable_not_critical(tmp_path: Path, code: int) -> None:
+@pytest.mark.parametrize(("code", "cause"), [(429, "rate limited"), (500, "empty body")])
+def test_a_rate_limit_or_a_server_error_is_recoverable_not_critical(tmp_path: Path, code: int, cause: str) -> None:
     done = run(tmp_path, *thrice(exchange(URL, "", status=code)))
 
-    assert done.rows == {FILE: failure_row("fetch_failed", "about request failed", str(code))}
+    assert done.rows == {FILE: failure_row("fetch_failed", f"about request failed (HTTP {code}, {cause})", str(code))}
     assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
 
 
 def test_a_bot_challenge_is_recoverable_not_critical(tmp_path: Path) -> None:
     done = run(tmp_path, *thrice(exchange(URL, CHALLENGE, status=403)))
 
-    assert done.rows == {FILE: failure_row("fetch_failed", "about request failed", "403")}
+    assert done.rows == {FILE: failure_row("fetch_failed", "about request failed (HTTP 403, bot challenge)", "403")}
     assert (done.status, done.ctx.critical) == (0, [])
 
 
@@ -248,7 +252,7 @@ def test_a_failure_keeps_the_days_good_row(tmp_path: Path) -> None:
 
 
 def test_a_good_row_replaces_the_days_failure_row(tmp_path: Path) -> None:
-    earlier = failure_row("fetch_failed", "about request failed", "503")
+    earlier = failure_row("fetch_failed", "about request failed (HTTP 503, empty body)", "503")
 
     done = run(tmp_path, df.about(), seed=earlier)
 
@@ -261,7 +265,7 @@ def test_one_forums_failure_does_not_stop_the_next(tmp_path: Path) -> None:
 
     done = run(tmp_path, *thrice(failed(URL)), exchange(f"{other}/about.json", ABOUT), cfg=cfg)
 
-    assert done.rows[FILE] == failure_row("fetch_failed", "about request failed", "000")
+    assert done.rows[FILE] == failure_row("fetch_failed", "about request failed (HTTP 000, connection refused)", "000")
     assert json.loads(done.rows["other.jsonl"])["base_url"] == other
 
 

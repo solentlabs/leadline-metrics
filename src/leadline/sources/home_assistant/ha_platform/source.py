@@ -42,7 +42,7 @@ def collect(ctx: Context, cfg: Any) -> None:
         row = _row(data, day)
     except HttpError as e:
         ctx.record_unfixable(spec.NAME, file.name, e, f"HTTP {e.http_code} from {ANALYTICS}")
-        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": "analytics request failed"}
+        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": e.failed("analytics")}
     except ValueError:
         failure = {"status": "parse_failed", "reason": "response was not JSON"}
     except _UnreadableError:

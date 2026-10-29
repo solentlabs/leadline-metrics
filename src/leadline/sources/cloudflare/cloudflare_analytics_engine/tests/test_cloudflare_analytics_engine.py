@@ -276,7 +276,18 @@ def test_rejected_credentials_are_not_retried_and_are_critical_at_once(tmp_path:
     assert done.rows[FILE] == ae.KEPT + failure_row("fetch_failed", str(code), "denied")
     assert done.sleeps == []
     assert done.status == 1
-    assert done.ctx.critical == [Critical(NAME, FILE, f"{ae.DATASET}: HTTP {code} from Analytics Engine's SQL API")]
+    assert done.ctx.critical == [
+        Critical(NAME, FILE, f"{ae.DATASET}: HTTP {code} from Analytics Engine's SQL API; text body")
+    ]
+
+
+def test_a_critical_names_the_kind_of_body_the_rejection_came_with(tmp_path: Path) -> None:
+    body = {"errors": [{"message": "Authentication error"}]}
+    done = run("three_failures_mark_the_newest_day", tmp_path, responses=[ae.totals(body, status=403)])
+
+    assert done.ctx.critical == [
+        Critical(NAME, FILE, f"{ae.DATASET}: HTTP 403 from Analytics Engine's SQL API; JSON body")
+    ]
 
 
 def test_a_failure_keeps_a_good_row_and_says_so(tmp_path: Path) -> None:

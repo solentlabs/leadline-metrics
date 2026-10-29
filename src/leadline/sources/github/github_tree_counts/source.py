@@ -197,7 +197,7 @@ def _collect(ctx: Context, entry: Any) -> None:
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch the tree of %s: HTTP %s", repo, e.http_code)
         ctx.record_unfixable(spec.NAME, file.name, e, f"{repo}: HTTP {e.http_code} from GitHub's git trees API")
-        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": "tree request failed"}
+        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": e.failed("tree")}
     except ValueError:
         failure = {"status": "parse_failed", "reason": "response was not JSON"}
     except _UnreadableError:
@@ -233,7 +233,7 @@ def _write_row(
             ctx.log.info("ERROR: Failed to fetch a blob of %s: HTTP %s", entry["repo"], e.http_code)
             reason = f"{entry['repo']}: HTTP {e.http_code} from GitHub's git blobs API"
             ctx.record_unfixable(spec.NAME, file.name, e, reason)
-            failed[f"blob request failed (HTTP {e.http_code})"] = [entry["content"]["key"]]
+            failed[e.failed("blob")] = [entry["content"]["key"]]
         except ValueError:
             ctx.log.info("ERROR: Failed to parse a blob of %s: not a base64 blob", entry["repo"])
             failed["blob response was not usable"] = [entry["content"]["key"]]

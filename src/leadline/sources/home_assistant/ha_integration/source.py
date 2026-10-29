@@ -14,7 +14,6 @@ ENV: tuple[str, ...] = ()  # a public feed: no credentials
 LAGGING = False
 FEED = "https://analytics.home-assistant.io/custom_integrations.json"
 ANALYTICS = "Home Assistant's custom integrations analytics"  # the feed, as findings name it
-FETCH_FAILED = "analytics request failed"
 UNEXPECTED = "response had an unexpected shape"
 
 
@@ -37,7 +36,9 @@ def collect(ctx: Context, cfg: Any) -> None:
             ctx.record_unfixable(
                 spec.NAME, spec.file_name(entry), e, f"{entry['integration']}: HTTP {e.http_code} from {ANALYTICS}"
             )
-            _write_failure(ctx, entry, {"status": "fetch_failed", "http_code": e.http_code, "reason": FETCH_FAILED})
+            _write_failure(
+                ctx, entry, {"status": "fetch_failed", "http_code": e.http_code, "reason": e.failed("analytics")}
+            )
         return
     except ValueError:
         for entry in cfg:

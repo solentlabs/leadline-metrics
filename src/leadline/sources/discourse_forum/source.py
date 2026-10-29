@@ -79,7 +79,7 @@ def _collect(ctx: Context, entry: dict[str, Any]) -> None:
     except HttpError as e:
         ctx.log.info("ERROR: Failed to fetch the site statistics of %s: HTTP %s", base_url, e.http_code)
         ctx.record_unfixable(spec.NAME, file.name, e, f"{base_url}: HTTP {e.http_code} for about.json")
-        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": "about request failed"}
+        failure = {"status": "fetch_failed", "http_code": e.http_code, "reason": e.failed("about")}
     except UnusableError as e:
         ctx.log.info("ERROR: Failed to parse the site statistics of %s: %s", base_url, e)
         failure = {"status": "parse_failed", "reason": str(e)}
