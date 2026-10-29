@@ -62,7 +62,8 @@ EMPTY_SECTION = re.compile(r"\n## [^\n]*\n\n(?=\n## |\Z)")
 
 
 def _decided(text: str) -> list[str]:
-    lines = EMPTY_SECTION.sub("", text).splitlines()
+    # The script starts the file with a blank line when nothing is critical; leadline writes none.
+    lines = EMPTY_SECTION.sub("", text).strip("\n").splitlines()
     return [line for line in lines if not any(re.search(pattern, line) for pattern in DECIDED)]
 
 
