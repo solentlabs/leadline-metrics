@@ -42,6 +42,22 @@ def failing_at(responses: Sequence[Exchange], url_end: str, failure: Callable[[s
     return [*responses[:at], failure(responses[at]["request"]["url"])]
 
 
+def thrice(response: Exchange) -> list[Exchange]:
+    """`response` once for each of the three tries a request that waiting can fix gets (ADR: a request is tried up to
+    three times)."""
+    return [response] * 3
+
+
+def retried(responses: Sequence[Exchange]) -> list[Exchange]:
+    """`responses` with each answer waiting can fix (a connection failure, a 429 or a 5xx) twice more: the script asks
+    once, leadline up to three times."""
+    again = [r for r in responses if "error" in r["response"] or r["response"].get("status", 200) in RETRIED]
+    return [*responses, *again, *again]
+
+
+RETRIED = frozenset({429, *range(500, 600)})
+
+
 def stable_id(text: str) -> int:
     """A made-up numeric ID, the same for the same text on every run."""
     return zlib.crc32(text.encode("utf-8")) % 10**9

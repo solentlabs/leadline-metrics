@@ -17,7 +17,7 @@ import port
 import pytest
 import scenarios
 from row_files import files_in
-from scenarios.builders.common import exchange, failed, failing_at
+from scenarios.builders.common import exchange, failed, failing_at, retried, thrice
 
 from leadline import config, http, trends
 from leadline.context import Critical, Finding
@@ -671,7 +671,7 @@ def test_a_list_it_cannot_read_leaves_the_rows_unfilled_and_costs_the_run_no_row
 
 def test_a_failed_request_for_the_stars_leaves_the_rows_unfilled_and_costs_the_run_no_row(tmp_path: Path) -> None:
     url = f"{gi.REPO_URL}/stargazers?per_page=100&page=1"
-    responses = [*gi.responses(gi.SMALL, stars=3, forks=1), failed(url), *gi.forks(FORKED)]
+    responses = [*gi.responses(gi.SMALL, stars=3, forks=1), *thrice(failed(url)), *gi.forks(FORKED)]
 
     done = run(tmp_path, responses, seed=COUNTLESS + COUNTED)
 
@@ -900,7 +900,11 @@ def test_a_day_with_more_people_than_the_limit_is_still_read_whole_so_a_run_alwa
 
 def test_a_profile_that_fails_stops_the_counts_at_its_day_and_costs_the_run_no_row(tmp_path: Path) -> None:
     broken = failed(f"{GITHUB_API}/users/user-1")
-    answers = [*counting(), *gi.profiles({"user-0": "Zedland, Germany", "forker-0": "Berlin, Germany"}), broken]
+    answers = [
+        *counting(),
+        *gi.profiles({"user-0": "Zedland, Germany", "forker-0": "Berlin, Germany"}),
+        *thrice(broken),
+    ]
 
     done = run(tmp_path, answers, [BY_REGION], seed=COUNTLESS + COUNTED)
 
@@ -917,7 +921,7 @@ def test_a_list_it_cannot_read_leaves_the_counts_by_region_for_the_next_night(tm
     seed = FIRST + '{"date": "2026-09-22", "repo": {"stars": 3, "forks": 0}, "issues": {"opened_total": 3}}\n'
     url = f"{gi.REPO_URL}/stargazers?per_page=100&page=1"
 
-    done = run(tmp_path, [*gi.responses(gi.SMALL, stars=3, forks=0), failed(url)], [BY_REGION], seed=seed)
+    done = run(tmp_path, [*gi.responses(gi.SMALL, stars=3, forks=0), *thrice(failed(url))], [BY_REGION], seed=seed)
 
     assert any(line.startswith(f"Left the stars by region of {FILE} unfilled: HTTP 0") for line in done.log)
     assert "stars_by_region" not in last_row(done)["repo"]
@@ -1271,6 +1275,7 @@ def test_a_repo_not_found_is_a_fetch_failed_row_and_critical(tmp_path: Path) -> 
 
 def test_a_failed_open_page_is_a_fetch_failed_row(tmp_path: Path) -> None:
     scenario = port.scenario(NAME, "failed_open_page_writes_nothing")
+    scenario = replace(scenario, responses=retried(scenario.responses))
 
     done = port.run(source, gi.leadline_config(scenario), scenario, tmp_path)
 
@@ -1280,6 +1285,7 @@ def test_a_failed_open_page_is_a_fetch_failed_row(tmp_path: Path) -> None:
 
 def test_a_failed_later_page_is_a_fetch_failed_row(tmp_path: Path) -> None:
     scenario = port.scenario(NAME, "failed_later_page_writes_nothing")
+    scenario = replace(scenario, responses=retried(scenario.responses))
 
     done = port.run(source, gi.leadline_config(scenario), scenario, tmp_path)
 
@@ -1329,11 +1335,12 @@ def test_an_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int
 def test_a_rate_limit_is_a_recoverable_fetch_failed_row(tmp_path: Path, code: int, headers: dict[str, str]) -> None:
     limited = lambda url: exchange(url, '{"message":"API rate limit exceeded"}', status=code, headers=headers)  # noqa: E731
     responses = failing_at(gi.responses(gi.SMALL), "state=all&per_page=100&page=1", limited)
+    responses = [*responses[:-1], *thrice(responses[-1])]
 
     done = run(tmp_path, responses)
 
     assert done.rows == {FILE: gi.YESTERDAY + failure_row("fetch_failed", "all issues request failed", str(code))}
-    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [])
+    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
 
 
 def answering(url: str, body: Any) -> list[Any]:
@@ -1421,7 +1428,7 @@ def test_a_failure_keeps_a_good_row(tmp_path: Path) -> None:
     """ADR: a failure never replaces good data."""
     good = run(tmp_path / "good", gi.responses(gi.SMALL)).rows[FILE]
 
-    done = run(tmp_path, [failed(gi.REPO_URL)], seed=good)
+    done = run(tmp_path, thrice(failed(gi.REPO_URL)), seed=good)
 
     assert done.rows == {FILE: good}
     assert f"WARN: kept the good row for 2026-09-23 in {FILE}; fetch_failed not recorded" in done.log
@@ -1430,7 +1437,7 @@ def test_a_failure_keeps_a_good_row(tmp_path: Path) -> None:
 def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
     other = f"{GITHUB_API}/repos/a/other"
     responses = [
-        failed(gi.REPO_URL),
+        *thrice(failed(gi.REPO_URL)),
         exchange(other, github_repo("a/other", stars=2)),
         exchange(f"{other}/issues?state=open&per_page=100&page=1", []),
         exchange(f"{other}/issues?state=all&per_page=100&page=1", []),
@@ -1498,7 +1505,7 @@ def test_check_finds_a_missing_maintainer_login(tmp_path: Path) -> None:
 def test_check_still_finds_the_label_when_the_login_cant_be_asked_for(tmp_path: Path) -> None:
     label = exchange(LABEL_URL, {"name": gi.LABEL})
 
-    findings = check(tmp_path, WITH_QUEUE, REPOSITORY, OPEN_PAGE, user_answer("", status=502), label)
+    findings = check(tmp_path, WITH_QUEUE, REPOSITORY, OPEN_PAGE, *thrice(user_answer("", status=502)), label)
 
     unavailable = Finding("warn", f"{REPO}: could not fetch the maintainer's login: HTTP 502")
     assert findings == [EXISTS, READABLE, unavailable, Finding("ok", f'{REPO}: the queue\'s label "{gi.LABEL}" exists')]
@@ -1534,16 +1541,16 @@ def test_check_warns_when_the_repo_has_no_such_label(tmp_path: Path) -> None:
             Finding("error", f"{REPO}: HTTP 404: the repo doesn't exist, or the token can't read it"),
         ),
         (
-            [exchange(gi.REPO_URL, "", status=403, headers={"X-RateLimit-Remaining": "0"})],
+            thrice(exchange(gi.REPO_URL, "", status=403, headers={"X-RateLimit-Remaining": "0"})),
             Finding("warn", f"{REPO}: could not fetch the repo: HTTP 403, rate limited"),
         ),
         (
             [REPOSITORY, exchange(OPEN_URL, "", status=403)],
             Finding("error", f"{REPO}: HTTP 403: the repo doesn't exist, or the token can't read it"),
         ),
-        ([REPOSITORY, failed(OPEN_URL)], Finding("warn", f"{REPO}: could not fetch its issues: HTTP 0")),
+        ([REPOSITORY, *thrice(failed(OPEN_URL))], Finding("warn", f"{REPO}: could not fetch its issues: HTTP 0")),
         (
-            [REPOSITORY, OPEN_PAGE, USER, exchange(LABEL_URL, "", status=503)],
+            [REPOSITORY, OPEN_PAGE, USER, *thrice(exchange(LABEL_URL, "", status=503))],
             Finding("warn", f'{REPO}: could not fetch its label "{gi.LABEL}": HTTP 503'),
         ),
     ],

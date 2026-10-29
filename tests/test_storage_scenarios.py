@@ -7,12 +7,15 @@ backends are shown to keep and return the same rows, whatever a source writes. D
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
+from typing import Sequence
 
 import port
 import pytest
 import scenarios
 from fake_d1 import FakeD1
+from scenarios.builders.common import Exchange, retried
 
 import leadline.sources
 from leadline.http import Http
@@ -34,6 +37,17 @@ SOURCES = scenarios.sources()
 CASES = [(kind, name, s.name) for kind in BACKENDS for name in SOURCES for s in port.golden_scenarios(name)]
 
 
+def three_tries(responses: Sequence[Exchange]) -> list[Exchange]:
+    """The scenario's answers with each failure waiting can fix asked three times, unless the script asked the same
+    request next to it (a script that retries has that in its scenario): the script asked once, leadline tries up to
+    three times."""
+    out: list[Exchange] = []
+    for i, response in enumerate(responses):
+        near = [*responses[max(i - 1, 0) : i], *responses[i + 1 : i + 2]]
+        out += [response] if any(r["request"] == response["request"] for r in near) else retried([response])
+    return out
+
+
 @pytest.fixture(scope="module")
 def found() -> leadline.sources.Registry[leadline.sources.Source]:
     return leadline.sources.discover()
@@ -50,7 +64,9 @@ def test_a_scenario_gives_the_goldens_rows_on_each_database_backend(
         else module.LEADLINE_CONFIG
     )
     backend = BACKENDS[kind](tmp_path)
+    saved = port.scenario(name, scenario)
+    saved = replace(saved, responses=three_tries(saved.responses))
 
-    port.run(found.sources[name], config, port.scenario(name, scenario), tmp_path / "out", backend)
+    port.run(found.sources[name], config, saved, tmp_path / "out", backend)
 
     assert port.golden_differences(name, scenario, tmp_path / "out") == []

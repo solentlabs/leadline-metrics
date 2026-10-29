@@ -15,7 +15,7 @@ from typing import Any
 import port
 import pytest
 import scenarios
-from scenarios.builders.common import exchange, failed
+from scenarios.builders.common import exchange, failed, retried, thrice
 
 from leadline.context import Critical, Finding
 from leadline.http import SavedResponses
@@ -65,7 +65,7 @@ ONE_UNREAD: dict[str, Any] = {"summary": {"DE": 1}, "reason": "1 of 2 profiles c
 
 def run(tmp_path: Path, *responses: Any, seed: str = EARLIER, cfg: Any = CONFIG) -> port.PortRun:
     scenario = replace(
-        port.scenario(NAME, "regions_from_profile_locations"), responses=list(responses), seed={FILE: seed}
+        port.scenario(NAME, "regions_from_profile_locations"), responses=retried(responses), seed={FILE: seed}
     )
     return port.run(source, cfg, scenario, tmp_path)
 
@@ -193,7 +193,9 @@ def failure_row(status: str, reason: str, http_code: str | None = None) -> str:
 
 
 def test_a_failed_issues_page_is_a_fetch_failed_row(tmp_path: Path) -> None:
-    done = port.run(source, CONFIG, port.scenario(NAME, "a_failed_issues_page_writes_nothing"), tmp_path)
+    scenario = port.scenario(NAME, "a_failed_issues_page_writes_nothing")
+
+    done = port.run(source, CONFIG, replace(scenario, responses=retried(scenario.responses)), tmp_path)
 
     assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "issues request failed", "000")}
     assert (done.status, done.ctx.critical) == (0, [])  # recoverable: the next run writes the day
@@ -256,7 +258,9 @@ def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
 
 
 def test_a_failed_profile_is_marked_unread_in_a_partial_row_never_a_guess(tmp_path: Path) -> None:
-    done = port.run(source, CONFIG, port.scenario(NAME, "a_failed_profile_falls_back_to_issue_text"), tmp_path)
+    scenario = port.scenario(NAME, "a_failed_profile_falls_back_to_issue_text")
+
+    done = port.run(source, CONFIG, replace(scenario, responses=retried(scenario.responses)), tmp_path)
 
     assert done.rows == {FILE: EARLIER + partial_row(OSCAR, PAPA_UNREAD, **ONE_UNREAD)}
     assert "WARN: Failed to fetch the profile of papa-user: HTTP 000" in done.log
@@ -270,12 +274,14 @@ def test_a_failed_profile_is_marked_unread_in_a_partial_row_never_a_guess(tmp_pa
         exchange(gcl.profile_url("papa-user"), []),
         exchange(gcl.profile_url("papa-user"), {"login": "papa-user", "location": 5}),
         exchange(gcl.profile_url("papa-user"), "", status=500),
-        exchange(gcl.profile_url("papa-user"), "", status=403, headers={"X-RateLimit-Remaining": "0"}),
+        thrice(exchange(gcl.profile_url("papa-user"), "", status=403, headers={"X-RateLimit-Remaining": "0"})),
     ],
     ids=["not JSON", "a list", "a location not a string", "a server error", "rate limited"],
 )
 def test_a_profile_it_cant_read_is_that_persons_alone(tmp_path: Path, answer: Any) -> None:
-    done = run(tmp_path, *issues(*gcl.FAILED_PROFILE), gcl.profile("oscar-user", "Zedland, Germany"), answer)
+    answers = answer if isinstance(answer, list) else [answer]
+
+    done = run(tmp_path, *issues(*gcl.FAILED_PROFILE), gcl.profile("oscar-user", "Zedland, Germany"), *answers)
 
     assert done.rows == {FILE: EARLIER + partial_row(OSCAR, PAPA_UNREAD, **ONE_UNREAD)}
     assert (done.status, done.ctx.critical) == (0, [])
@@ -311,7 +317,8 @@ KEPT = f"Kept the stored profile of papa-user for 2026-09-23 in {FILE}, which th
 
 
 def failed_profile(tmp_path: Path, seed: str) -> port.PortRun:
-    scenario = replace(port.scenario(NAME, "a_failed_profile_falls_back_to_issue_text"), seed={FILE: seed})
+    failing = port.scenario(NAME, "a_failed_profile_falls_back_to_issue_text")
+    scenario = replace(failing, responses=retried(failing.responses), seed={FILE: seed})
     return port.run(source, CONFIG, scenario, tmp_path)
 
 
@@ -1050,7 +1057,7 @@ def test_without_the_setting_nothing_is_logged_about_known_regions(tmp_path: Pat
 
 
 def check(tmp_path: Path, cfg: Any, *responses: Any) -> list[Finding]:
-    transport = SavedResponses(responses)
+    transport = SavedResponses(retried(responses))
     ctx = port.context(tmp_path, transport, port.local_time(scenarios.NOW, "UTC"), [])
     with port.credentials(scenarios.CREDENTIALS, source.ENV):
         findings = source.check(ctx, cfg)
@@ -1078,7 +1085,7 @@ def test_check_finds_the_repo_and_that_the_token_can_read_its_issues(tmp_path: P
             [Finding("error", f"{REPO}: HTTP 404: the repo doesn't exist, or the token can't read it")],
         ),
         (
-            [exchange(REPO_URL, "", status=403, headers={"Retry-After": "60"})],
+            thrice(exchange(REPO_URL, "", status=403, headers={"Retry-After": "60"})),
             [Finding("warn", f"{REPO}: could not fetch the repo: HTTP 403, rate limited")],
         ),
         (
@@ -1242,7 +1249,7 @@ def test_with_a_profile_unread_no_past_day_is_recomputed(tmp_path: Path) -> None
     scenario = port.scenario(NAME, LATE_SCENARIO)
     responses = [*scenario.responses[:-1], failed(gcl.profile_url("echo-user"))]
 
-    done = port.run(source, CONFIG, replace(scenario, responses=responses), tmp_path)
+    done = port.run(source, CONFIG, replace(scenario, responses=retried(responses)), tmp_path)
 
     assert done.rows[FILE].startswith(gcl.LATE)
     assert done.ctx.corrections == []

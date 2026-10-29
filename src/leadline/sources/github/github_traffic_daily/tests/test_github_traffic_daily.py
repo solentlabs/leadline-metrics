@@ -16,7 +16,7 @@ from typing import Any
 import port
 import pytest
 import scenarios
-from scenarios.builders.common import exchange, failed
+from scenarios.builders.common import exchange, failed, retried, thrice
 
 from leadline.context import Correction, Critical, Finding
 from leadline.http import SavedResponses
@@ -100,7 +100,8 @@ def test_it_sends_the_token_and_asks_for_the_github_json(tmp_path: Path) -> None
 
 @pytest.mark.parametrize("scenario", port.golden_scenarios(NAME), ids=lambda s: s.name)
 def test_rows_match_the_scripts(scenario: Any, tmp_path: Path) -> None:
-    done = port.run(source, CONFIG, scenario, tmp_path)
+    """The script asks once; leadline tries a request waiting can fix up to three times."""
+    done = port.run(source, CONFIG, replace(scenario, responses=retried(scenario.responses)), tmp_path)
 
     assert port.golden_differences(NAME, scenario.name, tmp_path) == []
     assert done.ctx.critical == CRITICAL.get(scenario.name, [])
@@ -193,7 +194,10 @@ def test_failed_views_are_a_fetch_failed_row_for_yesterday_and_critical_without_
 
 
 def test_failed_clones_are_a_fetch_failed_row_for_yesterday(tmp_path: Path) -> None:
-    done = port.run(source, CONFIG, without_yesterday("failed_clones_write_nothing"), tmp_path)
+    scenario = without_yesterday("failed_clones_write_nothing")
+    scenario = replace(scenario, responses=retried(scenario.responses))
+
+    done = port.run(source, CONFIG, scenario, tmp_path)
 
     assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "clones request failed", "000")}
     assert (done.status, done.ctx.critical) == (0, [])
@@ -221,7 +225,9 @@ def test_a_day_without_a_timestamp_is_a_parse_failed_row_for_yesterday(tmp_path:
 
 def test_the_failure_row_is_kept_out_where_yesterday_is_good(tmp_path: Path) -> None:
     """ADR: a failure never replaces good data. The scenarios seed yesterday's good row, so the rows match."""
-    done = port.run(source, CONFIG, port.scenario(NAME, "failed_clones_write_nothing"), tmp_path)
+    scenario = port.scenario(NAME, "failed_clones_write_nothing")
+
+    done = port.run(source, CONFIG, replace(scenario, responses=retried(scenario.responses)), tmp_path)
 
     assert f"WARN: kept the good row for 2026-09-22 in {FILE}; fetch_failed not recorded" in done.log
 
@@ -334,14 +340,14 @@ def test_an_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int
     [(403, {"X-RateLimit-Remaining": "0"}), (403, {"Retry-After": "60"}), (429, {})],
     ids=["403 none remaining", "403 retry-after", "429"],
 )
-def test_a_rate_limit_is_recoverable_and_not_retried(tmp_path: Path, code: int, headers: dict[str, str]) -> None:
+def test_a_rate_limit_is_tried_three_times_and_recoverable(tmp_path: Path, code: int, headers: dict[str, str]) -> None:
     limited = exchange(gd.VIEWS, '{"message":"API rate limit exceeded"}', status=code, headers=headers)
-    scenario = without_yesterday("failed_views_write_nothing", responses=[limited])
+    scenario = without_yesterday("failed_views_write_nothing", responses=thrice(limited))
 
     done = port.run(source, CONFIG, scenario, tmp_path)
 
     assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "views request failed", str(code))}
-    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [])
+    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
 
 
 def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
@@ -351,7 +357,7 @@ def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
         exchange(f"{other}/views", github_traffic("views", day)),
         exchange(f"{other}/clones", github_traffic("clones", day)),
     ]
-    scenario = without_yesterday("failed_views_write_nothing", responses=[failed(gd.VIEWS), *answers])
+    scenario = without_yesterday("failed_views_write_nothing", responses=[*thrice(failed(gd.VIEWS)), *answers])
 
     done = port.run(source, [*CONFIG, {"repo": "a/other"}], scenario, tmp_path)
 
@@ -377,26 +383,29 @@ def test_check_finds_the_token_can_read_the_traffic(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("response", "finding"),
+    ("answers", "finding"),
     [
         (
-            exchange(gd.VIEWS, '{"message":"Must have push access to repository"}', status=403),
+            [exchange(gd.VIEWS, '{"message":"Must have push access to repository"}', status=403)],
             Finding("error", f"{REPO}: HTTP 403: the token can't read its traffic, which needs push access"),
         ),
         (
-            exchange(gd.VIEWS, '{"message":"Not Found"}', status=404),
+            [exchange(gd.VIEWS, '{"message":"Not Found"}', status=404)],
             Finding("error", f"{REPO}: HTTP 404: the repo doesn't exist, or the token can't read it"),
         ),
         (
-            exchange(gd.VIEWS, "", status=429),
+            thrice(exchange(gd.VIEWS, "", status=429)),
             Finding("warn", f"{REPO}: could not fetch its traffic: HTTP 429, rate limited"),
         ),
-        (failed(gd.VIEWS), Finding("warn", f"{REPO}: could not fetch its traffic: HTTP 0")),
+        (thrice(failed(gd.VIEWS)), Finding("warn", f"{REPO}: could not fetch its traffic: HTTP 0")),
     ],
     ids=["no push access", "not found", "rate limited", "no connection"],
 )
-def test_check_reports_api_trouble_as_a_finding_never_a_crash(tmp_path: Path, response: Any, finding: Finding) -> None:
-    assert check(tmp_path, CONFIG, response) == [finding]
+def test_check_reports_api_trouble_as_a_finding_never_a_crash(
+    tmp_path: Path, answers: list[Any], finding: Finding
+) -> None:
+    """A failure waiting can fix is tried three times, one waiting can't fix once."""
+    assert check(tmp_path, CONFIG, *answers) == [finding]
 
 
 # --- the summary ---

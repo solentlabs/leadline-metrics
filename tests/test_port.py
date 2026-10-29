@@ -14,7 +14,7 @@ import scenarios
 import scratch_package
 from row_files import file_at
 from scenarios import Scenario
-from scenarios.builders.common import exchange, failed
+from scenarios.builders.common import exchange, failed, thrice
 
 from leadline import http, store
 from leadline.config import Section
@@ -117,7 +117,7 @@ def test_a_run_that_strays_from_the_scenarios_requests_fails(
 
 def test_a_saved_failure_is_an_http_error_with_the_scripts_code() -> None:
     """A failed connection reads as the real transport gives it: the text of urllib's URLError."""
-    transport = http.SavedResponses([failed(URL, "refused"), exchange(URL, "busy", status=429)])
+    transport = http.SavedResponses([*thrice(failed(URL, "refused")), *thrice(exchange(URL, "busy", status=429))])
     ctx = port.context(Path(), transport, port.local_time("2026-09-23T00:00:00", "UTC"), [])
 
     with pytest.raises(HttpError) as refused:
@@ -159,7 +159,7 @@ def test_a_named_zone_without_tzset_skips(monkeypatch: pytest.MonkeyPatch) -> No
 
 def test_a_saved_failure_keeps_its_headers() -> None:
     """So a source can tell a rate limit from a rejection, as it does from the real transport."""
-    transport = http.SavedResponses([exchange(URL, "limit", status=403, headers={"X-RateLimit-Remaining": "0"})])
+    transport = http.SavedResponses(thrice(exchange(URL, "limit", status=403, headers={"X-RateLimit-Remaining": "0"})))
     ctx = port.context(Path(), transport, port.local_time("2026-09-23T00:00:00", "UTC"), [])
 
     with pytest.raises(HttpError) as limited:

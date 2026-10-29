@@ -9,7 +9,7 @@ from typing import Any
 import port
 import pytest
 import scenarios
-from scenarios.builders.common import exchange, failed
+from scenarios.builders.common import exchange, failed, retried, thrice
 
 from leadline import http
 from leadline.context import Finding
@@ -62,7 +62,7 @@ def test_the_credential_is_the_variable_the_sources_need() -> None:
 
 
 def check_access(tmp_path: Path, response: Any, forbidden: str | None = None) -> Finding:
-    transport = http.SavedResponses([response])
+    transport = http.SavedResponses(retried(response if isinstance(response, list) else [response]))
     ctx = port.context(tmp_path, transport, port.local_time(scenarios.NOW, "UTC"), [])
     with port.credentials(scenarios.CREDENTIALS, (github.CREDENTIAL,)):
         finding = github.check_access(ctx, REPO, "", fetching="the repo", ok="the repo exists", forbidden=forbidden)
@@ -100,7 +100,7 @@ def test_access_is_ok_when_the_token_reads_the_path(tmp_path: Path) -> None:
             Finding("error", f"{REPO}: HTTP 404: the repo doesn't exist, or the token can't read it"),
         ),
         (
-            exchange(f"{GITHUB_API}/repos/{REPO}", "", status=403, headers={"Retry-After": "60"}),
+            thrice(exchange(f"{GITHUB_API}/repos/{REPO}", "", status=403, headers={"Retry-After": "60"})),
             "it needs push access",
             Finding("warn", f"{REPO}: could not fetch the repo: HTTP 403, rate limited"),
         ),
@@ -172,7 +172,7 @@ def test_check_traffic_finds_whether_the_token_can_read_the_traffic(
 
 
 def checked(tmp_path: Path, response: Any, check: Any) -> Finding:
-    transport = http.SavedResponses([response])
+    transport = http.SavedResponses(retried(response if isinstance(response, list) else [response]))
     ctx = port.context(tmp_path, transport, port.local_time(scenarios.NOW, "UTC"), [])
     with port.credentials(scenarios.CREDENTIALS, (github.CREDENTIAL,)):
         finding: Finding = check(ctx, REPO)
@@ -184,7 +184,7 @@ def checked(tmp_path: Path, response: Any, check: Any) -> Finding:
 
 
 def pages(tmp_path: Path, *responses: Any) -> list[Any]:
-    transport = http.SavedResponses(responses)
+    transport = http.SavedResponses(retried(responses))
     ctx = port.context(tmp_path, transport, port.local_time(scenarios.NOW, "UTC"), [])
     with port.credentials(scenarios.CREDENTIALS, (github.CREDENTIAL,)):
         answers = github.numbered_pages(ctx, f"{GITHUB_API}/repos/{REPO}/issues?state=all&per_page=2")
@@ -278,7 +278,7 @@ def answer(body: Any, status: int = 200) -> Any:
 
 
 def query(tmp_path: Path, response: Any) -> Any:
-    transport = http.SavedResponses([response])
+    transport = http.SavedResponses(retried(response if isinstance(response, list) else [response]))
     sent: list[Any] = []
 
     def recording(request: Any, timeout: float) -> Any:
@@ -359,7 +359,7 @@ def test_an_owner_and_name_are_the_query_variables() -> None:
 
 
 def check_query(tmp_path: Path, response: Any, maintainer: str | None = None) -> list[Finding]:
-    transport = http.SavedResponses([response])
+    transport = http.SavedResponses(retried(response if isinstance(response, list) else [response]))
     ctx = port.context(tmp_path, transport, port.local_time(scenarios.NOW, "UTC"), [])
     ok = "the token can query its things"
     with port.credentials(scenarios.CREDENTIALS, (github.CREDENTIAL,)):
@@ -487,7 +487,7 @@ USER_SENT = graphql_body("query($m:String!){user(login:$m){login}}", {"m": "exam
 
 
 def check_maintainer(tmp_path: Path, response: Any) -> Finding:
-    transport = http.SavedResponses([response])
+    transport = http.SavedResponses(retried(response if isinstance(response, list) else [response]))
     ctx = port.context(tmp_path, transport, port.local_time(scenarios.NOW, "UTC"), [])
     with port.credentials(scenarios.CREDENTIALS, (github.CREDENTIAL,)):
         finding = github.check_maintainer(ctx, REPO, "example-maintainer", misread=MISREAD)

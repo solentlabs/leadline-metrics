@@ -15,7 +15,7 @@ import port
 import pytest
 import scenarios
 from row_files import files_in
-from scenarios.builders.common import exchange, failed
+from scenarios.builders.common import exchange, failed, retried, thrice
 
 from leadline import config, trends
 from leadline.context import Critical, Finding
@@ -188,13 +188,19 @@ def test_the_divergences_are_the_decided_ones() -> None:
 # --- decided divergences: ADR "A failure is recorded as a failure" ---
 
 
+def failing() -> Any:
+    """The failed-fetch scenario with the answers a request is tried three times for."""
+    scenario = port.scenario(NAME, "failed_fetch_writes_nothing")
+    return replace(scenario, responses=retried(scenario.responses))
+
+
 def failure_row(status: str, reason: str, http_code: str | None = None) -> str:
     code = f', "http_code": "{http_code}"' if http_code is not None else ""
     return f'{{"date": "2026-09-23", "status": "{status}"{code}, "reason": "{reason}", "captured_at": "{NOW}"}}\n'
 
 
 def test_a_failed_fetch_is_a_fetch_failed_row(tmp_path: Path) -> None:
-    done = port.run(ha_integration, CONFIG, port.scenario(NAME, "failed_fetch_writes_nothing"), tmp_path)
+    done = port.run(ha_integration, CONFIG, failing(), tmp_path)
 
     assert done.rows == {FILE: ha.EARLIER + failure_row("fetch_failed", "analytics request failed", "503")}
     assert (done.status, done.ctx.critical) == (0, [])  # recoverable: the next run writes the day
@@ -263,7 +269,7 @@ def test_a_feed_that_lists_no_integrations_is_a_parse_failed_row_not_zeros(tmp_p
 def test_a_failure_keeps_a_good_row(tmp_path: Path) -> None:
     """ADR: a failure never replaces good data."""
     good = '{"date": "2026-09-23", "total": 96, "versions": {"3.13.1": 96}, "rank": 1}\n'
-    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), seed={FILE: ha.EARLIER + good})
+    scenario = replace(failing(), seed={FILE: ha.EARLIER + good})
 
     done = port.run(ha_integration, CONFIG, scenario, tmp_path)
 
@@ -310,7 +316,7 @@ def test_one_entry_it_cant_read_does_not_stop_the_next(tmp_path: Path) -> None:
 
 
 def test_a_failed_fetch_is_a_failure_row_for_every_entry(tmp_path: Path) -> None:
-    done = port.run(ha_integration, [*CONFIG, OTHER], port.scenario(NAME, "failed_fetch_writes_nothing"), tmp_path)
+    done = port.run(ha_integration, [*CONFIG, OTHER], failing(), tmp_path)
 
     assert done.rows["other.jsonl"] == failure_row("fetch_failed", "analytics request failed", "503")
 
@@ -336,7 +342,7 @@ def test_an_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int
 def test_a_rate_limit_is_recoverable_not_critical(tmp_path: Path) -> None:
     """A 403 that says its limit is spent is one waiting fixes (http: HttpError.rate_limited)."""
     limited = exchange(HA_INTEGRATIONS_URL, "", status=403, headers={"Retry-After": "60"})
-    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), responses=[limited])
+    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), responses=thrice(limited))
 
     done = port.run(ha_integration, CONFIG, scenario, tmp_path)
 
@@ -345,12 +351,14 @@ def test_a_rate_limit_is_recoverable_not_critical(tmp_path: Path) -> None:
 
 
 def test_no_connection_is_recorded_as_000_and_is_recoverable(tmp_path: Path) -> None:
-    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), responses=[failed(HA_INTEGRATIONS_URL)])
+    scenario = replace(
+        port.scenario(NAME, "failed_fetch_writes_nothing"), responses=thrice(failed(HA_INTEGRATIONS_URL))
+    )
 
     done = port.run(ha_integration, CONFIG, scenario, tmp_path)
 
     assert done.rows == {FILE: ha.EARLIER + failure_row("fetch_failed", "analytics request failed", "000")}
-    assert (done.status, done.sleeps) == (0, [])  # one attempt, as the script makes
+    assert (done.status, done.sleeps) == (0, [10, 20])  # three tries, waiting between them
 
 
 # --- check() ---
@@ -414,7 +422,7 @@ def test_check_reads_the_feed_once_for_every_entry(tmp_path: Path) -> None:
     ids=["unavailable", "no connection", "gone", "not JSON", "not an object", "empty"],
 )
 def test_check_reports_api_trouble_as_a_finding_never_a_crash(tmp_path: Path, response: Any, finding: Finding) -> None:
-    assert check(tmp_path, [{"integration": "mine"}], response) == [finding]
+    assert check(tmp_path, [{"integration": "mine"}], *retried([response])) == [finding]
 
 
 # --- the summary ---

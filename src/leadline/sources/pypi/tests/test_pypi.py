@@ -16,7 +16,7 @@ from typing import Any
 import port
 import pytest
 import scenarios
-from scenarios.builders.common import exchange, failed
+from scenarios.builders.common import exchange, failed, thrice
 
 from leadline.context import Critical, Finding
 from leadline.http import SavedResponses
@@ -502,13 +502,13 @@ def test_without_metadata_the_version_is_null_in_a_partial_row_and_the_backfill_
     assert done.status == 1
 
 
-def test_a_recoverable_metadata_failure_is_a_partial_row_neither_retried_nor_critical(tmp_path: Path) -> None:
-    responses = [sc.downloads(PACKAGE, sc.RECENT), failed(sc.project_url(PACKAGE))]
+def test_a_recoverable_metadata_failure_is_a_partial_row_tried_three_times_and_not_critical(tmp_path: Path) -> None:
+    responses = [sc.downloads(PACKAGE, sc.RECENT), *thrice(failed(sc.project_url(PACKAGE)))]
 
     done = run_scenario("downloads_for_the_day_week_and_month", tmp_path, responses=responses, seed={})
 
     assert done.rows == {FILE: partial(GOOD, "metadata request failed (HTTP 000)")}
-    assert (done.status, done.ctx.critical) == (0, [])
+    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
     assert "PyPI retry pass: nothing to retry" in done.log
 
 
@@ -540,7 +540,7 @@ def test_metadata_without_info_reads_as_the_script_reads_it(tmp_path: Path) -> N
 
 def test_failed_metadata_keeps_the_version_an_earlier_run_got_and_the_row_is_good(tmp_path: Path) -> None:
     earlier = GOOD.replace(NOW, "2026-09-23T08:00:00+00:00")
-    responses = [sc.downloads(PACKAGE, sc.RECENT), exchange(sc.project_url(PACKAGE), "", status=503)]
+    responses = [sc.downloads(PACKAGE, sc.RECENT), *thrice(exchange(sc.project_url(PACKAGE), "", status=503))]
 
     done = run_scenario("downloads_for_the_day_week_and_month", tmp_path, responses=responses, seed={FILE: earlier})
 
@@ -606,34 +606,37 @@ def test_check_finds_the_package_on_pypi(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("response", "finding"),
+    ("answers", "finding"),
     [
         (
-            exchange(sc.project_url(PACKAGE), '{"message": "Not Found"}', status=404),
+            [exchange(sc.project_url(PACKAGE), '{"message": "Not Found"}', status=404)],
             Finding("error", f"{PACKAGE}: HTTP 404 from PyPI: the package doesn't exist, or PyPI refuses it"),
         ),
         (
-            exchange(sc.project_url(PACKAGE), "", status=403),
+            [exchange(sc.project_url(PACKAGE), "", status=403)],
             Finding("error", f"{PACKAGE}: HTTP 403 from PyPI: the package doesn't exist, or PyPI refuses it"),
         ),
         (
-            exchange(sc.project_url(PACKAGE), "", status=429),
+            thrice(exchange(sc.project_url(PACKAGE), "", status=429)),
             Finding("warn", f"{PACKAGE}: could not read PyPI: HTTP 429"),
         ),
-        (failed(sc.project_url(PACKAGE)), Finding("warn", f"{PACKAGE}: could not read PyPI: HTTP 0")),
+        (thrice(failed(sc.project_url(PACKAGE))), Finding("warn", f"{PACKAGE}: could not read PyPI: HTTP 0")),
         (
-            exchange(sc.project_url(PACKAGE), "<html>maintenance</html>"),
+            [exchange(sc.project_url(PACKAGE), "<html>maintenance</html>")],
             Finding("warn", f"{PACKAGE}: could not read PyPI: metadata response was not JSON"),
         ),
         (
-            exchange(sc.project_url(PACKAGE), []),
+            [exchange(sc.project_url(PACKAGE), [])],
             Finding("warn", f"{PACKAGE}: could not read PyPI: metadata response had an unexpected shape"),
         ),
     ],
     ids=["not found", "forbidden", "rate limited", "no connection", "not JSON", "not an object"],
 )
-def test_check_reports_api_trouble_as_a_finding_never_a_crash(tmp_path: Path, response: Any, finding: Finding) -> None:
-    assert check(tmp_path, response) == [finding]
+def test_check_reports_api_trouble_as_a_finding_never_a_crash(
+    tmp_path: Path, answers: list[Any], finding: Finding
+) -> None:
+    """A failure waiting can fix is tried three times, one waiting can't fix once."""
+    assert check(tmp_path, *answers) == [finding]
 
 
 # --- the summary ---

@@ -5,9 +5,13 @@ follow [SemVer](https://semver.org/).
 
 ## Unreleased
 
-- `discourse_topics`: each topic request is tried up to three times (waiting 10, then
-  20 seconds), like goatcounter's, so one Cloudflare challenge or rate limit no longer
-  costs a night's reading, which can't be backfilled.
+- Every request is tried up to three times (waiting 10, then 20 seconds) unless its
+  source asks for one, where it was one try before: the GitHub sources, the Home
+  Assistant feeds, `discourse_topics`, `discourse_forum`, `pypi`'s metadata and
+  `cloudflare_web`'s site list. A night a service refuses for a moment (a bot
+  challenge, a stray 404, a reset connection) no longer leaves a gap that can't
+  be backfilled. Errors waiting can't fix (a rejected credential, a missing
+  thing) are still tried once; a rate limit is retried like any other failure.
 
 ## 0.9.0 - 2026-10-28
 

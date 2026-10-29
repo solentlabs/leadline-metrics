@@ -58,13 +58,52 @@ def test_get_json_sends_user_agent_and_timeout() -> None:
     assert transport.timeouts == [60]
 
 
-def test_failure_raises_without_retry_by_default() -> None:
+def test_a_source_can_ask_for_one_try() -> None:
     transport = FakeTransport(HttpError("u", 503, "busy"), ok(1))
 
     with pytest.raises(HttpError) as raised:
-        client(transport).get_json("https://x.test/u")
+        client(transport).get_json("https://x.test/u", attempts=1)
 
     assert (raised.value.code, raised.value.reason) == (503, "busy")
+    assert len(transport.requests) == 1
+
+
+def test_a_request_is_tried_three_times_by_default() -> None:
+    """ADR: a request is tried up to three times unless its source says one."""
+    sleeps: list[float] = []
+    transport = FakeTransport(HttpError("u", 503, "a"), HttpError("u", 503, "b"), ok(1))
+
+    assert client(transport, sleeps).get_json("https://x.test/u") == 1
+
+    assert sleeps == [10, 20]
+    assert len(transport.requests) == 3
+
+
+@pytest.mark.parametrize("call", ["request", "get_pages"])
+def test_every_way_to_ask_is_tried_three_times_by_default(call: str) -> None:
+    sleeps: list[float] = []
+    transport = FakeTransport(HttpError("u", 503, "a"), HttpError("u", 503, "b"), ok([1]))
+
+    getattr(client(transport, sleeps), call)("https://x.test/u")
+
+    assert (sleeps, len(transport.requests)) == ([10, 20], 3)
+
+
+def test_graphql_is_tried_three_times_by_default() -> None:
+    sleeps: list[float] = []
+    transport = FakeTransport(HttpError("u", 503, "a"), HttpError("u", 503, "b"), ok({"data": {}}))
+
+    client(transport, sleeps).graphql("https://x.test/g", "{ a }")
+
+    assert (sleeps, len(transport.requests)) == ([10, 20], 3)
+
+
+def test_an_error_waiting_cant_fix_is_still_tried_once_by_default() -> None:
+    transport = FakeTransport(HttpError("u", 401, "no"), ok(1))
+
+    with pytest.raises(HttpError):
+        client(transport).get_json("https://x.test/u")
+
     assert len(transport.requests) == 1
 
 
@@ -462,7 +501,7 @@ def test_a_failure_is_never_kept_so_the_next_request_is_sent() -> None:
     web = client(transport)
 
     with pytest.raises(HttpError):
-        web.get_json("https://x.test/a")
+        web.get_json("https://x.test/a", attempts=1)
     assert web.get_json("https://x.test/a") == 2
 
     assert len(transport.requests) == 2
@@ -744,7 +783,7 @@ def test_a_single_attempt_that_fails_is_logged_with_its_cause() -> None:
     web = client(FakeTransport(HttpError("u", 404, "no such site", {"cf-ray": "8a1-AMS"})))
 
     with Logged() as logged, pytest.raises(HttpError):
-        web.request("https://x.test/a")
+        web.request("https://x.test/a", attempts=1)
 
     assert logged.messages == [
         "WARN: attempt 1/1 failed (HTTP 404: no such site [cf-ray=8a1-AMS]), giving up: https://x.test/a"
@@ -775,7 +814,7 @@ def test_a_final_failure_line_names_the_path_and_hides_a_credential_in_the_query
     web = client(FakeTransport(HttpError(url, 404, "gone")))
 
     with Logged() as logged, pytest.raises(HttpError):
-        web.request(url)
+        web.request(url, attempts=1)
 
     assert logged.messages == [
         "WARN: attempt 1/1 failed (HTTP 404: gone), "

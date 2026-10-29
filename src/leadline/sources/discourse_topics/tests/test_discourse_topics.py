@@ -14,7 +14,7 @@ from typing import Any
 import port
 import pytest
 import scenarios
-from scenarios.builders.common import exchange, failed
+from scenarios.builders.common import exchange, failed, retried, thrice
 
 from leadline.context import Critical, Finding
 from leadline.http import SavedResponses
@@ -351,7 +351,7 @@ def test_a_topic_without_its_counts_is_a_parse_failed_row_naming_them_not_zeros(
 def test_each_topic_that_fails_writes_its_own_failure_row(tmp_path: Path) -> None:
     """The script skips each; leadline writes each its failure row, and the good topic its row."""
     scenario = port.scenario(NAME, "failed_or_unparseable_threads_are_skipped")
-    scenario = replace(scenario, responses=dt.retried(scenario.responses))
+    scenario = replace(scenario, responses=retried(scenario.responses))
 
     done = port.run(source, dt.leadline_config(scenario), scenario, tmp_path)
 
@@ -395,11 +395,6 @@ def test_an_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int
     assert done.rows == {FILE: failure_row(1001, "main", "fetch_failed", "topic request failed", str(code))}
     assert done.ctx.critical == [Critical(NAME, FILE, f"{BASE}: HTTP {code} for topic 1001 (main)")]
     assert done.status == 1
-
-
-def thrice(response: Any) -> list[Any]:
-    """`response` for each of the three attempts a request that waiting can fix gets."""
-    return [response] * 3
 
 
 CHALLENGE = "<!DOCTYPE html><html><head><title>Just a moment...</title></head><body></body></html>"

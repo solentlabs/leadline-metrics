@@ -15,8 +15,8 @@ the configured user agent and a 60-second timeout.
 
 | Call | Does |
 | ---- | ---- |
-| `request(url, method=, headers=, body=, attempts=1, require_body=False, backoff_s=10, recoverable=())` | the general form; returns a `Response` (`status`, `headers` with lower-cased names, `body`) |
-| `get_json(url, headers=, attempts=1)` | a GET's JSON |
+| `request(url, method=, headers=, body=, attempts=3, require_body=False, backoff_s=10, recoverable=())` | the general form; returns a `Response` (`status`, `headers` with lower-cased names, `body`) |
+| `get_json(url, headers=, attempts=3)` | a GET's JSON |
 | `get_pages(url, ...)` | a JSON array and every page after it (`Link: rel="next"`), concatenated |
 | `graphql(url, query, variables=None, ...)` | POSTs the query as JSON and returns the whole reply, `errors` included, for the source to judge |
 | `wait(seconds)` | pauses between requests, for an API that wants them spaced (`pypi`); tests record it instead of sleeping |
@@ -29,10 +29,12 @@ the configured user agent and a 60-second timeout.
   - `headers`: the response's headers, names lower-cased;
   - `http_code`: `code` as a failure row gives it, curl's three digits in
     the script: `"503"`, or `"000"` for no response.
-- **Retries.** One attempt unless the source asks for more. Before retry
-  n it waits n × 10 seconds, as the script does, or n × `backoff_s` where
-  the source gives one (`pypi`). Tests record these waits. An error waiting
-  can't fix is never retried.
+- **Retries.** Three attempts unless the source gives another number
+  (`attempts=1` where a second try can't help: a probe whose failure is the
+  answer; ADR "A request is tried up to three times unless its source says
+  one"). Before retry n it waits n × 10 seconds, as the script does, or
+  n × `backoff_s` where the source gives one (`pypi`). Tests record these
+  waits. An error waiting can't fix is never retried; a rate limit is.
 - **Failure causes.** Each failed attempt is logged with its cause,
   `WARN: attempt 1/3 failed (HTTP 404: <body> [server=..., cf-ray=...]),
   retrying in 10s: <url>`, from `HttpError.detail`: the connection error's

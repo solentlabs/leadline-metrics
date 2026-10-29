@@ -17,7 +17,6 @@ forum's answer are in DIVERGENCES for them (more data is captured than the scrip
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from typing import Any
 
 from scenarios import Scenario
@@ -137,12 +136,6 @@ SCENARIOS = [
 ]
 
 MORE_DATA = "more data is captured than the script did"
-
-
-def retried(responses: Sequence[Exchange]) -> list[Exchange]:
-    """`responses` with each connection failure twice more: the script asks once, leadline up to three times."""
-    again = [r for r in responses if "error" in r["response"]]
-    return [*responses, *again, *again]
 
 
 DIVERGENCES = {

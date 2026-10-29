@@ -14,7 +14,7 @@ from typing import Any
 import port
 import pytest
 import scenarios
-from scenarios.builders.common import exchange, failed
+from scenarios.builders.common import exchange, failed, retried, thrice
 
 from leadline.context import Critical, Finding
 from leadline.http import SavedResponses
@@ -61,9 +61,11 @@ def failure_row(status: str, reason: str, http_code: str | None = None) -> str:
 
 
 def week(**answers: Any) -> list[Any]:
-    """weekly_snapshot's responses, with the request for each URL given in `answers` answered so instead."""
+    """weekly_snapshot's responses, with the request for each URL given in `answers` answered so instead (an answer
+    may be a list: the tries of a request that is retried)."""
     responses = [gra.REPOSITORY, *gra.commits(gra.WEEK), *gra.rest(gra.ISSUES, gra.CONTRIBUTORS, gra.RELEASES)]
-    return [answers.get(e["request"]["url"], e) for e in responses]
+    answered = [answers.get(e["request"]["url"], e) for e in responses]
+    return [a for answer in answered for a in (answer if isinstance(answer, list) else [answer])]
 
 
 def run(tmp_path: Path, responses: list[Any], seed: str = gra.EARLIER, cfg: Any = CONFIG) -> port.PortRun:
@@ -229,14 +231,20 @@ def test_configured_patterns_count_fixes_and_redesigns_ignoring_case(tmp_path: P
 
 
 def test_a_failed_repository_is_a_fetch_failed_row(tmp_path: Path) -> None:
-    done = port.run(source, CONFIG, port.scenario(NAME, "failed_repository_writes_nothing"), tmp_path)
+    scenario = port.scenario(NAME, "failed_repository_writes_nothing")
+    scenario = replace(scenario, responses=retried(scenario.responses))
+
+    done = port.run(source, CONFIG, scenario, tmp_path)
 
     assert done.rows == {FILE: gra.EARLIER + failure_row("fetch_failed", "repository request failed", "000")}
     assert (done.status, done.ctx.critical) == (0, [])
 
 
 def test_a_failed_commits_page_is_a_fetch_failed_row(tmp_path: Path) -> None:
-    done = port.run(source, CONFIG, port.scenario(NAME, "a_failed_commits_page_writes_nothing"), tmp_path)
+    scenario = port.scenario(NAME, "a_failed_commits_page_writes_nothing")
+    scenario = replace(scenario, responses=retried(scenario.responses))
+
+    done = port.run(source, CONFIG, scenario, tmp_path)
 
     assert done.rows == {FILE: gra.EARLIER + failure_row("fetch_failed", "commits request failed", "502")}
     assert (done.status, done.ctx.critical) == (0, [])
@@ -327,7 +335,7 @@ def test_a_failure_keeps_a_good_row(tmp_path: Path) -> None:
     """ADR: a failure never replaces good data."""
     good = row(**WEEK)
 
-    done = run(tmp_path, [failed(gra.REPO_URL)], seed=gra.EARLIER + good)
+    done = run(tmp_path, thrice(failed(gra.REPO_URL)), seed=gra.EARLIER + good)
 
     assert done.rows == {FILE: gra.EARLIER + good}
     assert f"WARN: kept the good row for 2026-09-23 in {FILE}; fetch_failed not recorded" in done.log
@@ -360,7 +368,10 @@ def test_an_unparseable_list_body_is_null_in_a_partial_row(tmp_path: Path) -> No
 
 
 def test_failed_lists_are_null_in_a_partial_row_never_none(tmp_path: Path) -> None:
-    done = port.run(source, CONFIG, port.scenario(NAME, "failed_optional_lists_count_as_none"), tmp_path)
+    scenario = port.scenario(NAME, "failed_optional_lists_count_as_none")
+    scenario = replace(scenario, responses=retried(scenario.responses))
+
+    done = port.run(source, CONFIG, scenario, tmp_path)
 
     reason = (
         "issues request failed (HTTP 500); contributors request failed (HTTP 500); "
@@ -438,11 +449,11 @@ def test_empty_lists_read_as_the_script_reads_them(tmp_path: Path) -> None:
 def test_a_rate_limited_list_is_partial_and_recoverable(tmp_path: Path, code: int, headers: dict[str, str]) -> None:
     limited = exchange(gra.RELEASES_URL, '{"message":"API rate limit exceeded"}', status=code, headers=headers)
 
-    done = run(tmp_path, week(**{gra.RELEASES_URL: limited}))
+    done = run(tmp_path, week(**{gra.RELEASES_URL: thrice(limited)}))
 
     reason = f"releases request failed (HTTP {code})"
     assert done.rows == {FILE: gra.EARLIER + partial_row(reason, latest_release=None)}
-    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [])
+    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
 
 
 # --- several runs on one day (a run writes what it got, and never erases what it didn't) ---
@@ -451,7 +462,7 @@ def test_a_rate_limited_list_is_partial_and_recoverable(tmp_path: Path, code: in
 def test_a_failed_list_keeps_a_good_rows_value_and_the_row_stays_good(tmp_path: Path) -> None:
     good = row(**{**WEEK, "stars": 899, "codebase_bytes": 1000, "languages": {"Go": 1000}})
 
-    done = run(tmp_path, week(**{gra.LANGUAGES_URL: failed(gra.LANGUAGES_URL)}), seed=gra.EARLIER + good)
+    done = run(tmp_path, week(**{gra.LANGUAGES_URL: thrice(failed(gra.LANGUAGES_URL))}), seed=gra.EARLIER + good)
 
     assert done.rows == {FILE: gra.EARLIER + row(**{**WEEK, "codebase_bytes": 1000, "languages": {"Go": 1000}})}
     kept = f"Kept the stored codebase_bytes, languages for 2026-09-23 in {FILE}, which this run failed to get"
@@ -462,7 +473,7 @@ def test_a_partial_row_is_filled_by_a_later_run_and_becomes_good(tmp_path: Path)
     earlier_release = {"tag": "v3.8.0", "date": "2026-09-01"}
     partial = partial_row("languages request failed (HTTP 000)", codebase_bytes=None, latest_release=earlier_release)
 
-    done = run(tmp_path, week(**{gra.RELEASES_URL: failed(gra.RELEASES_URL)}), seed=gra.EARLIER + partial)
+    done = run(tmp_path, week(**{gra.RELEASES_URL: thrice(failed(gra.RELEASES_URL))}), seed=gra.EARLIER + partial)
 
     assert done.rows == {FILE: gra.EARLIER + row(**{**WEEK, "latest_release": earlier_release})}
 
@@ -470,7 +481,7 @@ def test_a_partial_row_is_filled_by_a_later_run_and_becomes_good(tmp_path: Path)
 def test_a_failure_keeps_a_partial_row(tmp_path: Path) -> None:
     partial = partial_row("languages request failed (HTTP 000)", codebase_bytes=None)
 
-    done = run(tmp_path, [failed(gra.REPO_URL)], seed=gra.EARLIER + partial)
+    done = run(tmp_path, thrice(failed(gra.REPO_URL)), seed=gra.EARLIER + partial)
 
     assert done.rows == {FILE: gra.EARLIER + partial}
     assert f"WARN: kept the partial row for 2026-09-23 in {FILE}; fetch_failed not recorded" in done.log
@@ -489,7 +500,7 @@ def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
     other = f"{GITHUB_API}/repos/a/other"
     since = f"since={gra.SINCE}"
     responses = [
-        failed(gra.REPO_URL),
+        *thrice(failed(gra.REPO_URL)),
         exchange(other, github_repo("a/other", stars=2)),
         exchange(f"{other}/commits?{since}&per_page=100&page=1", []),
         exchange(f"{other}/issues?state=all&{since}&per_page=100", []),
@@ -522,26 +533,28 @@ def test_check_finds_the_repo(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("response", "finding"),
+    ("responses", "finding"),
     [
         (
-            exchange(gra.REPO_URL, '{"message":"Not Found"}', status=404),
+            [exchange(gra.REPO_URL, '{"message":"Not Found"}', status=404)],
             Finding("error", f"{REPO}: HTTP 404: the repo doesn't exist, or the token can't read it"),
         ),
         (
-            exchange(gra.REPO_URL, "", status=401),
+            [exchange(gra.REPO_URL, "", status=401)],
             Finding("error", f"{REPO}: HTTP 401: the repo doesn't exist, or the token can't read it"),
         ),
         (
-            exchange(gra.REPO_URL, "", status=403, headers={"X-RateLimit-Remaining": "0"}),
+            thrice(exchange(gra.REPO_URL, "", status=403, headers={"X-RateLimit-Remaining": "0"})),
             Finding("warn", f"{REPO}: could not fetch the repo: HTTP 403, rate limited"),
         ),
-        (failed(gra.REPO_URL), Finding("warn", f"{REPO}: could not fetch the repo: HTTP 0")),
+        (thrice(failed(gra.REPO_URL)), Finding("warn", f"{REPO}: could not fetch the repo: HTTP 0")),
     ],
     ids=["not found", "rejected", "rate limited", "no connection"],
 )
-def test_check_reports_api_trouble_as_a_finding_never_a_crash(tmp_path: Path, response: Any, finding: Finding) -> None:
-    assert check(tmp_path, CONFIG, response) == [finding]
+def test_check_reports_api_trouble_as_a_finding_never_a_crash(
+    tmp_path: Path, responses: list[Any], finding: Finding
+) -> None:
+    assert check(tmp_path, CONFIG, *responses) == [finding]
 
 
 def test_check_checks_every_entry(tmp_path: Path) -> None:

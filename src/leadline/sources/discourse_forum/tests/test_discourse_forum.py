@@ -14,7 +14,7 @@ from typing import Any
 import port
 import pytest
 import scenarios
-from scenarios.builders.common import exchange, failed
+from scenarios.builders.common import exchange, failed, thrice
 
 from leadline.context import Critical, Finding
 from leadline.http import SavedResponses
@@ -158,10 +158,22 @@ def test_it_needs_no_credentials(tmp_path: Path) -> None:
 
 
 def test_a_forum_that_does_not_answer_is_a_fetch_failed_row(tmp_path: Path) -> None:
-    done = run(tmp_path, failed(URL))
+    done = run(tmp_path, *thrice(failed(URL)))
 
     assert done.rows == {FILE: failure_row("fetch_failed", "about request failed", "000")}
     assert (done.status, done.ctx.critical) == (0, [])
+
+
+def test_a_failed_about_request_is_tried_up_to_three_times(tmp_path: Path) -> None:
+    """ADR: a request is tried up to three times; the forum's one request gets the default."""
+    done = run(tmp_path, failed(URL), exchange(URL, "", status=503), df.about())
+
+    assert rows(done)[0]["users_count"] == 45000
+    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
+
+    failing = run(tmp_path / "failing", *thrice(failed(URL)))
+
+    assert failing.sleeps == [10, 20]
 
 
 @pytest.mark.parametrize("code", [401, 403, 404])
@@ -175,14 +187,14 @@ def test_an_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int
 
 @pytest.mark.parametrize("code", [429, 500])
 def test_a_rate_limit_or_a_server_error_is_recoverable_not_critical(tmp_path: Path, code: int) -> None:
-    done = run(tmp_path, exchange(URL, "", status=code))
+    done = run(tmp_path, *thrice(exchange(URL, "", status=code)))
 
     assert done.rows == {FILE: failure_row("fetch_failed", "about request failed", str(code))}
-    assert (done.status, done.ctx.critical) == (0, [])
+    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
 
 
 def test_a_bot_challenge_is_recoverable_not_critical(tmp_path: Path) -> None:
-    done = run(tmp_path, exchange(URL, CHALLENGE, status=403))
+    done = run(tmp_path, *thrice(exchange(URL, CHALLENGE, status=403)))
 
     assert done.rows == {FILE: failure_row("fetch_failed", "about request failed", "403")}
     assert (done.status, done.ctx.critical) == (0, [])
@@ -229,7 +241,7 @@ def test_a_failure_keeps_the_days_good_row(tmp_path: Path) -> None:
     """ADR: a failure never replaces good data; the key is the date."""
     good = scenarios.load_golden(NAME)[FIRST]["rows"][FILE]
 
-    done = run(tmp_path, failed(URL), seed=good)
+    done = run(tmp_path, *thrice(failed(URL)), seed=good)
 
     assert done.rows == {FILE: good}
     assert f"WARN: kept the good row for 2026-09-23 in {FILE}; fetch_failed not recorded" in done.log
@@ -247,7 +259,7 @@ def test_one_forums_failure_does_not_stop_the_next(tmp_path: Path) -> None:
     other = "https://other.example"
     cfg = [{"base_url": BASE, "file": FILE}, {"base_url": other, "file": "other.jsonl"}]
 
-    done = run(tmp_path, failed(URL), exchange(f"{other}/about.json", ABOUT), cfg=cfg)
+    done = run(tmp_path, *thrice(failed(URL)), exchange(f"{other}/about.json", ABOUT), cfg=cfg)
 
     assert done.rows[FILE] == failure_row("fetch_failed", "about request failed", "000")
     assert json.loads(done.rows["other.jsonl"])["base_url"] == other
@@ -273,25 +285,26 @@ def test_check_finds_the_forums_site_statistics(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("response", "finding"),
+    ("answers", "finding"),
     [
-        (failed(URL), Finding("warn", f"{BASE}: the forum did not answer: HTTP 0")),
-        (exchange(URL, "", status=404), Finding("warn", f"{BASE}: no about.json: HTTP 404")),
-        (exchange(URL, "", status=403), Finding("error", f"{BASE}: could not read about.json: HTTP 403")),
-        (exchange(URL, CHALLENGE, status=403), Finding("warn", f"{BASE}: could not read about.json: HTTP 403")),
+        (thrice(failed(URL)), Finding("warn", f"{BASE}: the forum did not answer: HTTP 0")),
+        ([exchange(URL, "", status=404)], Finding("warn", f"{BASE}: no about.json: HTTP 404")),
+        ([exchange(URL, "", status=403)], Finding("error", f"{BASE}: could not read about.json: HTTP 403")),
+        (thrice(exchange(URL, CHALLENGE, status=403)), Finding("warn", f"{BASE}: could not read about.json: HTTP 403")),
         (
-            exchange(URL, "<html>Oops</html>"),
+            [exchange(URL, "<html>Oops</html>")],
             Finding("warn", f"{BASE}: could not read about.json: about response was not JSON"),
         ),
         (
-            exchange(URL, {"about": {}}),
+            [exchange(URL, {"about": {}})],
             Finding("warn", f"{BASE}: could not read about.json: about response has no stats object"),
         ),
     ],
     ids=["no answer", "missing", "private", "bot challenge", "not JSON", "no stats"],
 )
-def test_check_reports_each_forums_trouble(tmp_path: Path, response: Any, finding: Finding) -> None:
-    assert check(tmp_path, df.LEADLINE_CONFIG, response) == [finding]
+def test_check_reports_each_forums_trouble(tmp_path: Path, answers: list[Any], finding: Finding) -> None:
+    """A failure waiting can fix is tried three times, one waiting can't fix once."""
+    assert check(tmp_path, df.LEADLINE_CONFIG, *answers) == [finding]
 
 
 def test_check_goes_on_to_the_next_forum(tmp_path: Path) -> None:

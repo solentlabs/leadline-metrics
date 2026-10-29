@@ -14,7 +14,7 @@ from typing import Any
 import port
 import pytest
 import scenarios
-from scenarios.builders.common import exchange, failed
+from scenarios.builders.common import exchange, failed, retried, thrice
 
 from leadline.context import Critical, Finding
 from leadline.http import SavedResponses
@@ -190,7 +190,7 @@ def test_a_failed_comments_query_leaves_them_null_and_fails_nothing(tmp_path: Pa
     sent = graphql_body(gd.COMMENTS_QUERY, {"o": "solentlabs", "n": "example"})
     broken = [scenario.responses[0], exchange(GITHUB_GRAPHQL, "", method="POST", sent=sent, status=502)]
 
-    done = port.run(github_discussions, CONFIG, replace(scenario, responses=broken), tmp_path)
+    done = port.run(github_discussions, CONFIG, replace(scenario, responses=retried(broken)), tmp_path)
 
     assert done.rows[FILE] == gd.WITHOUT_COMMENTS + gd.LATE + gd.four_today(4)
     assert f"Not rebuilding past comments for {REPO}: 502" in done.log
@@ -253,10 +253,12 @@ def test_an_unparseable_body_is_a_parse_failed_row(tmp_path: Path) -> None:
 
 
 def test_a_failed_fetch_is_a_fetch_failed_row(tmp_path: Path) -> None:
-    done = port.run(github_discussions, CONFIG, port.scenario(NAME, "failed_fetch_writes_nothing"), tmp_path)
+    scenario = port.scenario(NAME, "failed_fetch_writes_nothing")
+
+    done = port.run(github_discussions, CONFIG, replace(scenario, responses=retried(scenario.responses)), tmp_path)
 
     assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "discussions request failed", "502")}
-    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [])  # recoverable, one attempt
+    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])  # recoverable, three attempts
 
 
 GOOD = [github_discussion(1)]
@@ -321,7 +323,8 @@ def test_answers_without_the_discussions_are_a_parse_failed_row(tmp_path: Path, 
 def test_a_failure_keeps_a_good_row(tmp_path: Path) -> None:
     """ADR: a failure never replaces good data."""
     good = '{"date": "2026-09-23", "total": 3}\n'
-    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), seed={FILE: EARLIER + good})
+    failing = port.scenario(NAME, "failed_fetch_writes_nothing")
+    scenario = replace(failing, responses=retried(failing.responses), seed={FILE: EARLIER + good})
 
     done = port.run(github_discussions, CONFIG, scenario, tmp_path)
 
@@ -359,12 +362,12 @@ def test_an_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int
 )
 def test_an_http_rate_limit_is_recoverable(tmp_path: Path, code: int, headers: dict[str, str]) -> None:
     limited = exchange(GITHUB_GRAPHQL, "", method="POST", sent=gd.SENT, status=code, headers=headers)
-    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), responses=[limited])
+    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), responses=thrice(limited))
 
     done = port.run(github_discussions, CONFIG, scenario, tmp_path)
 
     assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "discussions request failed", str(code))}
-    assert (done.status, done.ctx.critical) == (0, [])
+    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])  # tried three times like any failure
 
 
 @pytest.mark.parametrize(
@@ -385,7 +388,7 @@ def test_a_graphql_error_waiting_can_fix_is_recoverable(tmp_path: Path, error: d
 def test_no_connection_is_recorded_as_000_and_is_recoverable(tmp_path: Path) -> None:
     scenario = replace(
         port.scenario(NAME, "failed_fetch_writes_nothing"),
-        responses=[failed(GITHUB_GRAPHQL, method="POST", sent=gd.SENT)],
+        responses=thrice(failed(GITHUB_GRAPHQL, method="POST", sent=gd.SENT)),
     )
 
     done = port.run(github_discussions, CONFIG, scenario, tmp_path)
@@ -398,7 +401,9 @@ def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
     other = {"repo": "a/other", "maintainer": gd.MAINTAINER}
     sent = graphql_body(gd.QUERY, {"o": "a", "n": "other"})
     answered = exchange(GITHUB_GRAPHQL, discussions_body([]), method="POST", sent=sent)
-    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), responses=[gd.answer("", 502), answered])
+    scenario = replace(
+        port.scenario(NAME, "failed_fetch_writes_nothing"), responses=[*thrice(gd.answer("", 502)), answered]
+    )
 
     done = port.run(github_discussions, [*CONFIG, other], scenario, tmp_path)
 
@@ -423,7 +428,7 @@ def query_answer(body: Any, status: int = 200) -> Any:
 
 
 def check(tmp_path: Path, *responses: Any) -> list[Finding]:
-    transport = SavedResponses(responses)
+    transport = SavedResponses(retried(responses))
     ctx = port.context(tmp_path, transport, port.local_time(scenarios.NOW, "UTC"), [])
     with port.credentials(scenarios.CREDENTIALS, github_discussions.ENV):
         findings = github_discussions.check(ctx, CONFIG)

@@ -15,7 +15,7 @@ from typing import Any
 import port
 import pytest
 import scenarios
-from scenarios.builders.common import exchange, failed
+from scenarios.builders.common import exchange, failed, thrice
 
 from leadline.context import Correction, Critical, Finding
 from leadline.http import SavedResponses
@@ -747,36 +747,41 @@ def test_check_reads_every_page_of_sites(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("response", "finding"),
+    ("answers", "finding"),
     [
         (
-            exchange(f"{SITES_URL}?page=1", "", status=429),
+            thrice(exchange(f"{SITES_URL}?page=1", "", status=429)),
             Finding("warn", "example: could not list the account's Web Analytics sites: HTTP 429"),
         ),
         (
-            failed(f"{SITES_URL}?page=1"),
+            thrice(failed(f"{SITES_URL}?page=1")),
             Finding("warn", "example: could not list the account's Web Analytics sites: HTTP 0"),
         ),
         (
-            exchange(f"{SITES_URL}?page=1", "", status=403),
+            [exchange(f"{SITES_URL}?page=1", "", status=403)],
             Finding("error", "example: could not list the account's Web Analytics sites: HTTP 403"),
         ),
         (
-            exchange(f"{SITES_URL}?page=1", "<html>"),
+            [exchange(f"{SITES_URL}?page=1", "<html>")],
             Finding("warn", "example: could not read the account's Web Analytics sites: not JSON"),
         ),
         (
-            exchange(
-                f"{SITES_URL}?page=1",
-                {"success": False, "errors": [{"code": 10000, "message": "Authentication error"}], "result": None},
-            ),
+            [
+                exchange(
+                    f"{SITES_URL}?page=1",
+                    {"success": False, "errors": [{"code": 10000, "message": "Authentication error"}], "result": None},
+                )
+            ],
             Finding("warn", "example: could not read the account's Web Analytics sites: unexpected answer"),
         ),
     ],
     ids=["rate limited", "no connection", "credentials rejected", "not JSON", "an unsuccessful answer"],
 )
-def test_check_reports_api_trouble_as_a_finding_never_a_crash(tmp_path: Path, response: Any, finding: Finding) -> None:
-    assert check(tmp_path, [entry(TAG)], response) == [finding]
+def test_check_reports_api_trouble_as_a_finding_never_a_crash(
+    tmp_path: Path, answers: list[Any], finding: Finding
+) -> None:
+    """A failure waiting can fix is tried three times, one waiting can't fix once."""
+    assert check(tmp_path, [entry(TAG)], *answers) == [finding]
 
 
 # --- the summary ---

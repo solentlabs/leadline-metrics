@@ -14,7 +14,7 @@ from typing import Any
 import port
 import pytest
 import scenarios
-from scenarios.builders.common import exchange, failed
+from scenarios.builders.common import exchange, failed, retried, thrice
 
 from leadline.context import Critical, Finding
 from leadline.http import SavedResponses
@@ -172,7 +172,9 @@ def partial_row(reason: str, *, referrers: bool = True, paths: bool = False) -> 
 
 
 def test_a_failed_referrers_fetch_is_a_partial_row_with_the_views_and_clones(tmp_path: Path) -> None:
-    done = run(port.scenario(NAME, "failed_referrers_leave_the_list_empty"), tmp_path)
+    scenario = port.scenario(NAME, "failed_referrers_leave_the_list_empty")
+
+    done = run(replace(scenario, responses=retried(scenario.responses)), tmp_path)
 
     assert done.rows == {FILE: partial_row("referrers request failed (HTTP 500)")}
     assert f"WARN: Failed to fetch GitHub referrers for {REPO}: HTTP 500" in done.log
@@ -184,7 +186,9 @@ def test_a_failed_referrers_fetch_keeps_the_referrers_an_earlier_run_got(tmp_pat
     scenario = port.scenario(NAME, "snapshot_with_the_top_five_referrers")
     run(scenario, tmp_path / "first")
     kept = port.scenario(NAME, "failed_referrers_leave_the_list_empty")
-    seeded = replace(kept, seed={FILE: (tmp_path / "first" / FILE).read_text(encoding="utf-8")})
+    seeded = replace(
+        kept, responses=retried(kept.responses), seed={FILE: (tmp_path / "first" / FILE).read_text(encoding="utf-8")}
+    )
 
     done = run(seeded, tmp_path / "second")
 
@@ -239,40 +243,43 @@ def test_a_site_with_no_popular_paths_has_an_empty_list(tmp_path: Path) -> None:
     assert json.loads(done.rows[FILE])["top_paths"] == []
 
 
-def paths_failed(tmp_path: Path, answer: Any) -> Any:
-    scenario = replace(
-        port.scenario(NAME, "snapshot_with_the_top_five_referrers"),
-        responses=gt.with_paths(gt.responses(), answer),
-    )
+def paths_failed(tmp_path: Path, *answers: Any) -> Any:
+    """Run the snapshot with the paths request answered by `answers`, in order."""
+    scenario = port.scenario(NAME, "snapshot_with_the_top_five_referrers")
+    scenario = replace(scenario, responses=[*gt.with_paths(gt.responses(), answers[0]), *answers[1:]])
     return port.run(source, CONFIG, scenario, tmp_path)
 
 
 def test_a_failed_paths_fetch_is_a_partial_row_with_the_views_clones_and_referrers(tmp_path: Path) -> None:
-    done = paths_failed(tmp_path, exchange(gt.PATHS, "", status=500))
+    done = paths_failed(tmp_path, *thrice(exchange(gt.PATHS, "", status=500)))
 
     assert done.rows == {FILE: partial_row("paths request failed (HTTP 500)", referrers=False, paths=True)}
     assert f"WARN: Failed to fetch GitHub paths for {REPO}: HTTP 500" in done.log
     assert (done.status, done.ctx.critical) == (0, [])
 
 
-def test_paths_the_token_may_not_read_are_critical_and_a_rate_limit_is_not(tmp_path: Path) -> None:
+def test_paths_the_token_may_not_read_are_critical_and_a_rate_limit_is_tried_three_times_not_critical(
+    tmp_path: Path,
+) -> None:
     forbidden = paths_failed(tmp_path / "forbidden", exchange(gt.PATHS, '{"message":"Forbidden"}', status=403))
     limited = paths_failed(
-        tmp_path / "limited", exchange(gt.PATHS, "", status=403, headers={"X-RateLimit-Remaining": "0"})
+        tmp_path / "limited", *thrice(exchange(gt.PATHS, "", status=403, headers={"X-RateLimit-Remaining": "0"}))
     )
 
     assert forbidden.ctx.critical == [Critical(NAME, FILE, f"{REPO}: HTTP 403 from GitHub's traffic API")]
     assert forbidden.rows == {FILE: partial_row("paths request failed (HTTP 403)", referrers=False, paths=True)}
     assert limited.ctx.critical == []
     assert limited.rows == {FILE: partial_row("paths request failed (HTTP 403)", referrers=False, paths=True)}
-    assert (limited.status, limited.sleeps) == (0, [])  # not retried
+    assert (limited.status, limited.sleeps) == (0, [10, 20])  # tried three times
 
 
 def test_referrers_and_paths_that_both_fail_say_so_in_one_reason(tmp_path: Path) -> None:
     scenario = replace(
         port.scenario(NAME, "failed_referrers_leave_the_list_empty"),
-        responses=gt.with_paths(
-            gt.responses(referrers=exchange(gt.REFERRERS, "", status=500)), exchange(gt.PATHS, "", status=502)
+        responses=retried(
+            gt.with_paths(
+                gt.responses(referrers=exchange(gt.REFERRERS, "", status=500)), exchange(gt.PATHS, "", status=502)
+            )
         ),
     )
 
@@ -297,6 +304,7 @@ def test_a_failed_paths_fetch_keeps_the_paths_an_earlier_run_got(tmp_path: Path)
 
 def paths_failed_with(scenario: Any, folder: Path) -> Any:
     failing = replace(scenario, responses=gt.with_paths(scenario.responses, exchange(gt.PATHS, "", status=500)))
+    failing = replace(failing, responses=[*failing.responses, *thrice(exchange(gt.PATHS, "", status=500))[1:]])
     return port.run(source, CONFIG, failing, folder)
 
 
@@ -373,7 +381,9 @@ def test_failed_views_are_a_fetch_failed_row_and_critical_without_push_access(tm
 
 
 def test_failed_clones_are_a_fetch_failed_row(tmp_path: Path) -> None:
-    done = run(port.scenario(NAME, "failed_clones_write_nothing"), tmp_path)
+    scenario = port.scenario(NAME, "failed_clones_write_nothing")
+
+    done = run(replace(scenario, responses=retried(scenario.responses)), tmp_path)
 
     assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "clones request failed", "000")}
     assert (done.status, done.ctx.critical) == (0, [])  # recoverable: the next run writes the day
@@ -479,7 +489,8 @@ def test_only_the_top_five_referrers_are_read(tmp_path: Path) -> None:
 def test_a_failure_keeps_a_good_row(tmp_path: Path) -> None:
     """ADR: a failure never replaces good data."""
     good = '{"date": "2026-09-23", "views_total": 7}\n'
-    scenario = replace(port.scenario(NAME, "failed_clones_write_nothing"), seed={FILE: EARLIER + good})
+    failing = port.scenario(NAME, "failed_clones_write_nothing")
+    scenario = replace(failing, responses=retried(failing.responses), seed={FILE: EARLIER + good})
 
     done = run(scenario, tmp_path)
 
@@ -517,14 +528,16 @@ def test_an_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int
     [(403, {"X-RateLimit-Remaining": "0"}), (403, {"Retry-After": "60"}), (429, {})],
     ids=["403 none remaining", "403 retry-after", "429"],
 )
-def test_a_rate_limit_is_recoverable_and_not_retried(tmp_path: Path, code: int, headers: dict[str, str]) -> None:
+def test_a_rate_limit_is_tried_three_times_and_recoverable(tmp_path: Path, code: int, headers: dict[str, str]) -> None:
     limited = exchange(gt.CLONES, '{"message":"API rate limit exceeded"}', status=code, headers=headers)
-    scenario = replace(port.scenario(NAME, "failed_clones_write_nothing"), responses=[gt.responses()[0], limited])
+    scenario = replace(
+        port.scenario(NAME, "failed_clones_write_nothing"), responses=[gt.responses()[0], *thrice(limited)]
+    )
 
     done = run(scenario, tmp_path)
 
     assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "clones request failed", str(code))}
-    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [])
+    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
 
 
 def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
@@ -535,7 +548,7 @@ def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
         exchange(f"{other}/popular/referrers", [github_referrer("github.com", 2, 1)]),
         exchange(f"{other}/popular/paths", [github_path("/a/other", "a/other", 2, 1)]),
     ]
-    scenario = replace(port.scenario(NAME, "failed_views_write_nothing"), responses=[failed(gt.VIEWS), *empty])
+    scenario = replace(port.scenario(NAME, "failed_views_write_nothing"), responses=[*thrice(failed(gt.VIEWS)), *empty])
 
     done = run_with(scenario, tmp_path)
 
@@ -565,31 +578,34 @@ def test_check_finds_the_token_can_read_the_traffic(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("response", "finding"),
+    ("answers", "finding"),
     [
         (
-            exchange(gt.VIEWS, '{"message":"Must have push access to repository"}', status=403),
+            [exchange(gt.VIEWS, '{"message":"Must have push access to repository"}', status=403)],
             Finding("error", f"{REPO}: HTTP 403: the token can't read its traffic, which needs push access"),
         ),
         (
-            exchange(gt.VIEWS, '{"message":"Not Found"}', status=404),
+            [exchange(gt.VIEWS, '{"message":"Not Found"}', status=404)],
             Finding("error", f"{REPO}: HTTP 404: the repo doesn't exist, or the token can't read it"),
         ),
         (
-            exchange(gt.VIEWS, "", status=401),
+            [exchange(gt.VIEWS, "", status=401)],
             Finding("error", f"{REPO}: HTTP 401: the repo doesn't exist, or the token can't read it"),
         ),
         (
-            exchange(gt.VIEWS, "", status=403, headers={"X-RateLimit-Remaining": "0"}),
+            thrice(exchange(gt.VIEWS, "", status=403, headers={"X-RateLimit-Remaining": "0"})),
             Finding("warn", f"{REPO}: could not fetch its traffic: HTTP 403, rate limited"),
         ),
-        (exchange(gt.VIEWS, "", status=503), Finding("warn", f"{REPO}: could not fetch its traffic: HTTP 503")),
-        (failed(gt.VIEWS), Finding("warn", f"{REPO}: could not fetch its traffic: HTTP 0")),
+        (thrice(exchange(gt.VIEWS, "", status=503)), Finding("warn", f"{REPO}: could not fetch its traffic: HTTP 503")),
+        (thrice(failed(gt.VIEWS)), Finding("warn", f"{REPO}: could not fetch its traffic: HTTP 0")),
     ],
     ids=["no push access", "not found", "rejected", "rate limited", "unavailable", "no connection"],
 )
-def test_check_reports_api_trouble_as_a_finding_never_a_crash(tmp_path: Path, response: Any, finding: Finding) -> None:
-    assert check(tmp_path, CONFIG, response) == [finding]
+def test_check_reports_api_trouble_as_a_finding_never_a_crash(
+    tmp_path: Path, answers: list[Any], finding: Finding
+) -> None:
+    """A failure waiting can fix is tried three times, one waiting can't fix once."""
+    assert check(tmp_path, CONFIG, *answers) == [finding]
 
 
 def test_check_checks_every_entry(tmp_path: Path) -> None:

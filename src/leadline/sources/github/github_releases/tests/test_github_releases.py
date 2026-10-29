@@ -15,7 +15,7 @@ import port
 import pytest
 import scenarios
 from row_files import files_in
-from scenarios.builders.common import exchange, failed
+from scenarios.builders.common import exchange, failed, retried, thrice
 
 from leadline import trends
 from leadline.config import Hide
@@ -162,7 +162,10 @@ def failure_row(status: str, reason: str, http_code: str | None = None) -> str:
 
 
 def test_a_failed_fetch_is_a_fetch_failed_row(tmp_path: Path) -> None:
-    done = port.run(github_releases, CONFIG, port.scenario(NAME, "failed_fetch_writes_nothing"), tmp_path)
+    scenario = port.scenario(NAME, "failed_fetch_writes_nothing")
+    scenario = replace(scenario, responses=retried(scenario.responses))
+
+    done = port.run(github_releases, CONFIG, scenario, tmp_path)
 
     assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "releases request failed", "500")}
     assert (done.status, done.ctx.critical) == (0, [])  # recoverable: the next run writes the day
@@ -256,7 +259,8 @@ def test_any_answer_the_source_cant_use_is_a_parse_failed_row(tmp_path: Path, bo
 def test_a_failure_keeps_a_good_row(tmp_path: Path) -> None:
     """ADR: a failure never replaces good data."""
     good = f'{{"date": "2026-09-23", "repo": "{REPO}", "releases": []}}\n'
-    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), seed={FILE: EARLIER + good})
+    base = port.scenario(NAME, "failed_fetch_writes_nothing")
+    scenario = replace(base, responses=retried(base.responses), seed={FILE: EARLIER + good})
 
     done = port.run(github_releases, CONFIG, scenario, tmp_path)
 
@@ -292,29 +296,29 @@ def test_an_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int
     [(403, {"X-RateLimit-Remaining": "0"}), (403, {"Retry-After": "60"}), (429, {})],
     ids=["403 none remaining", "403 retry-after", "429"],
 )
-def test_a_rate_limit_is_recoverable_and_not_retried(tmp_path: Path, code: int, headers: dict[str, str]) -> None:
+def test_a_rate_limit_is_retried_and_is_recoverable(tmp_path: Path, code: int, headers: dict[str, str]) -> None:
     limited = exchange(URL, '{"message":"API rate limit exceeded"}', status=code, headers=headers)
-    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), responses=[limited])
+    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), responses=thrice(limited))
 
     done = port.run(github_releases, CONFIG, scenario, tmp_path)
 
     assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "releases request failed", str(code))}
-    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [])
+    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
 
 
 def test_no_connection_is_recorded_as_000_and_is_recoverable(tmp_path: Path) -> None:
-    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), responses=[failed(URL)])
+    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), responses=thrice(failed(URL)))
 
     done = port.run(github_releases, CONFIG, scenario, tmp_path)
 
     assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "releases request failed", "000")}
-    assert (done.status, done.sleeps) == (0, [])  # one attempt, as the script makes
+    assert (done.status, done.sleeps) == (0, [10, 20])  # three tries
 
 
 def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
     other = github_numbered_pages("a/other", "releases", "per_page=100", [], per_page=100, numbered=False)
     scenario = replace(
-        port.scenario(NAME, "failed_fetch_writes_nothing"), responses=[exchange(URL, "", status=502), *other]
+        port.scenario(NAME, "failed_fetch_writes_nothing"), responses=[*thrice(exchange(URL, "", status=502)), *other]
     )
 
     done = port.run(github_releases, [*CONFIG, {"repo": "a/other"}], scenario, tmp_path)
@@ -343,27 +347,29 @@ def test_check_finds_the_repo(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("response", "finding"),
+    ("responses", "finding"),
     [
         (
-            exchange(REPO_URL, '{"message":"Not Found"}', status=404),
+            [exchange(REPO_URL, '{"message":"Not Found"}', status=404)],
             Finding("error", f"{REPO}: HTTP 404: the repo doesn't exist, or the token can't read it"),
         ),
         (
-            exchange(REPO_URL, "", status=401),
+            [exchange(REPO_URL, "", status=401)],
             Finding("error", f"{REPO}: HTTP 401: the repo doesn't exist, or the token can't read it"),
         ),
         (
-            exchange(REPO_URL, "", status=403, headers={"Retry-After": "60"}),
+            thrice(exchange(REPO_URL, "", status=403, headers={"Retry-After": "60"})),
             Finding("warn", f"{REPO}: could not fetch the repo: HTTP 403, rate limited"),
         ),
-        (exchange(REPO_URL, "", status=503), Finding("warn", f"{REPO}: could not fetch the repo: HTTP 503")),
-        (failed(REPO_URL), Finding("warn", f"{REPO}: could not fetch the repo: HTTP 0")),
+        (thrice(exchange(REPO_URL, "", status=503)), Finding("warn", f"{REPO}: could not fetch the repo: HTTP 503")),
+        (thrice(failed(REPO_URL)), Finding("warn", f"{REPO}: could not fetch the repo: HTTP 0")),
     ],
     ids=["not found", "rejected", "rate limited", "unavailable", "no connection"],
 )
-def test_check_reports_api_trouble_as_a_finding_never_a_crash(tmp_path: Path, response: Any, finding: Finding) -> None:
-    assert check(tmp_path, CONFIG, response) == [finding]
+def test_check_reports_api_trouble_as_a_finding_never_a_crash(
+    tmp_path: Path, responses: list[Any], finding: Finding
+) -> None:
+    assert check(tmp_path, CONFIG, *responses) == [finding]
 
 
 def test_check_checks_every_entry(tmp_path: Path) -> None:

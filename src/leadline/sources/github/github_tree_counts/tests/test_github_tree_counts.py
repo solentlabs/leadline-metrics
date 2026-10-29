@@ -16,7 +16,7 @@ import port
 import pytest
 import scenarios
 from row_files import files_in
-from scenarios.builders.common import exchange, failed
+from scenarios.builders.common import exchange, failed, retried, thrice
 
 from leadline import config, trends
 from leadline.context import Critical, Finding
@@ -404,28 +404,28 @@ def test_an_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int
     [(403, {"X-RateLimit-Remaining": "0"}), (403, {"Retry-After": "60"}), (429, {})],
     ids=["403 none remaining", "403 retry-after", "429"],
 )
-def test_a_rate_limit_is_recoverable_and_not_retried(tmp_path: Path, code: int, headers: dict[str, str]) -> None:
+def test_a_rate_limit_is_recoverable_and_tried_three_times(tmp_path: Path, code: int, headers: dict[str, str]) -> None:
     limited = exchange(tc.TREE_URL, '{"message":"API rate limit exceeded"}', status=code, headers=headers)
-    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), responses=[limited])
+    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), responses=thrice(limited))
 
     done = port.run(github_tree_counts, CONFIG, scenario, tmp_path)
 
     assert done.rows == {FILE: tc.EARLIER + failure_row("fetch_failed", "tree request failed", str(code))}
-    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [])
+    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
 
 
 def test_no_connection_is_recorded_as_000_and_is_recoverable(tmp_path: Path) -> None:
-    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), responses=[failed(tc.TREE_URL)])
+    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), responses=thrice(failed(tc.TREE_URL)))
 
     done = port.run(github_tree_counts, CONFIG, scenario, tmp_path)
 
     assert done.rows == {FILE: tc.EARLIER + failure_row("fetch_failed", "tree request failed", "000")}
-    assert (done.status, done.sleeps) == (0, [])  # one attempt, as the script makes
+    assert (done.status, done.sleeps) == (0, [10, 20])  # three attempts
 
 
 def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
     other_url = "https://api.github.com/repos/a/other/git/trees/main?recursive=1"
-    responses = [exchange(tc.TREE_URL, "", status=502), exchange(other_url, github_tree("a/other", tc.MODEMS))]
+    responses = [*thrice(exchange(tc.TREE_URL, "", status=502)), exchange(other_url, github_tree("a/other", tc.MODEMS))]
     scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), responses=responses)
 
     done = port.run(github_tree_counts, [*CONFIG, {**GENERIC, "repo": "a/other"}], scenario, tmp_path)
@@ -438,7 +438,7 @@ def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
 
 
 def check(tmp_path: Path, cfg: Any, *responses: Any) -> list[Finding]:
-    transport = SavedResponses(responses)
+    transport = SavedResponses(retried(responses))
     ctx = port.context(tmp_path, transport, port.local_time(scenarios.NOW, "UTC"), [])
     with port.credentials(scenarios.CREDENTIALS, github_tree_counts.ENV):
         findings = github_tree_counts.check(ctx, cfg)
@@ -480,7 +480,7 @@ def test_check_warns_of_a_truncated_tree(tmp_path: Path) -> None:
             Finding("error", f"{WHERE}: HTTP 401: the repo or its ref doesn't exist, or the token can't read it"),
         ),
         (
-            exchange(tc.TREE_URL, "", status=403, headers={"X-RateLimit-Remaining": "0"}),
+            thrice(exchange(tc.TREE_URL, "", status=403, headers={"X-RateLimit-Remaining": "0"})),
             Finding("warn", f"{WHERE}: could not fetch the tree: HTTP 403, rate limited"),
         ),
         (exchange(tc.TREE_URL, "", status=502), Finding("warn", f"{WHERE}: could not fetch the tree: HTTP 502")),
@@ -491,7 +491,9 @@ def test_check_warns_of_a_truncated_tree(tmp_path: Path) -> None:
     ids=["not found", "rejected", "rate limited", "unavailable", "no connection", "not JSON", "no tree"],
 )
 def test_check_reports_api_trouble_as_a_finding_never_a_crash(tmp_path: Path, response: Any, finding: Finding) -> None:
-    assert check(tmp_path, CONFIG, response) == [finding]
+    responses = response if isinstance(response, list) else [response]
+
+    assert check(tmp_path, CONFIG, *responses) == [finding]
 
 
 def test_check_checks_every_entry(tmp_path: Path) -> None:
@@ -546,7 +548,7 @@ def test_a_rate_limit_stops_the_rebuild_for_the_night_and_the_next_night_goes_on
     limited_tree = tc.commit_tree(*tc.HISTORY[3])["request"]["url"]
     limited = exchange(limited_tree, '{"message": "API rate limit exceeded"}', status=403)
     limited["response"]["headers"] = {"x-ratelimit-remaining": "0"}
-    night = [*scenario.responses[:-1], limited]
+    night = [*scenario.responses[:-1], *thrice(limited)]
 
     first = port.run(github_tree_counts, CONFIG, replace(scenario, responses=night), tmp_path / "first")
     resumed = [*scenario.responses[:1], *tc.commits(tc.HISTORY), tc.commit_tree(*tc.HISTORY[3])]
@@ -713,7 +715,7 @@ def test_a_blob_that_cant_be_read_is_a_failed_part_not_a_count(tmp_path: Path) -
         *tc.tree(tc.MODEMS + tc.NOT_MODEMS, contents=tc.TEXTS_TODAY),
         tc.blob(tc.AWAITING),
         tc.blob(tc.NEW_X100),
-        exchange(BLOB_URL + tc.BLOB_SHA(tc.NO_STATUS), "", status=503),
+        *thrice(exchange(BLOB_URL + tc.BLOB_SHA(tc.NO_STATUS), "", status=503)),
     ]
 
     done = content_run(tmp_path, responses)
@@ -768,7 +770,7 @@ def test_a_failed_blob_never_replaces_the_counts_the_day_has(tmp_path: Path) -> 
     )
     responses = [
         *tc.tree(tc.MODEMS[:1], contents=tc.TEXTS_TODAY),
-        exchange(BLOB_URL + tc.BLOB_SHA(tc.NEW_X100), "", status=503),
+        *thrice(exchange(BLOB_URL + tc.BLOB_SHA(tc.NEW_X100), "", status=503)),
     ]
 
     done = content_run(tmp_path, responses, stored)

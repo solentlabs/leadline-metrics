@@ -1596,3 +1596,29 @@ health looks for gaps in. Unbounded, the file grew to 7.5 MB in 90 nights,
 nearly all of it in the nights a release rebuilt history and recorded hundreds
 of corrections, and a hosted database counts every row it stores. A fix that
 has to be remembered longer belongs in the journal, with its reason.
+
+## A request is tried up to three times unless its source says one
+
+**Decision:** The core `http` tries a request up to three times: it waits 10
+seconds before the second try and 20 before the third (`attempts=3`, the
+default of `request`, `get_json`, `get_pages` and `graphql`). A source
+passes `attempts=1` only where a second try can't help or would do harm, such
+as a probe whose failure is the answer it wants, and a source that retries in
+passes of its own (PyPI's history) names its number. Nothing else changes: an
+error waiting can't fix is never retried, a failure is never kept for reuse, a
+rate limit is retried like any other failure, and a request that still fails
+after the last try is the failure row it was before.
+
+**Rationale:** Most sources read a snapshot, what an API says now, and a
+snapshot a night missed can't be read again: the next night's answer says
+nothing about it. For those sources a second try is the only recovery there
+is, and a failed request is most often a passing one (a bot challenge, a
+stray 404, a reset connection) that clears in seconds. When each source chose
+its number, the ones that were forgotten were the ones with no backfill: the
+forum lost a night for good to one challenge. A default makes a new source
+safe without its author remembering, and the sources that differ say so where
+the request is made. The cost is time only: a request that fails every try
+waits 30 seconds, so a service that is down costs its requests that long on
+that night's run, which no one is waiting for. A rate limit that lasts an hour
+is not cleared by 30 seconds, and the retries spend a few requests of its
+budget, which is small against the data a transient failure saves.

@@ -15,7 +15,7 @@ from typing import Any
 import port
 import pytest
 import scenarios
-from scenarios.builders.common import exchange, failed
+from scenarios.builders.common import exchange, failed, retried, thrice
 
 from leadline import http, runner
 from leadline.config import Config, ConfigError
@@ -318,13 +318,19 @@ def test_the_divergences_are_the_decided_ones() -> None:
 # --- decided divergences: ADR "A failure is recorded as a failure" ---
 
 
+def failing() -> Any:
+    """The failed-fetch scenario with the answers a request is tried three times for."""
+    scenario = port.scenario(NAME, "failed_fetch_writes_nothing")
+    return replace(scenario, responses=retried(scenario.responses))
+
+
 def failure_row(status: str, reason: str, http_code: str | None = None) -> str:
     code = f', "http_code": "{http_code}"' if http_code is not None else ""
     return f'{{"date": "2026-09-23", "status": "{status}"{code}, "reason": "{reason}", "captured_at": "{NOW}"}}\n'
 
 
 def test_a_failed_fetch_is_a_fetch_failed_row(tmp_path: Path) -> None:
-    done = port.run(ha_platform, CONFIG, port.scenario(NAME, "failed_fetch_writes_nothing"), tmp_path)
+    done = port.run(ha_platform, CONFIG, failing(), tmp_path)
 
     assert done.rows == {FILE: hp.EARLIER + failure_row("fetch_failed", "analytics request failed", "503")}
     assert (done.status, done.ctx.critical) == (0, [])  # recoverable: the next run writes the day
@@ -379,7 +385,7 @@ def test_any_answer_the_scripts_code_stops_on_is_a_parse_failed_row(tmp_path: Pa
 def test_a_failure_keeps_a_good_row(tmp_path: Path) -> None:
     """ADR: a failure never replaces good data."""
     good = '{"date": "2026-09-23", "active_installations": 1100, "reports_integrations": 450}\n'
-    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), seed={FILE: hp.EARLIER + good})
+    scenario = replace(failing(), seed={FILE: hp.EARLIER + good})
 
     done = port.run(ha_platform, CONFIG, scenario, tmp_path)
 
@@ -417,7 +423,7 @@ def test_an_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int
 def test_a_rate_limit_is_recoverable_not_critical(tmp_path: Path) -> None:
     """A 403 that says its limit is spent is one waiting fixes (http: HttpError.rate_limited)."""
     limited = exchange(HA_PLATFORM_URL, "", status=403, headers={"Retry-After": "60"})
-    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), responses=[limited])
+    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), responses=thrice(limited))
 
     done = port.run(ha_platform, CONFIG, scenario, tmp_path)
 
@@ -426,12 +432,12 @@ def test_a_rate_limit_is_recoverable_not_critical(tmp_path: Path) -> None:
 
 
 def test_no_connection_is_recorded_as_000_and_is_recoverable(tmp_path: Path) -> None:
-    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), responses=[failed(HA_PLATFORM_URL)])
+    scenario = replace(port.scenario(NAME, "failed_fetch_writes_nothing"), responses=thrice(failed(HA_PLATFORM_URL)))
 
     done = port.run(ha_platform, CONFIG, scenario, tmp_path)
 
     assert done.rows == {FILE: hp.EARLIER + failure_row("fetch_failed", "analytics request failed", "000")}
-    assert (done.status, done.sleeps) == (0, [])  # one attempt, as the script makes
+    assert (done.status, done.sleeps) == (0, [10, 20])  # three tries, waiting between them
 
 
 # --- check() ---
@@ -482,7 +488,7 @@ def test_check_names_the_fields_the_answer_lacks(tmp_path: Path) -> None:
     ids=["unavailable", "no connection", "gone", "not JSON", "no current"],
 )
 def test_check_reports_api_trouble_as_a_finding_never_a_crash(tmp_path: Path, response: Any, finding: Finding) -> None:
-    assert check(tmp_path, response) == [finding]
+    assert check(tmp_path, *retried([response])) == [finding]
 
 
 # --- the summary ---

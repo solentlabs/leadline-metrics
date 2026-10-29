@@ -16,7 +16,7 @@ from typing import Any
 import port
 import pytest
 from scenarios import Scenario
-from scenarios.builders.common import exchange
+from scenarios.builders.common import exchange, thrice
 
 from leadline import reports
 
@@ -41,7 +41,9 @@ def run(tmp_path: Path, response: Any, status: int = 200, seed: str | None = Non
     scenario = Scenario(
         "guide_example",
         calls=[],
-        responses=[exchange(URL, response, status=status)],
+        responses=thrice(exchange(URL, response, status=status))
+        if status >= 500
+        else [exchange(URL, response, status=status)],
         seed={FILE: seed} if seed is not None else {},
         expected={},
     )

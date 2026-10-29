@@ -16,7 +16,7 @@ import port
 import pytest
 import scenarios
 from row_files import files_in
-from scenarios.builders.common import exchange, failed
+from scenarios.builders.common import exchange, failed, retried, thrice
 
 from leadline import trends
 from leadline.context import Correction, Critical, Finding
@@ -162,10 +162,12 @@ def test_graphql_errors_are_a_graphql_error_row(tmp_path: Path) -> None:
 
 
 def test_a_failed_later_page_is_a_fetch_failed_row(tmp_path: Path) -> None:
-    done = port.run(github_response_times, CONFIG, port.scenario(NAME, "a_failed_later_page_writes_nothing"), tmp_path)
+    scenario = port.scenario(NAME, "a_failed_later_page_writes_nothing")
+
+    done = port.run(github_response_times, CONFIG, replace(scenario, responses=retried(scenario.responses)), tmp_path)
 
     assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "issues request failed", "502")}
-    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [])
+    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
     assert f"ERROR: Failed to fetch issue page 2 for {REPO}: HTTP 502" in done.log
 
 
@@ -295,7 +297,8 @@ def test_an_unparseable_page_is_a_parse_failed_row(tmp_path: Path) -> None:
 def test_a_failure_keeps_a_good_row(tmp_path: Path) -> None:
     """ADR: a failure never replaces good data."""
     good = '{"date": "2026-09-23", "issues_scanned": 3}\n'
-    scenario = replace(port.scenario(NAME, "a_failed_later_page_writes_nothing"), seed={FILE: EARLIER + good})
+    failing = port.scenario(NAME, "a_failed_later_page_writes_nothing")
+    scenario = replace(failing, responses=retried(failing.responses), seed={FILE: EARLIER + good})
 
     done = port.run(github_response_times, CONFIG, scenario, tmp_path)
 
@@ -350,7 +353,7 @@ def test_a_graphql_rate_limit_is_recoverable(tmp_path: Path) -> None:
 def test_no_connection_is_recorded_as_000_and_is_recoverable(tmp_path: Path) -> None:
     scenario = replace(
         port.scenario(NAME, "graphql_errors_write_nothing"),
-        responses=[failed(GITHUB_GRAPHQL, method="POST", sent=FIRST_SENT)],
+        responses=thrice(failed(GITHUB_GRAPHQL, method="POST", sent=FIRST_SENT)),
     )
 
     done = port.run(github_response_times, CONFIG, scenario, tmp_path)
@@ -364,7 +367,7 @@ def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
     sent = graphql_body(grt.QUERY, {"o": "a", "n": "other", "c": None})
     answered = exchange(GITHUB_GRAPHQL, issues(), method="POST", sent=sent)
     failing = exchange(GITHUB_GRAPHQL, "", method="POST", sent=FIRST_SENT, status=502)
-    scenario = replace(port.scenario(NAME, "graphql_errors_write_nothing"), responses=[failing, answered])
+    scenario = replace(port.scenario(NAME, "graphql_errors_write_nothing"), responses=[*thrice(failing), answered])
 
     done = port.run(github_response_times, [*CONFIG, other], scenario, tmp_path)
 
@@ -389,7 +392,7 @@ def query_answer(body: Any, status: int = 200) -> Any:
 
 
 def check(tmp_path: Path, *responses: Any) -> list[Finding]:
-    transport = SavedResponses(responses)
+    transport = SavedResponses(retried(responses))
     ctx = port.context(tmp_path, transport, port.local_time(scenarios.NOW, "UTC"), [])
     with port.credentials(scenarios.CREDENTIALS, github_response_times.ENV):
         findings = github_response_times.check(ctx, CONFIG)

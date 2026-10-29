@@ -28,6 +28,8 @@ log = logging.getLogger("leadline")
 TIMEOUT_S = 60
 # Before retry n (1-based), wait n * RETRY_BACKOFF_S seconds, as the script does.
 RETRY_BACKOFF_S = 10
+# A request is tried this many times unless its source says otherwise (ADR: a request is tried up to three times).
+ATTEMPTS = 3
 # Errors waiting can't fix: the credentials are rejected, or the thing asked for doesn't exist. They
 # are never retried, and a source marks one critical at once (docs/ARCHITECTURE_DECISIONS.md, "One
 # failed night recovers; consecutive failures are critical"). A 403 that is a rate limit is not one of
@@ -283,7 +285,7 @@ class Http:
         method: str = "GET",
         headers: Mapping[str, str] | None = None,
         body: bytes | None = None,
-        attempts: int = 1,
+        attempts: int = ATTEMPTS,
         require_body: bool = False,
         backoff_s: float = RETRY_BACKOFF_S,
         recoverable: Collection[int] = (),
@@ -341,10 +343,10 @@ class Http:
         """Pause between requests, for an API that wants them spaced (pypistats); tests record it, not sleep."""
         self._sleep(seconds)
 
-    def get_json(self, url: str, *, headers: Mapping[str, str] | None = None, attempts: int = 1) -> Any:
+    def get_json(self, url: str, *, headers: Mapping[str, str] | None = None, attempts: int = ATTEMPTS) -> Any:
         return self.request(url, headers=headers, attempts=attempts).json()
 
-    def get_pages(self, url: str, *, headers: Mapping[str, str] | None = None, attempts: int = 1) -> list[Any]:
+    def get_pages(self, url: str, *, headers: Mapping[str, str] | None = None, attempts: int = ATTEMPTS) -> list[Any]:
         """GET a JSON array and every page after it (Link: rel="next"), concatenated."""
         items: list[Any] = []
         next_url: str | None = url
@@ -365,7 +367,7 @@ class Http:
         variables: Mapping[str, Any] | None = None,
         *,
         headers: Mapping[str, str] | None = None,
-        attempts: int = 1,
+        attempts: int = ATTEMPTS,
     ) -> Any:
         """POST a GraphQL query; returns the whole reply, `errors` included, for the caller to judge."""
         payload: dict[str, Any] = {"query": query}

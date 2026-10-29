@@ -14,7 +14,7 @@ from typing import Any
 import port
 import pytest
 import scenarios
-from scenarios.builders.common import exchange, failed
+from scenarios.builders.common import exchange, failed, retried, thrice
 
 from leadline.context import Critical, Finding
 from leadline.http import SavedResponses
@@ -265,7 +265,10 @@ def failure_row(status: str, reason: str, http_code: str | None = None) -> str:
 
 
 def test_a_failed_repository_is_a_fetch_failed_row(tmp_path: Path) -> None:
-    done = port.run(source, CONFIG, port.scenario(NAME, "failed_repository_writes_nothing"), tmp_path)
+    scenario = port.scenario(NAME, "failed_repository_writes_nothing")
+    scenario = replace(scenario, responses=retried(scenario.responses))
+
+    done = port.run(source, CONFIG, scenario, tmp_path)
 
     assert done.rows == {FILE: EARLIER + failure_row("fetch_failed", "repository request failed", "502")}
     assert (done.status, done.ctx.critical) == (0, [])  # recoverable: the next run writes the day
@@ -302,7 +305,7 @@ def test_a_failure_keeps_a_good_row(tmp_path: Path) -> None:
     """ADR: a failure never replaces good data."""
     good = '{"date": "2026-09-23", "repo": "solentlabs/example-tool", "stars": 41}\n'
 
-    done = run(tmp_path, exchange(grs.REPO_URL, "", status=502), seed=EARLIER + good)
+    done = run(tmp_path, *thrice(exchange(grs.REPO_URL, "", status=502)), seed=EARLIER + good)
 
     assert done.rows == {FILE: EARLIER + good}
     assert f"WARN: kept the good row for 2026-09-23 in {FILE}; fetch_failed not recorded" in done.log
@@ -316,7 +319,10 @@ def partial_row(reason: str, **traffic: Any) -> str:
 
 
 def test_failed_traffic_is_null_in_a_partial_row_never_zero(tmp_path: Path) -> None:
-    done = port.run(source, CONFIG, port.scenario(NAME, "failed_traffic_counts_as_zero"), tmp_path)
+    scenario = port.scenario(NAME, "failed_traffic_counts_as_zero")
+    scenario = replace(scenario, responses=retried(scenario.responses))
+
+    done = port.run(source, CONFIG, scenario, tmp_path)
 
     reason = "views request failed (HTTP 403); clones request failed (HTTP 000)"
     assert done.rows == {FILE: partial_row(reason, **NO_VIEWS, **NO_CLONES)}
@@ -340,7 +346,7 @@ def test_clones_without_their_counts_are_null_in_a_partial_row_naming_them_not_z
 
 
 def test_failed_clones_alone_are_null_in_a_partial_row(tmp_path: Path) -> None:
-    done = run(tmp_path, REPOSITORY, VIEWS, exchange(grs.CLONES, "", status=500))
+    done = run(tmp_path, REPOSITORY, VIEWS, *thrice(exchange(grs.CLONES, "", status=500)))
 
     assert done.rows == {FILE: EARLIER + partial_row("clones request failed (HTTP 500)", **NO_CLONES)}
     assert (done.status, done.ctx.critical) == (0, [])
@@ -366,10 +372,10 @@ def test_views_it_cant_use_are_null_in_a_partial_row(tmp_path: Path, body: Any) 
 def test_rate_limited_traffic_is_partial_and_recoverable(tmp_path: Path, code: int, headers: dict[str, str]) -> None:
     limited = exchange(grs.VIEWS, '{"message":"API rate limit exceeded"}', status=code, headers=headers)
 
-    done = run(tmp_path, REPOSITORY, limited, CLONES)
+    done = run(tmp_path, REPOSITORY, *thrice(limited), CLONES)
 
     assert done.rows == {FILE: EARLIER + partial_row(f"views request failed (HTTP {code})", **NO_VIEWS)}
-    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [])
+    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
 
 
 # --- several runs on one day (a run writes what it got, and never erases what it didn't) ---
@@ -381,7 +387,7 @@ KEPT_VIEWS = f"Kept the stored views_14d, views_unique_14d for 2026-09-23 in {FI
 def test_failed_views_keep_a_good_rows_views_and_the_row_stays_good(tmp_path: Path) -> None:
     good = row(**{**STATS, "stars": 40}, **{**TRAFFIC, **STORED_VIEWS})
 
-    done = run(tmp_path, REPOSITORY, exchange(grs.VIEWS, "", status=500), CLONES, seed=EARLIER + good)
+    done = run(tmp_path, REPOSITORY, *thrice(exchange(grs.VIEWS, "", status=500)), CLONES, seed=EARLIER + good)
 
     assert done.rows == {FILE: EARLIER + row(**STATS, **{**TRAFFIC, **STORED_VIEWS})}
     assert KEPT_VIEWS in done.log
@@ -391,7 +397,7 @@ def test_failed_views_keep_a_good_rows_views_and_the_row_stays_good(tmp_path: Pa
 def test_a_partial_row_is_filled_by_a_later_run_and_becomes_good(tmp_path: Path) -> None:
     partial = partial_row("clones request failed (HTTP 500)", **STORED_VIEWS, **NO_CLONES)
 
-    done = run(tmp_path, REPOSITORY, exchange(grs.VIEWS, "", status=500), CLONES, seed=EARLIER + partial)
+    done = run(tmp_path, REPOSITORY, *thrice(exchange(grs.VIEWS, "", status=500)), CLONES, seed=EARLIER + partial)
 
     assert done.rows == {FILE: EARLIER + row(**STATS, **{**TRAFFIC, **STORED_VIEWS})}
     assert KEPT_VIEWS in done.log
@@ -400,7 +406,7 @@ def test_a_partial_row_is_filled_by_a_later_run_and_becomes_good(tmp_path: Path)
 def test_what_no_run_got_stays_null_named_by_this_runs_failure(tmp_path: Path) -> None:
     partial = partial_row("views request failed (HTTP 502); clones request failed (HTTP 502)", **NO_VIEWS, **NO_CLONES)
 
-    done = run(tmp_path, REPOSITORY, exchange(grs.VIEWS, "", status=500), CLONES, seed=EARLIER + partial)
+    done = run(tmp_path, REPOSITORY, *thrice(exchange(grs.VIEWS, "", status=500)), CLONES, seed=EARLIER + partial)
 
     assert done.rows == {FILE: EARLIER + partial_row("views request failed (HTTP 500)", **NO_VIEWS)}
 
@@ -408,7 +414,7 @@ def test_what_no_run_got_stays_null_named_by_this_runs_failure(tmp_path: Path) -
 def test_a_failure_keeps_a_partial_row(tmp_path: Path) -> None:
     partial = partial_row("views request failed (HTTP 500)", **NO_VIEWS)
 
-    done = run(tmp_path, exchange(grs.REPO_URL, "", status=502), seed=EARLIER + partial)
+    done = run(tmp_path, *thrice(exchange(grs.REPO_URL, "", status=502)), seed=EARLIER + partial)
 
     assert done.rows == {FILE: EARLIER + partial}
     assert f"WARN: kept the partial row for 2026-09-23 in {FILE}; fetch_failed not recorded" in done.log
@@ -428,7 +434,7 @@ def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
     other = f"{GITHUB_API}/repos/a/other"
     done = run(
         tmp_path,
-        exchange(grs.REPO_URL, "", status=502),
+        *thrice(exchange(grs.REPO_URL, "", status=502)),
         exchange(other, github_repo("a/other", stars=2)),
         exchange(f"{other}/traffic/views", github_traffic("views", {})),
         exchange(f"{other}/traffic/clones", github_traffic("clones", {})),
@@ -467,7 +473,7 @@ def test_check_finds_the_repo_and_that_the_token_can_read_its_traffic(tmp_path: 
             [Finding("error", f"{REPO}: HTTP 404: the repo doesn't exist, or the token can't read it")],
         ),
         (
-            [exchange(grs.REPO_URL, "", status=403, headers={"Retry-After": "60"})],
+            thrice(exchange(grs.REPO_URL, "", status=403, headers={"Retry-After": "60"})),
             [Finding("warn", f"{REPO}: could not fetch the repo: HTTP 403, rate limited")],
         ),
         (
@@ -478,7 +484,7 @@ def test_check_finds_the_repo_and_that_the_token_can_read_its_traffic(tmp_path: 
             ],
         ),
         (
-            [REPOSITORY, failed(grs.VIEWS)],
+            [REPOSITORY, *thrice(failed(grs.VIEWS))],
             [
                 Finding("ok", f"{REPO}: the repo exists"),
                 Finding("warn", f"{REPO}: could not fetch its traffic: HTTP 0"),
