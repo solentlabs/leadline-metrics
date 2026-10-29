@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -235,6 +236,7 @@ def test_its_steps_commit_what_leadline_wrote_and_nothing_when_nothing_changed(t
         "metrics/SUMMARY.md",
         "metrics/health.jsonl",
         "metrics/leadline.log",
+        f"metrics/logs/leadline-{date.today()}.log",  # noqa: DTZ011 (the run date is local)
         "metrics/trends.html",
         "metrics/trends.json",
     ]

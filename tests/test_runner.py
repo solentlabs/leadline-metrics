@@ -14,7 +14,7 @@ import pytest
 
 from leadline import health, runner, trends
 from leadline.config import Config, ConfigError, Section, Shown
-from leadline.context import LOG_FILE, Context, Critical, Finding, open_context
+from leadline.context import LOG_DIR, LOG_FILE, Context, Critical, Finding, open_context
 from leadline.http import Http, Response
 from leadline.sources import Registry, Source
 
@@ -565,7 +565,9 @@ def test_an_empty_reports_list_writes_no_report(tmp_path: Path) -> None:
 
     runner.run(config(tmp_path, reports=[], a={}), registry=reg(a))
 
-    assert sorted(path.name for path in tmp_path.iterdir()) == sorted([LOG_FILE, health.FILE, trends.DATA, trends.PAGE])
+    assert sorted(path.name for path in tmp_path.iterdir()) == sorted(
+        [LOG_FILE, LOG_DIR, health.FILE, trends.DATA, trends.PAGE]
+    )
 
 
 def test_a_config_with_its_own_reports_writes_only_those_and_leaves_an_old_summary_as_it_is(tmp_path: Path) -> None:

@@ -3,14 +3,23 @@ from __future__ import annotations
 import logging
 import re
 import urllib.request
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
 from leadline import http
 from leadline.config import Config
-from leadline.context import LOG_FILE, Correction, Critical, Finding, open_context, open_report_context
+from leadline.context import (
+    LOG_DIR,
+    LOG_FILE,
+    LOG_KEEP_DAYS,
+    Correction,
+    Critical,
+    Finding,
+    open_context,
+    open_report_context,
+)
 from leadline.http import HttpError, Response
 
 LINE = re.compile(r"^\[\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\] (.*)$")
@@ -64,6 +73,55 @@ def test_log_file_is_truncated_each_run_and_closed_after(tmp_path: Path, capsys:
     assert "second run" in logged
     assert "after the run" not in logged
     assert "after the run" not in capsys.readouterr().out
+
+
+def _night(out: Path, days_ago: int) -> Path:
+    return out / LOG_DIR / f"leadline-{date.today() - timedelta(days=days_ago)}.log"  # noqa: DTZ011 (local date)
+
+
+def test_each_night_keeps_its_own_log(tmp_path: Path) -> None:
+    """Live 2026-10-21: the log that held the cause of a gap was overwritten the next night."""
+    with open_context(config(tmp_path)) as ctx:
+        ctx.log.info("tonight")
+
+    kept = _night(tmp_path, 0).read_text(encoding="utf-8")
+    assert kept == (tmp_path / LOG_FILE).read_text(encoding="utf-8")
+    assert "tonight" in kept
+
+
+def test_a_rerun_the_same_day_adds_to_the_nights_log(tmp_path: Path) -> None:
+    with open_context(config(tmp_path)) as ctx:
+        ctx.log.info("first run")
+    with open_context(config(tmp_path)) as ctx:
+        ctx.log.info("second run")
+
+    kept = _night(tmp_path, 0).read_text(encoding="utf-8")
+    assert "first run" in kept
+    assert "second run" in kept
+    assert "first run" not in (tmp_path / LOG_FILE).read_text(encoding="utf-8")
+
+
+def test_the_last_14_nights_are_kept_and_older_ones_dropped(tmp_path: Path) -> None:
+    assert LOG_KEEP_DAYS == 14
+    for days_ago in (1, 13, 14, 15, 40):
+        _night(tmp_path, days_ago).parent.mkdir(exist_ok=True)
+        _night(tmp_path, days_ago).write_text("old\n", encoding="utf-8")
+    other = tmp_path / LOG_DIR / "notes.txt"
+    other.write_text("mine\n", encoding="utf-8")
+    (tmp_path / LOG_DIR / "leadline-2026-13-45.log").write_text("not a date\n", encoding="utf-8")  # left alone
+
+    with open_context(config(tmp_path)):
+        pass
+
+    kept = sorted(path.name for path in (tmp_path / LOG_DIR).iterdir())
+    assert kept == sorted(["notes.txt", "leadline-2026-13-45.log", *(_night(tmp_path, n).name for n in (0, 1, 13))])
+
+
+def test_a_report_writes_no_nightly_log(tmp_path: Path) -> None:
+    with open_report_context(config(tmp_path)):
+        pass
+
+    assert not (tmp_path / LOG_DIR).exists()
 
 
 def test_the_leadline_logger_is_left_as_it_was_found(tmp_path: Path) -> None:

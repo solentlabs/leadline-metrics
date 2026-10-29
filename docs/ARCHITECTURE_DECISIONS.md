@@ -1644,3 +1644,21 @@ JSON body is the API itself), where the whole body is large, may hold
 anything the host sends, and is cut by every source differently. Putting it
 in `reason` leaves every file readable as it was, and one function keeps the
 words the same across sources.
+
+## The nightly log is kept for 14 nights
+
+**Decision:** Each run also writes its log to `logs/leadline-YYYY-MM-DD.log`
+in the output folder, named for the run's local date. A rerun that day adds
+to the file. A run deletes the files of the nights before the last 14, the
+run's night included, and nothing else in the folder. `leadline.log` stays the
+latest run's log, as before; `report` writes no nightly log.
+
+**Rationale:** The log holds what a row can't: the attempts, the waits and the
+response headers behind a failure. One file rewritten each night lost them
+before anyone looked, so a gap's cause could not be found the morning after a
+missed look. Fourteen nights is what `health.jsonl` keeps, and the window
+within which a gap is looked for, so the two cover the same days and a
+failure that health records still has its log. A log is operational and is
+not worth keeping longer; what has to be remembered longer belongs in the
+journal. A rerun adds to its night's file so the log of the run that failed is
+not erased by the run that fixed it.

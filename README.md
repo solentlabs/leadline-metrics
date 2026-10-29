@@ -94,6 +94,8 @@ python3 leadline.pyz run --config leadline.json
   per day, back as far as GitHub still has them (14 days).
 - `metrics/health.jsonl`: the run's health row.
 - `metrics/leadline.log`: the run's log, also printed as it runs.
+- `metrics/logs/leadline-YYYY-MM-DD.log`: each night's log, the last 14
+  nights.
 - `metrics/SUMMARY.md`: the latest numbers, how they changed, and
   anything that needs you.
 - `metrics/trends.html`: the same numbers charted over time; open it in

@@ -18,6 +18,9 @@ follow [SemVer](https://semver.org/).
   page)`, where it said only `topic request failed`. A critical entry in
   `health.jsonl` ends with the same cause. The nightly log is overwritten
   each run, so a row is what is left to read.
+- Each night's log is kept in `logs/leadline-YYYY-MM-DD.log` for 14 nights
+  (`leadline.log` is still the latest run's), so the cause of a failure
+  can be read after the next run.
 
 ## 0.9.0 - 2026-10-28
 

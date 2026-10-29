@@ -341,7 +341,10 @@ differ.
   script's `log()` writes it. Warnings and errors carry `WARN:` and
   `ERROR:` in the message, as the script's do.
 - Lines go to stdout and to `leadline.log` in the output folder, which each
-  run rewrites (`report` logs to stdout only).
+  run rewrites, and to the night's own log, `logs/leadline-YYYY-MM-DD.log`,
+  which a rerun that day adds to. The last 14 nights are kept and older ones
+  deleted (ADR: the nightly log is kept for 14 nights). `report` logs to
+  stdout only.
 - The log opens with the version, the Python it ran on, the run date, the
   output folder, the sources.
 

@@ -11,10 +11,11 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sys
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterator, Mapping, Protocol
 
@@ -27,6 +28,9 @@ if TYPE_CHECKING:  # the report path never loads http (docs/ARCHITECTURE.md, "De
 
 # Rewritten on every run, so it only ever describes the latest one.
 LOG_FILE = "leadline.log"
+LOG_DIR = "logs"  # each night's log, `leadline-YYYY-MM-DD.log`, so a failure's cause outlives the next run
+LOG_KEEP_DAYS = 14  # the run's night and the nights before it, this many in all (as health.jsonl keeps)
+_NIGHT = re.compile(r"^leadline-(\d{4}-\d\d-\d\d)\.log$")
 
 
 LEVELS = ("ok", "warn", "error")
@@ -237,17 +241,38 @@ def open_context(config: Config) -> Iterator[Context]:
 
     config.out_dir.mkdir(parents=True, exist_ok=True)
     backend = _backend(config)
+    # Local time, whose date is the script's `date +%F` and whose stamp is its captured_at.
+    now = datetime.now().astimezone()
     handlers: list[logging.Handler] = [
         logging.StreamHandler(sys.stdout),
         logging.FileHandler(config.out_dir / LOG_FILE, "w", encoding="utf-8"),
+        _night_handler(config.out_dir, now.date()),
     ]
     with _logging(*handlers) as log:
-        # Local time, whose date is the script's `date +%F` and whose stamp is its captured_at.
-        now = datetime.now().astimezone()
         transport: http.Transport = http.urlopen
         yield Context(
             now=now, out_dir=config.out_dir, log=log, http=http.Http(config.user_agent, transport), backend=backend
         )
+
+
+def _before(day: str, oldest: date) -> bool:
+    """Whether `day` is a date earlier than `oldest`; a name that isn't a date is not."""
+    try:
+        return date.fromisoformat(day) < oldest
+    except ValueError:
+        return False
+
+
+def _night_handler(out_dir: Path, today: date) -> logging.Handler:
+    """The log of the run's night, which a rerun that day adds to; drops the nights past LOG_KEEP_DAYS first."""
+    folder = out_dir / LOG_DIR
+    folder.mkdir(exist_ok=True)
+    oldest = today - timedelta(days=LOG_KEEP_DAYS - 1)
+    for path in folder.iterdir():
+        night = _NIGHT.match(path.name)
+        if night and _before(night.group(1), oldest):
+            path.unlink()
+    return logging.FileHandler(folder / f"leadline-{today.isoformat()}.log", "a", encoding="utf-8")
 
 
 @contextmanager
