@@ -16,6 +16,7 @@ ENV: tuple[str, ...] = ()  # a public forum: no credentials
 LAGGING = False
 # The row's counts read as they are, and the field each is read from; the post count is read apart.
 COUNTS = {"views": "views", "likes": "like_count"}
+ATTEMPTS = 3  # a snapshot can't be backfilled, so a failed request is tried again, as goatcounter's are
 POSTS_CHUNK = 20  # the posts asked for by id in one request, the forum's own chunk size
 
 
@@ -66,7 +67,7 @@ def _read(ctx: Context, base_url: str, topic_id: int) -> dict[str, Any]:
 
 def _topic(ctx: Context, base_url: str, topic_id: int) -> Any:
     """The topic's answer, read as JSON. Raises HttpError, UnusableError."""
-    return read_json("topic", ctx.http.request(f"{base_url.rstrip('/')}/t/{topic_id}.json"))
+    return read_json("topic", ctx.http.request(f"{base_url.rstrip('/')}/t/{topic_id}.json", attempts=ATTEMPTS))
 
 
 def _counted(answer: Any) -> dict[str, Any]:
@@ -178,7 +179,9 @@ def _posted(ctx: Context, base_url: str, topic_id: int, answer: dict[str, Any]) 
     missing = [i for i in ids if i not in found]
     for n in range(0, len(missing), POSTS_CHUNK):
         asked = "&".join(f"post_ids[]={i}" for i in missing[n : n + POSTS_CHUNK])
-        more = read_json("posts", ctx.http.request(f"{base_url.rstrip('/')}/t/{topic_id}/posts.json?{asked}"))
+        more = read_json(
+            "posts", ctx.http.request(f"{base_url.rstrip('/')}/t/{topic_id}/posts.json?{asked}", attempts=ATTEMPTS)
+        )
         listed = (more.get("post_stream") or {}).get("posts") if isinstance(more, dict) else None
         if not isinstance(listed, list):
             raise unexpected("posts")

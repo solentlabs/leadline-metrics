@@ -3,6 +3,12 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions
 follow [SemVer](https://semver.org/).
 
+## Unreleased
+
+- `discourse_topics`: each topic request is tried up to three times (waiting 10, then
+  20 seconds), like goatcounter's, so one Cloudflare challenge or rate limit no longer
+  costs a night's reading, which can't be backfilled.
+
 ## 0.9.0 - 2026-10-28
 
 - `health.jsonl` keeps the last 14 days of rows. The first run after the update drops

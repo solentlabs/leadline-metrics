@@ -327,7 +327,7 @@ def test_a_row_whose_topic_id_is_a_string_is_a_line_without_a_usable_key(tmp_pat
     """
     stray = '{"date": "2026-09-23", "topic_id": "1001", "label": "main", "views": 5400}\n'
 
-    done = run(tmp_path, failed(dt.topic_url(1001)), seed=stray)
+    done = run(tmp_path, *thrice(failed(dt.topic_url(1001))), seed=stray)
 
     assert done.rows == {FILE: stray + failure_row(1001, "main", "fetch_failed", "topic request failed", "000")}
 
@@ -351,6 +351,7 @@ def test_a_topic_without_its_counts_is_a_parse_failed_row_naming_them_not_zeros(
 def test_each_topic_that_fails_writes_its_own_failure_row(tmp_path: Path) -> None:
     """The script skips each; leadline writes each its failure row, and the good topic its row."""
     scenario = port.scenario(NAME, "failed_or_unparseable_threads_are_skipped")
+    scenario = replace(scenario, responses=dt.retried(scenario.responses))
 
     done = port.run(source, dt.leadline_config(scenario), scenario, tmp_path)
 
@@ -396,19 +397,43 @@ def test_an_error_waiting_cant_fix_is_critical_at_once(tmp_path: Path, code: int
     assert done.status == 1
 
 
+def thrice(response: Any) -> list[Any]:
+    """`response` for each of the three attempts a request that waiting can fix gets."""
+    return [response] * 3
+
+
 CHALLENGE = "<!DOCTYPE html><html><head><title>Just a moment...</title></head><body></body></html>"
 
 
 def test_a_bot_challenge_is_recoverable_not_critical(tmp_path: Path) -> None:
     """Live 2026-10-21: the forum's host challenged the NAS; one failed night recovers (ADR)."""
-    done = run(tmp_path, exchange(dt.topic_url(1001), CHALLENGE, status=403))
+    done = run(tmp_path, *thrice(exchange(dt.topic_url(1001), CHALLENGE, status=403)))
 
     assert done.rows == {FILE: failure_row(1001, "main", "fetch_failed", "topic request failed", "403")}
     assert (done.status, done.ctx.critical) == (0, [])
 
 
+def test_a_topic_request_is_retried_after_10_then_20_seconds(tmp_path: Path) -> None:
+    """Live 2026-10-21 lost a night to one challenge; a snapshot can't be backfilled, so the request is retried."""
+    url = dt.topic_url(1001)
+
+    done = run(tmp_path, *[exchange(url, CHALLENGE, status=403)] * 2, dt.topic(1001, 5400, 61, 88))
+
+    assert done.rows == {FILE: GOOD}
+    assert done.sleeps == [10, 20]
+
+
+def test_three_challenged_attempts_are_a_recoverable_failure_row(tmp_path: Path) -> None:
+    url = dt.topic_url(1001)
+
+    done = run(tmp_path, *thrice(exchange(url, CHALLENGE, status=403)))
+
+    assert done.rows == {FILE: failure_row(1001, "main", "fetch_failed", "topic request failed", "403")}
+    assert (done.status, done.ctx.critical, done.sleeps) == (0, [], [10, 20])
+
+
 def test_a_rate_limit_is_recoverable(tmp_path: Path) -> None:
-    done = run(tmp_path, exchange(dt.topic_url(1001), "", status=429))
+    done = run(tmp_path, *thrice(exchange(dt.topic_url(1001), "", status=429)))
 
     assert done.rows == {FILE: failure_row(1001, "main", "fetch_failed", "topic request failed", "429")}
     assert (done.status, done.ctx.critical) == (0, [])
@@ -416,7 +441,7 @@ def test_a_rate_limit_is_recoverable(tmp_path: Path) -> None:
 
 def test_a_failure_keeps_the_topics_good_row(tmp_path: Path) -> None:
     """ADR: a failure never replaces good data; the key is the date and the topic."""
-    done = run(tmp_path, failed(dt.topic_url(1001)), seed=GOOD)
+    done = run(tmp_path, *thrice(failed(dt.topic_url(1001))), seed=GOOD)
 
     assert done.rows == {FILE: GOOD}
     assert f"WARN: kept the good row for 2026-09-23 topic_id=1001 in {FILE}; fetch_failed not recorded" in done.log
@@ -433,7 +458,7 @@ def test_a_good_row_replaces_the_topics_failure_row(tmp_path: Path) -> None:
 def test_another_topics_good_row_keeps_no_failure_row_out(tmp_path: Path) -> None:
     other = GOOD.replace('"topic_id": 1001', '"topic_id": 1002')
 
-    done = run(tmp_path, failed(dt.topic_url(1001)), seed=other)
+    done = run(tmp_path, *thrice(failed(dt.topic_url(1001))), seed=other)
 
     assert done.rows == {FILE: other + failure_row(1001, "main", "fetch_failed", "topic request failed", "000")}
 
@@ -464,41 +489,41 @@ def test_check_finds_each_topic(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("response", "finding"),
+    ("responses", "finding"),
     [
-        (exchange(dt.topic_url(1001), "", status=404), Finding("warn", f"{BASE}: no topic 1001 (main): HTTP 404")),
+        ([exchange(dt.topic_url(1001), "", status=404)], Finding("warn", f"{BASE}: no topic 1001 (main): HTTP 404")),
         (
-            exchange(dt.topic_url(1001), "", status=403),
+            [exchange(dt.topic_url(1001), "", status=403)],
             Finding("error", f"{BASE}: could not read topic 1001 (main): HTTP 403"),
         ),
         (
-            exchange(dt.topic_url(1001), "", status=429),
+            thrice(exchange(dt.topic_url(1001), "", status=429)),
             Finding("warn", f"{BASE}: could not read topic 1001 (main): HTTP 429"),
         ),
         (
-            exchange(dt.topic_url(1001), CHALLENGE, status=403),
+            thrice(exchange(dt.topic_url(1001), CHALLENGE, status=403)),
             Finding("warn", f"{BASE}: could not read topic 1001 (main): HTTP 403"),
         ),
         (
-            exchange(dt.topic_url(1001), "<html>Oops</html>"),
+            [exchange(dt.topic_url(1001), "<html>Oops</html>")],
             Finding("warn", f"{BASE}: could not read topic 1001 (main): topic response was not JSON"),
         ),
         (
-            exchange(dt.topic_url(1001), [1]),
+            [exchange(dt.topic_url(1001), [1])],
             Finding("warn", f"{BASE}: could not read topic 1001 (main): topic response had an unexpected shape"),
         ),
     ],
     ids=["missing", "private", "rate limited", "bot challenge", "not JSON", "not a topic"],
 )
-def test_check_reports_each_topics_trouble_and_goes_on(tmp_path: Path, response: Any, finding: Finding) -> None:
-    findings = check(tmp_path, config(TWO), response, dt.topic(1002, 700, 5, 2))
+def test_check_reports_each_topics_trouble_and_goes_on(tmp_path: Path, responses: list[Any], finding: Finding) -> None:
+    findings = check(tmp_path, config(TWO), *responses, dt.topic(1002, 700, 5, 2))
 
     assert findings == [finding, Finding("ok", f"{BASE}: topic 1002 (other-thread) exists")]
 
 
 def test_check_finds_a_forum_that_does_not_answer_once(tmp_path: Path) -> None:
     """No answer at all is the base_url's trouble, not each topic's: one finding, and no more requests."""
-    findings = check(tmp_path, config(TWO), failed(dt.topic_url(1001)))
+    findings = check(tmp_path, config(TWO), *thrice(failed(dt.topic_url(1001))))
 
     assert findings == [Finding("warn", f"{BASE}: the forum did not answer: HTTP 0")]
 

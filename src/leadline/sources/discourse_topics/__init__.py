@@ -1,7 +1,8 @@
 """discourse_topics: views, replies and likes of topics on a Discourse forum.
 
 Each entry names a forum (`base_url`) and its `topics`, each an id and a label. Each topic is read
-from `<base_url>/t/<id>.json`, one request each, as the script's collect_forum reads its threads, and
+from `<base_url>/t/<id>.json`, one request each (tried up to three times, since a missed night can't be
+backfilled), as the script's collect_forum reads its threads, and
 written as one row for the run's date, keyed by the date and the topic's id (`store.SECOND_KEY`):
 its views, its replies (its posts but the first), its likes and the day of its last post (empty when
 it has none), then what the answer also tells, all optional and null where it lacks them: `participants`
