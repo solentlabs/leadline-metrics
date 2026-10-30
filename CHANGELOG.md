@@ -3,7 +3,7 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions
 follow [SemVer](https://semver.org/).
 
-## Unreleased
+## 0.9.1 - 2026-10-29
 
 - Every request is tried up to three times (waiting 10, then 20 seconds)
   unless its source asks for one, where it was one try before: the GitHub
