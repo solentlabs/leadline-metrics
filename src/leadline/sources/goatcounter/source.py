@@ -12,14 +12,13 @@ from typing import Any, Collection, Mapping, NamedTuple, Sequence
 from leadline import store
 from leadline.config import is_count
 from leadline.context import Context, Finding
-from leadline.http import HttpError, UnusableError, read_json, unexpected
+from leadline.http import ATTEMPTS, HttpError, UnusableError, read_json, unexpected
 from leadline.sources.goatcounter import spec
 from leadline.storage import File
 
 CREDENTIAL = "GOATCOUNTER_TOKEN"
 ENV: tuple[str, ...] = (CREDENTIAL,)
 LAGGING = True
-ATTEMPTS = 3  # for the pages, as the script asks for them
 WINDOW_DAYS = 7  # the week before the run: a single day's window comes back empty
 PAGE_LIMIT = 200  # well past the site's pages: the API's default of 20 would miss some
 REFERRER_PAGES = 10  # the pages whose referrers are fetched

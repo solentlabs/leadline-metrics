@@ -9,14 +9,13 @@ from typing import Any, Dict
 
 from leadline import store
 from leadline.context import Context, Finding
-from leadline.http import HttpError, Response
+from leadline.http import ATTEMPTS, HttpError, Response
 from leadline.sources.cloudflare.cloudflare_zone_traffic import spec
 from leadline.storage import File
 
 ENV: tuple[str, ...] = ("CLOUDFLARE_API_TOKEN",)
 LAGGING = True  # yesterday's row is the newest a run can write
 GRAPHQL = "https://api.cloudflare.com/client/v4/graphql"
-ATTEMPTS = 3
 UNEXPECTED = "response had an unexpected shape"
 NONE = "(none)"  # the name of a count whose item has none
 

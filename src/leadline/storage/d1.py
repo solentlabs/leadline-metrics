@@ -22,7 +22,6 @@ from leadline.storage.sql import Rows, SqlBackend, Statement, schema_statements
 
 API = "https://api.cloudflare.com/client/v4"
 STATEMENTS = 50  # statements in one request
-ATTEMPTS = 3  # tries for a request that fails in a way waiting can fix
 CREDENTIAL = "CLOUDFLARE_D1_TOKEN"
 
 
@@ -75,7 +74,7 @@ class D1(SqlBackend):
     def _post(self, body: bytes) -> list[dict[str, Any]]:
         headers = {"Authorization": f"Bearer {self._token}", "Content-Type": "application/json"}
         try:
-            reply = self._http.request(self.url, method="POST", headers=headers, body=body, attempts=ATTEMPTS)
+            reply = self._http.request(self.url, method="POST", headers=headers, body=body)
             answer = reply.json()
         except HttpError as e:
             raise StorageError(self._failure(e)) from e

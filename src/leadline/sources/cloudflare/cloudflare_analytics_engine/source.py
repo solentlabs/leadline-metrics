@@ -12,13 +12,12 @@ from urllib.parse import quote
 
 from leadline import store
 from leadline.context import Context, Finding
-from leadline.http import HttpError, Response
+from leadline.http import ATTEMPTS, HttpError, Response
 from leadline.sources.cloudflare.cloudflare_analytics_engine import spec
 
 ENV: tuple[str, ...] = ("CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID")
 LAGGING = True
 API = "https://api.cloudflare.com/client/v4"
-ATTEMPTS = 3
 REASON_CHARS = 200  # of an error's body, as a failure row's reason
 
 SQL_TIME = "%Y-%m-%d %H:%M:%S"

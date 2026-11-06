@@ -18,7 +18,6 @@ ENV: tuple[str, ...] = ("CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID")
 LAGGING = True
 API = "https://api.cloudflare.com/client/v4"
 GRAPHQL = f"{API}/graphql"
-ATTEMPTS = 3
 WEEK_DAYS = 7  # the week the row for yesterday sums, and its top referrers
 HEAL_DAYS = 30  # the complete days re-read every run, yesterday the last (the script's CLOUDFLARE_HEAL_DAYS)
 NUMBERS = ("pageviews", "visits")  # a day's numbers: what a correction compares
@@ -180,10 +179,10 @@ def _collect(ctx: Context, entry: Any) -> None:
 
 
 def _post(ctx: Context, query: str) -> Response:
-    """The script's request: the query as {"query": ...}, three attempts while it fails or its body is empty."""
+    """The script's request: the query as {"query": ...}, tried while it fails or its body is empty."""
     body = json.dumps({"query": query}).encode("utf-8")
     headers = {**_auth(), "Content-Type": "application/json"}
-    return ctx.http.request(GRAPHQL, method="POST", headers=headers, body=body, attempts=ATTEMPTS, require_body=True)
+    return ctx.http.request(GRAPHQL, method="POST", headers=headers, body=body, require_body=True)
 
 
 def _read(body: bytes, label: str, tag: str, week_ago: str, yesterday: str) -> tuple[Days, dict[str, Any]]:
