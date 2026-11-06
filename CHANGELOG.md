@@ -3,6 +3,14 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions
 follow [SemVer](https://semver.org/).
 
+## 0.9.2 - 2026-11-06
+
+- A new config setting, `watch`, makes a count in a file's row for
+  yesterday critical: `{"file", "field", "key", "at_least"}`, such as an
+  app's refused sign-ins. A critical shows at the top of SUMMARY.md, in
+  `health.jsonl`, and makes the run exit 1. A watched file with no rows is
+  critical too, so a misspelled name shows. See `docs/CONFIGURATION.md`.
+
 ## 0.9.1 - 2026-10-29
 
 - Every request is tried up to three times (waiting 10, then 20 seconds)
