@@ -446,6 +446,13 @@ def test_a_breakdown_is_the_newest_rows_top_keys_largest_first_with_the_rest_as_
     }
 
 
+def test_a_breakdowns_empty_key_is_not_drawn_or_added_up(tmp_path: Path) -> None:
+    """ADR: an empty key counts the rows with no value (no refusal), the baseline that would bury a rare real key."""
+    field = breakdown(tmp_path, {"": 64, "invalid_grant": 1}, {"": 60})
+
+    assert (field["keys"], field["values"], field["other"]) == (["invalid_grant"], [[1, 0]], [0, 0])
+
+
 def test_a_breakdown_fills_its_top_from_older_keys_by_their_largest_share_on_any_date(tmp_path: Path) -> None:
     field = breakdown(tmp_path, {"gone": 1, "old": 50, "a": 1}, {"a": 5, "b": 1})
 

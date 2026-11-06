@@ -100,9 +100,12 @@ def summary(cfg: Any) -> list[config.Section]:
 
 
 def _shown(entry: Any) -> list[config.Shown]:
-    """Each count its layouts give, as a daily total; a total by a dimension, an object, isn't shown."""
-    keys = [field.key for layout in layouts(entry["layouts"]) for field in layout.fields if field.by is None]
-    return [config.Shown(key, key, "daily") for key in dict.fromkeys(keys)]
+    """Each count its layouts give, as a daily total, and each total by a dimension, an object, as a breakdown."""
+    fields = {field.key: field for layout in layouts(entry["layouts"]) for field in layout.fields}
+    return [
+        config.Shown(key, key, "daily") if field.by is None else config.Shown(key, key, "breakdown", half=True)
+        for key, field in fields.items()
+    ]
 
 
 def file_name(entry: Any) -> str:

@@ -638,5 +638,23 @@ def test_its_summary_shows_its_fields_from_the_golden_rows(tmp_path: Path) -> No
         "",
         "### cloudflare_analytics_engine: example_usage",
         "",
+        "- events: active.day 2 · signout.ok 1",
         "- active_day_shared: 3 in 7d",
     ]
+
+
+def test_its_summary_charts_a_total_by_a_dimension_as_a_breakdown() -> None:
+    """ADR: an analytics engine dataset's totals by a dimension are shown, so trends can chart refusals by reason."""
+    entry = ae.leadline_config(port.scenario(NAME, "totals_each_dimension_on_its_own"))
+    [section] = cloudflare_analytics_engine.summary(entry)
+
+    kinds = {shown.field: shown.kind for shown in section.shown}
+    assert "breakdown" in kinds.values()
+    assert all(kind in ("daily", "breakdown") for kind in kinds.values())
+    assert {shown.field for shown in section.shown if shown.kind == "breakdown"} == {
+        field.key
+        for layout in cloudflare_analytics_engine.spec.layouts(entry[0]["layouts"])
+        for field in layout.fields
+        if field.by is not None
+    }
+    assert all(shown.half for shown in section.shown if shown.kind == "breakdown")

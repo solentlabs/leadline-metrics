@@ -3,6 +3,16 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions
 follow [SemVer](https://semver.org/).
 
+## 0.9.3 - 2026-11-06
+
+- Trends charts each total by a dimension of a `cloudflare_analytics_engine`
+  dataset (an app's events, refusal reasons, session ages, error codes,
+  screens, app versions) as a breakdown, where it charted only the daily
+  counts. A breakdown leaves out the empty key, the rows with no value, so a
+  rare value shows beside it. Put a project on its own page with `pages`.
+- Internal: the sources use the core's default of three tries instead of a
+  constant each.
+
 ## 0.9.2 - 2026-11-06
 
 - A new config setting, `watch`, makes a count in a file's row for

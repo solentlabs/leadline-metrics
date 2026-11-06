@@ -144,7 +144,8 @@ series. Each series has a value for each of the section's `dates`, in order
   the range for it, and it has no "Counted from" note.
 - **A breakdown** keeps at most 5 keys (and its neutral ones), in `keys`, in
   the order they stack,
-  bottom first. `versions` is true when every key is a version (`1.2.0`,
+  bottom first. The empty key, a count of rows with no value, is left out of
+  every series, `other` too. `versions` is true when every key is a version (`1.2.0`,
   `2.0.0-beta.1`): then every prerelease (a version with a suffix after a
   dash) is added up apart, in `prerelease`, a list of each day's count, and
   by base version, its release part (`2.0.0` for `2.0.0-beta.1`), in `betas`:

@@ -482,7 +482,7 @@ def _breakdown(
 ) -> dict[str, Any]:
     """Objects of counts as series: BREAKDOWN_TOP keys, bottom band first, each key's count in each row (0 where
     the row lacks the key), and the rest of each row's counts added up, `other`. A row with no object of counts is
-    None in every series.
+    None in every series. The empty key, a count of rows with no value, is left out.
 
     Where every key is a version (`versions`), the prereleases (`2.0.0-beta.1`) are added up apart, `prerelease`,
     and by base version (`betas`, as `_betas` gives them); the rest are counted by release line (`_release_line`):
@@ -497,7 +497,7 @@ def _breakdown(
         {
             key: n
             for key, n in obj.items()
-            if isinstance(n, (int, float)) and not isinstance(n, bool) and (prereleases or not _prerelease(key))
+            if key and isinstance(n, (int, float)) and not isinstance(n, bool) and (prereleases or not _prerelease(key))
         }
         if isinstance(obj, dict)
         else None

@@ -1686,3 +1686,18 @@ occurrence night, not every night a file lags. A misspelled file name would
 otherwise never fire and be read as silence, so it is critical. The
 threshold is the config's, not the code's, so raising it as volume grows is
 an edit to the config.
+
+## An analytics engine dataset's totals by a dimension are charted
+
+**Decision:** The `cloudflare_analytics_engine` summary shows each count its
+layouts give as a daily total, as before, and each total by a dimension as a
+breakdown, half width. Trends leaves the empty key out of every breakdown.
+
+**Rationale:** An app's events, refusal reasons, session ages, error codes and
+screens are counted by a dimension, so the daily totals alone charted one
+number, and a rare event, such as one refused sign-in a day, could be seen
+only on the night it happened. A chart of each breakdown shows the pattern
+across days, by app version too. A value that is empty counts the rows with
+no value (no refusal, no session age); on a chart it is the baseline, many
+times the size of the event worth seeing, and it would hide it. The rows keep
+the empty key, since the count of rows is true; only the chart omits it.

@@ -52,7 +52,8 @@ Each layout has:
     has one value, written as a number (`{"key": "active_day_shared",
     "count_nonempty": "blob2", "where": {"event": "active.day"}}`).
 
-  A key is the same kind in every layout.
+  A key is the same kind in every layout. Trends charts each count as a daily
+  total and each total by a dimension as a breakdown, half width.
 
 **Privacy rules**, kept by the code whatever the config (ADR: Analytics
 Engine datasets are read as totals, one dimension at a time):
