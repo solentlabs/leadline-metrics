@@ -19,6 +19,7 @@ from scenarios import Scenario
 from scenarios.health import CONFIG, CURRENT, FILE, LAGGING, failure, good, rows
 
 from leadline import __version__, health, http
+from leadline.config import Watch
 from leadline.context import Context, Critical
 
 HASH = "fedcba987654"
@@ -42,9 +43,10 @@ def write(
     ctx: Context,
     written: Mapping[str, health.Written] | None = None,
     checks: Sequence[Mapping[str, str]] = (),
+    watches: Sequence[Watch] = (),
 ) -> dict[str, Any]:
     """Write the run's health row; returns it, as the last line of health.jsonl."""
-    health.write(ctx, written or {}, checks, HASH)
+    health.write(ctx, written or {}, checks, HASH, watches)
     row: dict[str, Any] = json.loads((ctx.out_dir / FILE).read_text(encoding="utf-8").splitlines()[-1])
     return row
 
@@ -323,3 +325,79 @@ def test_a_rerun_the_same_day_leaves_the_window_as_it_is(tmp_path: Path) -> None
     write(ctx)
 
     assert len((tmp_path / FILE).read_text(encoding="utf-8").splitlines()) == 1
+
+
+# A watch makes the run critical when a count in the file's row for yesterday (the run date's day before) reaches
+# its `at_least` (docs/ARCHITECTURE.md, "Terms"; ADR: a watch turns a count into a critical).
+USAGE = "usage.jsonl"
+REFUSED = Watch(USAGE, "events", "refresh.refused", 1)
+
+
+def usage(day: str, events: Any, status: str = "ok") -> str:
+    return json.dumps({"date": day, "status": status, "events": events}) + "\n"
+
+
+def test_a_count_that_reaches_at_least_in_yesterdays_row_is_critical(tmp_path: Path) -> None:
+    ctx = seeded(tmp_path, {USAGE: usage("2026-09-22", {"refresh.ok": 9, "refresh.refused": 2})})
+
+    assert write(ctx, watches=[REFUSED])["critical"] == [
+        {
+            "source": "watch",
+            "file": USAGE,
+            "reason": "events refresh.refused was 2 on 2026-09-22 (at least 1 is critical)",
+        }
+    ]
+    assert [c.source for c in ctx.critical] == ["watch"]  # the context holds it too, which sets the exit status
+
+
+@pytest.mark.parametrize(
+    "seed",
+    [
+        usage("2026-09-22", {"refresh.ok": 9}),
+        usage("2026-09-22", {"refresh.refused": 0}),
+        usage("2026-09-22", {}),
+        usage("2026-09-22", None),
+        usage("2026-09-22", {"refresh.refused": "2"}),
+        usage("2026-09-22", {"refresh.refused": True}),
+        usage("2026-09-22", {"refresh.refused": 5}, status="fetch_failed"),
+        usage("2026-09-21", {"refresh.refused": 5}),
+        usage("2026-09-23", {"refresh.refused": 5}),
+    ],
+    ids=[
+        "no such key",
+        "zero",
+        "no counts",
+        "no counts object",
+        "a count that is a string",
+        "a count that is a boolean",
+        "a failure row",
+        "the day before yesterday's row",
+        "today's row",
+    ],
+)
+def test_a_watch_that_finds_nothing_to_count_is_quiet(tmp_path: Path, seed: str) -> None:
+    assert write(seeded(tmp_path, {USAGE: seed}), watches=[REFUSED])["critical"] == []
+
+
+def test_a_count_below_at_least_is_quiet(tmp_path: Path) -> None:
+    ctx = seeded(tmp_path, {USAGE: usage("2026-09-22", {"refresh.refused": 2})})
+
+    assert write(ctx, watches=[Watch(USAGE, "events", "refresh.refused", 3)])["critical"] == []
+
+
+def test_each_watch_is_judged_on_its_own(tmp_path: Path) -> None:
+    ctx = seeded(tmp_path, {USAGE: usage("2026-09-22", {"a": 1, "b": 4})})
+
+    both = [Watch(USAGE, "events", "b", 2), Watch(USAGE, "events", "a", 1)]
+    reasons = [c["reason"] for c in write(ctx, watches=both)["critical"]]
+
+    assert reasons == [
+        "events b was 4 on 2026-09-22 (at least 2 is critical)",
+        "events a was 1 on 2026-09-22 (at least 1 is critical)",
+    ]
+
+
+def test_a_watched_file_that_does_not_exist_is_critical_so_a_typo_shows(tmp_path: Path) -> None:
+    row = write(seeded(tmp_path, {}), watches=[REFUSED])
+
+    assert row["critical"] == [{"source": "watch", "file": USAGE, "reason": f"{USAGE} has no rows to watch"}]

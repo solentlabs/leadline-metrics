@@ -1662,3 +1662,27 @@ failure that health records still has its log. A log is operational and is
 not worth keeping longer; what has to be remembered longer belongs in the
 journal. A rerun adds to its night's file so the log of the run that failed is
 not erased by the run that fixed it.
+
+## A watch turns a count into a critical
+
+**Decision:** The config's optional `watch` list names a count in a file's
+rows: `file`, `field` (an object of counts), `key` and `at_least`. Health
+reads each watched file's good row for yesterday, the run date's day before,
+and records a critical for source `watch` when the count at `key` is a
+whole number of at least `at_least`. A watched file that has no rows is
+critical. A missing row, a failure row and a missing field or key are
+quiet. The setting is generic: it names no source and no dataset.
+
+**Rationale:** A report block only displays; critical is recorded during a
+run, so a count a person has to act on, such as refused sign-ins or failed
+saves in an app's usage data, was visible only to someone who opened the
+report. For a project with few users, one occurrence can be the one
+that matters, and the person reading the summary is the only monitor. Health
+already reads the output files and records every critical, so a watch needs
+no source and no new file, and it appears where criticals already do: the
+top of SUMMARY.md, `health.jsonl` and the exit status. Yesterday's row is
+the row a run on the date collects; judging it alone fires once per
+occurrence night, not every night a file lags. A misspelled file name would
+otherwise never fire and be read as silence, so it is critical. The
+threshold is the config's, not the code's, so raising it as volume grows is
+an edit to the config.

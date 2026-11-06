@@ -57,7 +57,7 @@ def run(
             for name, cfg in loaded.items()
             for file in by_name[name].files(cfg).values()
         }
-        health.write(ctx, written, checks, config.config_hash)
+        health.write(ctx, written, checks, config.config_hash, config.watch)
         build(ctx, config, registry)
     return exit_status(ctx)
 

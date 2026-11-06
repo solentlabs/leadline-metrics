@@ -110,6 +110,8 @@ docs.
   - an error waiting can't fix (credentials rejected, the thing asked for
     doesn't exist), on its first night;
   - a source that crashed, or failed to load;
+  - a [watch](CONFIGURATION.md#watch): a count in a file's row for yesterday
+    that reaches the number the config sets;
   - a report block that can't be written ([REPORTS.md](REPORTS.md#each-block-on-its-own)),
     or a trends file ([TRENDS.md](TRENDS.md)).
 - **Backfill**: writing a good row for a past date that had none, or had a
@@ -676,6 +678,10 @@ gap_window_days, gap_count, gaps, checks, critical, corrections, captured_at
   including one left out by `--only` or skipped for its credentials, since
   its file is no fresher for it. A file no configured source writes is never
   critical, and never lagging.
+- **Watches.** Health also judges each of the config's `watch` entries
+  ([CONFIGURATION.md](CONFIGURATION.md#watch); ADR: a watch turns a count
+  into a critical), recording a critical for source `watch` before it
+  writes the row.
 - **What it misses.** A report block or trends file that fails is critical
   too, but after this row is written; the log and the exit status carry
   it.

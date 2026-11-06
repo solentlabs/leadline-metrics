@@ -13,7 +13,7 @@ from typing import Any, Iterator
 import pytest
 
 from leadline import health, runner, trends
-from leadline.config import Config, ConfigError, Section, Shown
+from leadline.config import Config, ConfigError, Section, Shown, Watch
 from leadline.context import LOG_DIR, LOG_FILE, Context, Critical, Finding, open_context
 from leadline.http import Http, Response
 from leadline.sources import Registry, Source
@@ -448,6 +448,22 @@ def test_a_source_with_no_good_row_two_nights_running_makes_the_run_exit_1(tmp_p
     reason = f"no good row for 2 nights, since {days_ago(1)}"
     assert health_row(tmp_path)["critical"] == [{"source": "quiet", "file": "a.jsonl", "reason": reason}]
     assert f"ERROR: quiet is critical (a.jsonl): {reason}" in log_text(tmp_path)
+
+
+def test_a_watched_count_in_yesterdays_row_makes_the_run_exit_1(tmp_path: Path) -> None:
+    """ADR: a watch turns a count into a critical."""
+    (tmp_path / "usage.jsonl").write_text(
+        json.dumps({"date": days_ago(1), "events": {"refresh.refused": 3}}) + "\n", encoding="utf-8"
+    )
+    usage = FakeSource("usage", outputs={"": "usage.jsonl"})
+    watching = replace(config(tmp_path, usage={}), watch=(Watch("usage.jsonl", "events", "refresh.refused", 1),))
+
+    status = runner.run(watching, registry=reg(usage))
+
+    assert status == 1
+    reason = f"events refresh.refused was 3 on {days_ago(1)} (at least 1 is critical)"
+    assert health_row(tmp_path)["critical"] == [{"source": "watch", "file": "usage.jsonl", "reason": reason}]
+    assert f"ERROR: watch is critical (usage.jsonl): {reason}" in log_text(tmp_path)
 
 
 def test_a_lagging_source_gets_a_day_more(tmp_path: Path) -> None:

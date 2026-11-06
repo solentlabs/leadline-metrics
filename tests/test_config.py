@@ -18,6 +18,7 @@ from leadline.config import (
     ConfigError,
     Section,
     Shown,
+    Watch,
     answer_rule,
     complement,
     default_file,
@@ -219,6 +220,39 @@ def test_pages_are_kept_as_the_file_gives_them_for_trends_to_validate(tmp_path: 
 
     assert load(write(tmp_path, {"out_dir": "m", "pages": pages}), NO_FLAGS).pages == pages
     assert load(write(tmp_path, {"out_dir": "m"}), NO_FLAGS).pages is None
+
+
+# --- watch: counts in a file's row for yesterday that make the run critical ---
+
+
+WATCH = {"file": "usage.jsonl", "field": "events", "key": "refresh.refused", "at_least": 1}
+
+
+def test_watch_is_loaded_as_a_tuple_of_watches_and_defaults_to_none(tmp_path: Path) -> None:
+    loaded = load(write(tmp_path, {"out_dir": "m", "watch": [WATCH]}), NO_FLAGS).watch
+
+    assert loaded == (Watch("usage.jsonl", "events", "refresh.refused", 1),)
+    assert load(write(tmp_path, {"out_dir": "m"}), NO_FLAGS).watch == ()
+
+
+@pytest.mark.parametrize(
+    ("watch", "message"),
+    [
+        ({"file": "usage.jsonl"}, r"^watch must be a JSON list$"),
+        ([["usage.jsonl"]], r"^watch\[0\] must be a JSON object$"),
+        ([{**WATCH, "extra": 1}], r"^watch\[0\]: unknown settings: extra$"),
+        ([{k: v for k, v in WATCH.items() if k != "key"}], r"^watch\[0\].key is required$"),
+        ([{**WATCH, "file": "usage.csv"}], r"^watch\[0\].file must name a \.jsonl file$"),
+        ([{**WATCH, "file": "../usage.jsonl"}], r"^watch\[0\].file must name a \.jsonl file$"),
+        ([{**WATCH, "field": ""}], r"^watch\[0\].field must be a non-empty string$"),
+        ([{**WATCH, "at_least": 0}], r"^watch\[0\].at_least must be a whole number, 1 or more$"),
+        ([{**WATCH, "at_least": True}], r"^watch\[0\].at_least must be a whole number, 1 or more$"),
+        ([{**WATCH, "at_least": 1.5}], r"^watch\[0\].at_least must be a whole number, 1 or more$"),
+    ],
+)
+def test_a_watch_that_is_not_usable_names_the_setting(tmp_path: Path, watch: Any, message: str) -> None:
+    with pytest.raises(ConfigError, match=message):
+        load(write(tmp_path, {"out_dir": "m", "watch": watch}), NO_FLAGS)
 
 
 # --- replay was a setting; it is gone ---

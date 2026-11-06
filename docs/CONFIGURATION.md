@@ -47,6 +47,7 @@ scalar setting can also be given as a flag, which overrides the file.
 | `projects` | none | the trends pages' groups of sections, in order ([Projects](#projects)); without it, a page doesn't group them |
 | `pages` | none | the trends pages, each a file, a title and its projects ([Pages](#pages)); without it, one `trends.html` |
 | `storage` | none | where the row files are kept ([Storage](#storage)); without it, jsonl files in `out_dir` |
+| `watch` | none | counts in a file's row for yesterday that make the run critical ([Watch](#watch)); without it, none |
 
 - `config.SETTINGS` lists the scalar settings and their flags;
   `config.SHARED` lists the sections of `shared`.
@@ -76,6 +77,7 @@ folder's files, and needs no credential:
 | `sources`, `shared` | used to validate each entry as `run` does, to find its files and to build its sections; nothing is collected, so an unset credential changes nothing |
 | `reports`, `projects`, `pages` | used |
 | `storage` | used: the row files are read from it |
+| `watch` | not used: only a run judges it, and `report` writes no health row |
 | `user_agent` / `--user-agent` | not used: no request is made |
 
 ## Storage
@@ -495,6 +497,40 @@ on no page too.
   only in case count as the same, as for [output files](#output-files));
   a title missing or empty; a project that names none of `projects`, or
   listed twice on one page.
+
+## Watch
+
+`watch`, optional: counts that make the run critical. A report block only
+shows a line; a watch is how a count in a file's rows reaches the
+[critical list](ARCHITECTURE.md#terms) and the run's exit status 1.
+
+```json
+"watch": [
+  {"file": "usage-app.jsonl", "field": "events", "key": "refresh.refused", "at_least": 1}
+]
+```
+
+- **A watch** is the `file` it reads, a plain `*.jsonl` name in the output
+  folder; the `field` in that file's rows, an object of counts (a dotted
+  path, as in a report line); the `key` counted in it; and `at_least`, a
+  whole number of 1 or more. Each is required.
+- **When it fires.** After the sources have run, health reads the file's
+  row for yesterday, the run date's day before. If it is a good row and
+  the count at `key` is a whole number of at least `at_least`, the run
+  records a critical for source `watch`, naming the file, the count and the
+  date: `events refresh.refused was 2 on 2026-09-22 (at least 1 is
+  critical)`. A missing row, a failure row, a missing `field` or `key` and a
+  count that isn't a whole number are quiet: a file with no good row is
+  judged by its freshness, and a key a night did not see counted zero.
+- **A file that has no rows** is critical, `<file> has no rows to watch`,
+  so a misspelled name shows the first night.
+- **Each night is judged alone.** A refusal on one day is critical on that
+  night's run only.
+- **Errors**, each a config error before anything runs, named by its
+  place (`watch[0].at_least: ...`): `watch` not a list; an entry not an
+  object, with a setting besides the four, or missing one; a `file` that
+  isn't a plain `*.jsonl` name; a `field` or `key` empty or not a string;
+  an `at_least` below 1 or not a whole number.
 
 ## Example
 

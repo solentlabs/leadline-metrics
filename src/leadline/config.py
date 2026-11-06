@@ -64,6 +64,7 @@ class ConfigError(Exception):
     """The config (file, flags or source names) is unusable; the run doesn't start."""
 
 
+TABLES = ("sources", "shared", "reports", "projects", "pages", "storage", "watch")  # the settings besides SETTINGS
 STORAGE_BACKENDS = ("jsonl", "sqlite", "d1")
 _STORAGE_KEYS = {"jsonl": (), "sqlite": ("path",), "d1": ("account_id", "database_id")}
 
@@ -76,6 +77,16 @@ class Storage(NamedTuple):
     path: Path | None = None
     account_id: str | None = None
     database_id: str | None = None
+
+
+class Watch(NamedTuple):
+    """A count that makes the run critical: in the row `file` has for yesterday, the object at `field` counts
+    `key` at least `at_least` times (docs/CONFIGURATION.md, "Watch")."""
+
+    file: str
+    field: str
+    key: str
+    at_least: int
 
 
 @dataclass(frozen=True)
@@ -99,6 +110,8 @@ class Config:
     pages: Any = None
     # Where the row files are kept (docs/CONFIGURATION.md, "Storage").
     storage: Storage = field(default_factory=Storage)
+    # The counts that make the run critical (docs/CONFIGURATION.md, "Watch"), in the file's order.
+    watch: tuple[Watch, ...] = ()
 
 
 def load(path: Path, flags: Mapping[str, str | None]) -> Config:
@@ -112,7 +125,7 @@ def load(path: Path, flags: Mapping[str, str | None]) -> Config:
         raise ConfigError(f"{path} is not valid JSON: {e}") from e
     if not isinstance(data, dict):
         raise ConfigError(f"{path} must be a JSON object")
-    unknown = sorted(set(data) - set(SETTINGS) - {"sources", "shared", "reports", "projects", "pages", "storage"})
+    unknown = sorted(set(data) - set(SETTINGS) - set(TABLES))
     if unknown:
         raise ConfigError(f"unknown settings: {', '.join(unknown)}")
 
@@ -144,7 +157,40 @@ def load(path: Path, flags: Mapping[str, str | None]) -> Config:
         projects=data.get("projects"),
         pages=data.get("pages"),
         storage=_storage(data.get("storage"), path.parent),
+        watch=_watch(data.get("watch")),
     )
+
+
+_WATCH_KEYS = ("file", "field", "key", "at_least")
+
+
+def _watch(value: Any) -> tuple[Watch, ...]:
+    """The `watch` setting: a list of `{"file", "field", "key", "at_least"}`; none at all is no watches."""
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise ConfigError("watch must be a JSON list")
+    return tuple(_one_watch(f"watch[{i}]", entry) for i, entry in enumerate(value))
+
+
+def _one_watch(where: str, entry: Any) -> Watch:
+    if not isinstance(entry, dict):
+        raise ConfigError(f"{where} must be a JSON object")
+    unknown = sorted(set(entry) - set(_WATCH_KEYS))
+    if unknown:
+        raise ConfigError(f"{where}: unknown settings: {', '.join(unknown)}")
+    for name in _WATCH_KEYS:
+        if name not in entry:
+            raise ConfigError(f"{where}.{name} is required")
+    file, at_least = entry["file"], entry["at_least"]
+    if not (isinstance(file, str) and file.endswith(".jsonl") and "/" not in file and "\\" not in file):
+        raise ConfigError(f"{where}.file must name a .jsonl file")
+    for name in ("field", "key"):
+        if not (isinstance(entry[name], str) and entry[name]):
+            raise ConfigError(f"{where}.{name} must be a non-empty string")
+    if not (isinstance(at_least, int) and not isinstance(at_least, bool) and at_least >= 1):
+        raise ConfigError(f"{where}.at_least must be a whole number, 1 or more")
+    return Watch(file, entry["field"], entry["key"], at_least)
 
 
 def _storage(value: Any, folder: Path) -> Storage:

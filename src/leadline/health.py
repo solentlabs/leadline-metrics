@@ -39,12 +39,17 @@ class Written(NamedTuple):
 
 
 def write(
-    ctx: Context, written: Mapping[str, Written], checks: Sequence[Mapping[str, str]], config_hash: str | None
+    ctx: Context,
+    written: Mapping[str, Written],
+    checks: Sequence[Mapping[str, str]],
+    config_hash: str | None,
+    watches: Sequence[config.Watch] = (),
 ) -> None:
     """Write the run's health row, after recording each critical source file on the context.
 
     `written` maps each file a configured source writes to its source; `checks` are the findings of
-    every source's check(), each with its source's name.
+    every source's check(), each with its source's name; `watches` are the config's counts that make the
+    run critical (`_watched`).
     """
     ctx.log.info("Checking metrics freshness...")
     today = ctx.date
@@ -53,6 +58,8 @@ def write(
     for name, file in written.items():
         if name in statuses:
             _judge(ctx, name, file, statuses[name], _good_dates(ctx.file(name)))
+    for watch in watches:
+        _watched(ctx, watch, watch.file in statuses)
     row = {
         "date": today.isoformat(),
         "script_version": __version__,
@@ -159,6 +166,26 @@ def _judge(ctx: Context, name: str, file: Written, by_date: Mapping[date, Any], 
     nights = (expected - since).days + 1
     if nights >= CRITICAL_NIGHTS:
         ctx.record_critical(file.source, name, f"no good row for {nights} nights, since {since.isoformat()}")
+
+
+def _watched(ctx: Context, watch: config.Watch, exists: bool) -> None:
+    """Record critical a watch whose count in the file's good row for yesterday reaches `at_least`.
+
+    A watch on a file with no rows is critical too, so a misspelled name shows. A file with no good row for
+    yesterday is quiet here: its freshness is judged above.
+    """
+    if not exists:
+        ctx.record_critical("watch", watch.file, f"{watch.file} has no rows to watch")
+        return
+    day = (ctx.date - timedelta(days=1)).isoformat()
+    row = store.rows_by_date(ctx.file(watch.file)).get(day)
+    if row is None or not store.is_good(row):
+        return
+    counts = store.value(row, watch.field)
+    found = counts.get(watch.key) if isinstance(counts, dict) else None
+    if isinstance(found, int) and not isinstance(found, bool) and found >= watch.at_least:
+        what = f"{watch.field} {watch.key} was {found} on {day}"
+        ctx.record_critical("watch", watch.file, f"{what} (at least {watch.at_least} is critical)")
 
 
 def _log(ctx: Context, row: Mapping[str, Any]) -> None:
