@@ -3,6 +3,14 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions
 follow [SemVer](https://semver.org/).
 
+## Unreleased
+
+- A new source, `cloudflare_workers`, records each Cloudflare Worker's daily
+  invocations, errors and subrequests, how its invocations ended
+  (`outcomes`) and its CPU time percentiles, re-reading the last 28 days
+  every run. It needs `CLOUDFLARE_API_TOKEN` (Account Analytics: Read) and
+  `CLOUDFLARE_ACCOUNT_ID`. See its README.
+
 ## 0.9.3 - 2026-11-06
 
 - Trends charts each total by a dimension of a `cloudflare_analytics_engine`

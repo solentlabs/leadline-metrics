@@ -1,4 +1,5 @@
-"""Cloudflare builders: Web Analytics over GraphQL and the Workers Analytics Engine SQL API."""
+"""Cloudflare builders: Web Analytics, zone analytics and Workers metrics over GraphQL, and the Workers Analytics
+Engine SQL API."""
 
 # cspell:ignore pathing
 from __future__ import annotations
@@ -202,3 +203,33 @@ def zone_totals_group(day: date, visits: int, avg: float, p50: float, p95: float
         },
         "dimensions": {"date": day.isoformat()},
     }
+
+
+# --- Cloudflare Workers metrics: workersInvocationsAdaptive over GraphQL ---
+# From Cloudflare's "Querying Workers Metrics with GraphQL"
+# (https://developers.cloudflare.com/analytics/graphql-api/tutorials/querying-workers-metrics/): the dataset, its
+# `scriptName` filter and `status` dimension, `sum { requests errors subrequests }` and `quantiles { cpuTimeP50
+# cpuTimeP99 }` (CPU time in microseconds). The tutorial groups by `datetime`; the `date` dimension and the
+# `date_geq`/`date_leq` filter used here are the adaptive datasets' standard ones, not shown there, and the first live
+# `check` confirms them. No capture holds these answers, so no shape is verified against a real one.
+
+
+def workers_day(
+    day: date, requests: int, *, errors: int = 0, subrequests: int = 0, p50: float = 0, p99: float = 0
+) -> Json:
+    """A `daily` group: one day's invocations, errors and subrequests, and its CPU time percentiles (microseconds)."""
+    return {
+        "dimensions": {"date": day.isoformat()},
+        "sum": {"requests": requests, "errors": errors, "subrequests": subrequests},
+        "quantiles": {"cpuTimeP50": p50, "cpuTimeP99": p99},
+    }
+
+
+def workers_outcome(day: date, status: str, requests: int) -> Json:
+    """An `outcomes` group: one day's invocations that ended with `status` (`success`, `scriptThrewException`)."""
+    return {"dimensions": {"date": day.isoformat(), "status": status}, "sum": {"requests": requests}}
+
+
+def workers_metrics(daily: Sequence[Json] = (), outcomes: Sequence[Json] = ()) -> Json:
+    """The query's result for one account: its `daily` and `outcomes` groups."""
+    return {"data": {"viewer": {"accounts": [{"daily": list(daily), "outcomes": list(outcomes)}]}}, "errors": None}

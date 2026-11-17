@@ -23,8 +23,8 @@ variables are unset or empty is skipped, not failed
 <!-- BEGIN GENERATED credentials-table -->
 | Variable | Used by |
 | -------- | ------- |
-| `CLOUDFLARE_ACCOUNT_ID` | `cloudflare_analytics_engine`, `cloudflare_web` |
-| `CLOUDFLARE_API_TOKEN` | `cloudflare_analytics_engine`, `cloudflare_web`, `cloudflare_zone_traffic` |
+| `CLOUDFLARE_ACCOUNT_ID` | `cloudflare_analytics_engine`, `cloudflare_web`, `cloudflare_workers` |
+| `CLOUDFLARE_API_TOKEN` | `cloudflare_analytics_engine`, `cloudflare_web`, `cloudflare_workers`, `cloudflare_zone_traffic` |
 | `GITHUB_TOKEN` | `github_contributor_locations`, `github_discussions`, `github_issues`, `github_releases`, `github_repo_activity`, `github_repo_stats`, `github_response_times`, `github_traffic`, `github_traffic_daily`, `github_tree_counts` |
 | `GOATCOUNTER_TOKEN` | `goatcounter` |
 <!-- END GENERATED credentials-table -->
@@ -241,6 +241,7 @@ Generated from the source packages and their READMEs by `make docs`
 | ------ | ----- |
 | [`cloudflare_analytics_engine`](../src/leadline/sources/cloudflare/cloudflare_analytics_engine/README.md) | a Workers Analytics Engine dataset's daily totals over SQL, each dimension on its own; the last `refetch_days` days are read again every run. |
 | [`cloudflare_web`](../src/leadline/sources/cloudflare/cloudflare_web/README.md) | a site's page views and visits from Cloudflare Web Analytics, each row with the site tag it was read under; the last 30 days healed and corrected. Yesterday's row also holds the week's `top_referrers`, `top_countries`, `top_devices`, `top_paths`, `top_browsers`, `top_systems` and `top_bots` (`name`, `count`; ten at most). These count visitors whose browsers run Cloudflare's beacon, so unlike the zone's request counts they leave out scanners and other bots. |
+| [`cloudflare_workers`](../src/leadline/sources/cloudflare/cloudflare_workers/README.md) | each Cloudflare Worker's invocations as a row a day, kept for good where Cloudflare keeps them three months: requests, errors and subrequests, the invocations by how they ended, and the CPU time's 50th and 99th percentiles. The last 28 days are read again every run. |
 | [`cloudflare_zone_traffic`](../src/leadline/sources/cloudflare/cloudflare_zone_traffic/README.md) | a Cloudflare zone's HTTP traffic as a row a day, kept for good where Cloudflare keeps it for a year (daily totals) or 31 days (per-request detail): requests, cached and encrypted requests and bytes, page views, threats, unique visitors and visits, and the counts by country, status code, browser, operating system, device type, data center, path, host and more. Counts only, never a visitor's address. |
 | [`discourse_forum`](../src/leadline/sources/discourse_forum/README.md) | a Discourse forum's own site statistics (members, topics, posts, likes, active members, and the forum's chat counts where it has chat), a row a day per forum. |
 | [`discourse_topics`](../src/leadline/sources/discourse_topics/README.md) | views, replies and likes of topics on a Discourse forum, a row per topic a day; each topic's days before its first row rebuilt back to its creation: replies and last post. |
