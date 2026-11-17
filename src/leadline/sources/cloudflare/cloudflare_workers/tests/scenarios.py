@@ -2,7 +2,8 @@
 
 The script has no collector for it, so each scenario carries the rows the source must leave (`expected`), written by
 hand and reviewed; they are the source's golden. The run is 2026-09-23, so the newest day it writes is 2026-09-22, and
-the 28 days it reads begin 2026-08-26.
+the 28 days it reads begin 2026-08-26. A first run (a file with no row before those 28 days) reads the 84 days from
+2026-06-30, in three queries of 28 days, oldest first. A scenario about the nightly window seeds an older row (OLDER).
 
 Every answer is built by the builders of the cloudflare group from made-up values (no capture holds these answers).
 """
@@ -31,6 +32,7 @@ NOW = "2026-09-23T23:31:05+00:00"  # the scenarios' clock as captured_at gives i
 EARLIER = "2026-09-22T23:30:02+00:00"  # an earlier night's
 YESTERDAY = date(2026, 9, 22)
 WINDOW_START = YESTERDAY - timedelta(days=spec.WINDOW_DAYS - 1)  # 2026-08-26
+HISTORY_START = YESTERDAY - timedelta(days=spec.HISTORY_DAYS - 1)  # 2026-06-30
 LEADLINE_CONFIG = [{"script": SCRIPT}]
 DIVERGENCES: dict[str, str] = {}  # the script has no collector for this source
 
@@ -39,13 +41,22 @@ def sent(query: str) -> str:
     return json.dumps({"query": query})
 
 
-def answer(body: Any, status: int = 200) -> Exchange:
-    query = spec.query(ACCOUNT, SCRIPT, WINDOW_START, YESTERDAY)
+def answer(body: Any, status: int = 200, start: date = WINDOW_START) -> Exchange:
+    """The answer to the query for the 28 days from `start` (the nightly window unless given)."""
+    query = spec.query(ACCOUNT, SCRIPT, start, start + timedelta(days=spec.WINDOW_DAYS - 1))
     return exchange(CLOUDFLARE_GRAPHQL, body, method="POST", sent=sent(query), status=status)
 
 
-def failure() -> Exchange:
-    return failed(CLOUDFLARE_GRAPHQL, method="POST", sent=sent(spec.query(ACCOUNT, SCRIPT, WINDOW_START, YESTERDAY)))
+def failure(start: date = WINDOW_START) -> Exchange:
+    query = spec.query(ACCOUNT, SCRIPT, start, start + timedelta(days=spec.WINDOW_DAYS - 1))
+    return failed(CLOUDFLARE_GRAPHQL, method="POST", sent=sent(query))
+
+
+def history(*bodies: Any) -> list[Exchange]:
+    """A first run's three answers, oldest first: `bodies` for the first ones, the rest empty."""
+    starts = [HISTORY_START + timedelta(days=n * spec.WINDOW_DAYS) for n in range(3)]
+    given = [*bodies, *[workers_metrics()] * (3 - len(bodies))]
+    return [answer(body, start=start) for body, start in zip(given, starts)]
 
 
 def day(n: int) -> date:
@@ -126,13 +137,15 @@ SCENARIOS = [
         "writes_a_row_for_each_day_of_the_window",
         [],
         [answer(workers_metrics(daily(), outcomes()))],
-        expected={FILE: window(d2=DAY_2, d0=DAY_0)},
+        seed={FILE: OLDER},
+        expected={FILE: OLDER + window(d2=DAY_2, d0=DAY_0)},
     ),
     Scenario(
         "a_quiet_worker_writes_zeros",
         [],
         [answer(workers_metrics())],
-        expected={FILE: window()},
+        seed={FILE: OLDER},
+        expected={FILE: OLDER + window()},
     ),
     Scenario(
         "corrects_a_changed_day_and_fills_a_failed_one",
@@ -153,7 +166,8 @@ SCENARIOS = [
         "three_failed_attempts_write_a_failure_row",
         [],
         [failure()] * 3,
-        expected={FILE: FAILED},
+        seed={FILE: OLDER},
+        expected={FILE: OLDER + FAILED},
     ),
     Scenario(
         "a_failure_keeps_a_good_row",
@@ -166,31 +180,59 @@ SCENARIOS = [
         "graphql_errors_in_a_success",
         [],
         [answer({"data": None, "errors": [{"message": "not authorized", "path": ["viewer"]}]})],
-        expected={FILE: failure_row("graphql_error", "not authorized")},
+        seed={FILE: OLDER},
+        expected={FILE: OLDER + failure_row("graphql_error", "not authorized")},
     ),
     Scenario(
         "an_account_the_token_cannot_see_is_no_account",
         [],
         [answer({"data": {"viewer": {"accounts": []}}, "errors": None})],
-        expected={FILE: failure_row("no_account", "account filter matched nothing")},
+        seed={FILE: OLDER},
+        expected={FILE: OLDER + failure_row("no_account", "account filter matched nothing")},
     ),
     Scenario(
         "a_body_that_is_not_json",
         [],
         [answer("<html>Bad gateway</html>")],
-        expected={FILE: failure_row("parse_failed", "response was not JSON")},
+        seed={FILE: OLDER},
+        expected={FILE: OLDER + failure_row("parse_failed", "response was not JSON")},
     ),
     Scenario(
         "a_count_of_another_kind_is_an_unexpected_shape",
         [],
         [answer(workers_metrics([workers_day(day(0), -1)]))],
-        expected={FILE: failure_row("parse_failed", "response had an unexpected shape")},
+        seed={FILE: OLDER},
+        expected={FILE: OLDER + failure_row("parse_failed", "response had an unexpected shape")},
     ),
     Scenario(
         "retries_until_the_request_succeeds",
         [],
         [failure(), answer("", status=500), answer(workers_metrics([workers_day(day(0), 9)]))],
-        expected={FILE: window(d0={"requests": 9, "cpu_us": {"p50": 0, "p99": 0}})},
+        seed={FILE: OLDER},
+        expected={FILE: OLDER + window(d0={"requests": 9, "cpu_us": {"p50": 0, "p99": 0}})},
+    ),
+    Scenario(
+        "a_first_run_reads_three_months_from_the_first_day_with_invocations",
+        [],
+        history(workers_metrics([workers_day(day(70), 4, p50=500, p99=600)], [workers_outcome(day(70), "success", 4)])),
+        expected={
+            FILE: "".join(row(day(n)) for n in range(70, spec.WINDOW_DAYS - 1, -1)).replace(
+                row(day(70)), row(day(70), requests=4, outcomes={"success": 4}, cpu_us={"p50": 500, "p99": 600})
+            )
+            + window()
+        },
+    ),
+    Scenario(
+        "a_first_run_with_nothing_older_writes_the_window",
+        [],
+        history(),
+        expected={FILE: window()},
+    ),
+    Scenario(
+        "a_first_run_that_fails_writes_a_failure_row",
+        [],
+        [failure(HISTORY_START)] * 3,
+        expected={FILE: FAILED},
     ),
     Scenario(
         "skips_without_the_account_id",

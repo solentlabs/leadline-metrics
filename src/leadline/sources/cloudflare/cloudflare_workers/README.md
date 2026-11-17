@@ -3,9 +3,10 @@
 - **Reads:** each Cloudflare Worker's invocations as a row a day, kept for good
   where Cloudflare keeps them three months: requests, errors and
   subrequests, the invocations by how they ended, and the CPU time's 50th and
-  99th percentiles. The last 28 days are read again every run.
+  99th percentiles. The first run reads three months; every run after, the
+  last 28 days.
 - **Requests:** Cloudflare's GraphQL Analytics API, one query per entry for
-  the 28 days ending yesterday (UTC), from the account's
+  the 28 days ending yesterday (UTC), three on the first run, from the account's
   `workersInvocationsAdaptive` dataset filtered by the Worker's script name.
   `check` asks for the 7 days ending yesterday.
 - **Credentials:** `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`; the
@@ -36,7 +37,11 @@ A row is one UTC day of the Worker. Every count is a whole number.
 
 ## How a run goes
 
-- **Every run** reads the 28 days ending yesterday and rewrites them: a day
+- **The first run** (a file with no row before the last 28 days) reads the
+  84 days ending yesterday, in three queries of 28 days (a query spans at
+  most a month, and Cloudflare keeps three months), and writes a row for
+  each day from the first one Cloudflare has to yesterday.
+- **Every run after** reads the 28 days ending yesterday and rewrites them: a day
   with no invocations is a row of zeros, and a value Cloudflare changed is
   corrected (each correction is recorded for health). Days older than the 28
   are never touched.

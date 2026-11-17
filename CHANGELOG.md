@@ -7,8 +7,8 @@ follow [SemVer](https://semver.org/).
 
 - A new source, `cloudflare_workers`, records each Cloudflare Worker's daily
   invocations, errors and subrequests, how its invocations ended
-  (`outcomes`) and its CPU time percentiles, re-reading the last 28 days
-  every run. It needs `CLOUDFLARE_API_TOKEN` (Account Analytics: Read) and
+  (`outcomes`) and its CPU time percentiles. The first run reads the three
+  months Cloudflare keeps; every run after re-reads the last 28 days. It needs `CLOUDFLARE_API_TOKEN` (Account Analytics: Read) and
   `CLOUDFLARE_ACCOUNT_ID`. See its README.
 
 ## 0.9.3 - 2026-11-06

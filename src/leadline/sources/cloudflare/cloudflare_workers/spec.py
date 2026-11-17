@@ -16,6 +16,7 @@ DEFAULT_FILE = config.default_file(NAME, "script")  # cloudflare-workers-{script
 
 KEYS = ("script",)  # the keys an entry may have, besides `file`
 WINDOW_DAYS = 28  # read and rewritten every run, yesterday the last; one query spans at most a month
+HISTORY_DAYS = 3 * WINDOW_DAYS  # a first run's reach, in 28-day queries: Cloudflare keeps three months
 CHECK_DAYS = 7  # the days `check` asks about
 PAGE = 10000  # the most groups an answer holds (maxPageSize): every status of every day
 

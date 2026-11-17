@@ -39,8 +39,10 @@ def read(tmp_path: Path) -> list[dict[str, Any]]:
 
 
 def run(tmp_path: Path, *responses: Any, seed: dict[str, str] | None = None) -> port.PortRun:
+    """A run on `responses`, from a file holding `seed` (by default an older row, so the run reads the 28 days)."""
     base = port.scenario(NAME, "writes_a_row_for_each_day_of_the_window")
-    return port.run(cloudflare_workers, CONFIG, replace(base, responses=responses, seed=seed or {}), tmp_path)
+    files = {FILE: cw.OLDER} if seed is None else seed
+    return port.run(cloudflare_workers, CONFIG, replace(base, responses=responses, seed=files), tmp_path)
 
 
 # --- the contract ---
@@ -125,11 +127,38 @@ def test_the_script_has_no_collector_so_there_are_no_divergences() -> None:
 def test_a_run_writes_the_28_days_ending_yesterday(tmp_path: Path) -> None:
     port.run(cloudflare_workers, CONFIG, port.scenario(NAME, "a_quiet_worker_writes_zeros"), tmp_path)
 
-    dates = [r["date"] for r in read(tmp_path)]
+    dates = [r["date"] for r in read(tmp_path)][1:]  # after the seeded older row
     assert (len(dates), dates[0], dates[-1]) == (28, "2026-08-26", "2026-09-22")
 
 
 # --- the window ---
+
+
+def test_a_first_run_reads_84_days_in_three_queries_oldest_first(tmp_path: Path) -> None:
+    done = port.run(
+        cloudflare_workers,
+        CONFIG,
+        port.scenario(NAME, "a_first_run_reads_three_months_from_the_first_day_with_invocations"),
+        tmp_path,
+    )
+
+    dates = [r["date"] for r in read(tmp_path)]
+    assert (dates[0], dates[-1], len(dates)) == ("2026-07-14", "2026-09-22", 71)
+    assert done.ctx.corrections == []
+
+
+def test_a_file_with_a_row_before_the_window_reads_only_the_window(tmp_path: Path) -> None:
+    done = run(tmp_path, cw.answer(workers_metrics()))
+
+    assert done.status == 0
+    assert read(tmp_path)[0] == json.loads(cw.OLDER)
+
+
+def test_a_file_with_rows_only_in_the_window_reads_three_months_again(tmp_path: Path) -> None:
+    done = run(tmp_path, *cw.history(), seed={FILE: cw.row(cw.day(3), cw.EARLIER)})
+
+    assert done.status == 0
+    assert len(read(tmp_path)) == spec.WINDOW_DAYS
 
 
 def test_a_changed_day_is_a_correction_and_a_filled_failure_is_not(tmp_path: Path) -> None:
@@ -146,7 +175,7 @@ def test_a_day_outside_the_window_in_the_answer_is_left_out(tmp_path: Path) -> N
     outside = cw.WINDOW_START - timedelta(days=1)
     run(tmp_path, cw.answer(workers_metrics([workers_day(outside, 7)], [workers_outcome(outside, "success", 7)])))
 
-    rows = read(tmp_path)
+    rows = read(tmp_path)[1:]  # after the seeded older row
     assert rows[0]["date"] == "2026-08-26"
     assert sum(r["requests"] for r in rows) == 0
 
@@ -180,7 +209,7 @@ def test_a_failed_request_waits_10_then_20_seconds(tmp_path: Path) -> None:
 def test_a_rejected_token_is_critical_and_not_retried(tmp_path: Path, code: int) -> None:
     done = run(tmp_path, cw.answer("", status=code))
 
-    assert (read(tmp_path)[0]["status"], read(tmp_path)[0]["http_code"]) == ("fetch_failed", str(code))
+    assert (read(tmp_path)[-1]["status"], read(tmp_path)[-1]["http_code"]) == ("fetch_failed", str(code))
     assert done.sleeps == []
     assert done.ctx.critical == [
         Critical(NAME, FILE, f"example-worker: HTTP {code} from Cloudflare's GraphQL API; empty body")
@@ -237,7 +266,7 @@ SUMS = {"sum": {"requests": 1, "errors": 0, "subrequests": 0}, "quantiles": {"cp
 def test_an_answer_of_another_shape_is_parse_failed_for_yesterday(tmp_path: Path, body: Any) -> None:
     done = run(tmp_path, cw.answer(body))
 
-    assert (tmp_path / FILE).read_text(encoding="utf-8") == cw.failure_row(
+    assert (tmp_path / FILE).read_text(encoding="utf-8") == cw.OLDER + cw.failure_row(
         "parse_failed", "response had an unexpected shape"
     )
     assert (done.status, done.ctx.critical) == (0, [])
@@ -247,7 +276,7 @@ def test_graphql_errors_give_the_first_three_messages(tmp_path: Path) -> None:
     errors = [{"message": f"problem {n}"} for n in range(4)]
     run(tmp_path, cw.answer({"data": None, "errors": errors}))
 
-    assert read(tmp_path)[0]["reason"] == "problem 0; problem 1; problem 2"
+    assert read(tmp_path)[-1]["reason"] == "problem 0; problem 1; problem 2"
 
 
 # --- check ---

@@ -1,10 +1,11 @@
 """cloudflare_workers: each Cloudflare Worker's daily invocations from Cloudflare's GraphQL Analytics API.
 
 Cloudflare keeps this data three months and answers a month per query; a row a day keeps it for good. Each entry names a
-Worker by its script name, and every run reads its 28 days ending yesterday (UTC) in one query and rewrites them in its
-file (store.write_window): a day's invocations, errors and subrequests, its invocations by how they ended (`outcomes`),
-and its CPU time percentiles in microseconds (`cpu_us`). A day with no invocations is a row of zeros; a value Cloudflare
-changed is corrected, and each correction recorded.
+Worker by its script name. The first run reads the 84 days ending yesterday (UTC), in three queries of 28 days, and
+writes a row for each day from the first one Cloudflare has; every run after reads the 28 days ending yesterday in one
+query and rewrites them in its file (store.write_window): a day's invocations, errors and subrequests, its invocations
+by how they ended (`outcomes`), and its CPU time percentiles in microseconds (`cpu_us`). A day with no invocations is a
+row of zeros; a value Cloudflare changed is corrected, and each correction recorded.
 
 The answer is read whole or not at all (ADR: a failure is recorded as a failure): a failed request, the API's own
 errors, an account the filter didn't match, or an answer of another shape writes a failure row for yesterday, which

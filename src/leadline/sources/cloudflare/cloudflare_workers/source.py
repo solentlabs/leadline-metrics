@@ -87,12 +87,20 @@ def _post(ctx: Context, query: str, attempts: int = ATTEMPTS) -> Response:
 def _collect(ctx: Context, entry: Any) -> None:
     script, file = entry["script"], ctx.file(spec.file_name(entry))
     yesterday = ctx.date - timedelta(days=1)
-    start = yesterday - timedelta(days=spec.WINDOW_DAYS - 1)
+    window_start = yesterday - timedelta(days=spec.WINDOW_DAYS - 1)
+    # Three months are read once: until the file holds a row older than the 28 days every run rewrites.
+    older = any(
+        (parsed := store.parse_date(day)) is not None and parsed < window_start for day in store.rows_by_date(file)
+    )
+    start = window_start if older else yesterday - timedelta(days=spec.HISTORY_DAYS - 1)
     ctx.log.info("Collecting Cloudflare Workers metrics for %s (%s to %s)...", script, start, yesterday)
     head = {"date": yesterday.isoformat(), "script": script}  # a failure row's
     try:
-        response = _post(ctx, spec.query(os.environ["CLOUDFLARE_ACCOUNT_ID"], script, start, yesterday))
-        days = _read(_answer(response), start, yesterday)
+        days: PerDay = {}
+        for first in range(0, (yesterday - start).days + 1, spec.WINDOW_DAYS):  # 28 days a query, oldest first
+            span = (start + timedelta(days=first), start + timedelta(days=first + spec.WINDOW_DAYS - 1))
+            response = _post(ctx, spec.query(os.environ["CLOUDFLARE_ACCOUNT_ID"], script, *span))
+            days.update(_read(_answer(response), *span))
     except HttpError as e:
         ctx.log.info("ERROR: Cloudflare Workers %s failed (HTTP %s)", script, e.http_code)
         ctx.record_unfixable(spec.NAME, file.name, e, f"{script}: HTTP {e.http_code} from Cloudflare's GraphQL API")
@@ -102,7 +110,9 @@ def _collect(ctx: Context, entry: Any) -> None:
     except _UnreadableError:
         failure = {"status": "parse_failed", "reason": UNEXPECTED}
     else:
-        dates = [(start + timedelta(days=n)).isoformat() for n in range(spec.WINDOW_DAYS)]
+        # From the first day the answers have, or the 28 days' first, to yesterday.
+        first_day = min([window_start, *(date.fromisoformat(day) for day in days)])
+        dates = [(first_day + timedelta(days=n)).isoformat() for n in range((yesterday - first_day).days + 1)]
         rows = [{"date": day, "script": script, "status": "ok", **days.get(day, _zero())} for day in dates]
         store.write_window(file, rows, ctx, spec.NAME)
         return
