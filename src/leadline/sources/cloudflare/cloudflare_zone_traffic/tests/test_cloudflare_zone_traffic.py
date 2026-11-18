@@ -101,11 +101,23 @@ def test_no_query_asks_for_an_address() -> None:
         spec.daily_query("z", day, day),
         spec.totals_query("z", day, day),
         spec.probe_query("z", day),
-        *(spec.list_query("z", dimension, day, day) for _, dimension in spec.LISTS),
+        *(spec.list_query("z", field, day, day) for field, *_ in spec.LISTS),
     ]
 
     assert [q for q in queries if "clientIP" in q or "originIP" in q] == []
-    assert [dimension for _, dimension in spec.LISTS if dimension.endswith("IP")] == []
+    assert [dimension for _, dimension, _ in spec.LISTS if dimension.endswith("IP")] == []
+
+
+# --- refused requests ---
+
+
+def test_refused_paths_are_the_paths_of_the_requests_refused_with_a_4xx() -> None:
+    day = date(2026, 9, 22)
+    refused = spec.list_query("z", "refused_paths", day, day)
+
+    assert "dimensions { date clientRequestPath }" in refused
+    assert "edgeResponseStatus_geq: 400, edgeResponseStatus_lt: 500" in refused
+    assert "edgeResponseStatus" not in spec.list_query("z", "paths", day, day)
 
 
 # --- the reviewed rows ---
@@ -178,7 +190,7 @@ def test_a_part_that_failed_last_night_is_filled_by_the_next_run(tmp_path: Path)
     port.run(cloudflare_zone_traffic, CONFIG, first, tmp_path / "one")
     partial = (tmp_path / "one" / FILE).read_text(encoding="utf-8")
     assert json.loads(partial.splitlines()[-1])["status"] == "partial"
-    healed = [cz.daily_answer(zone_daily(cz.zone_days())), *cz.per_request(cz.path_groups(), cz.totals_groups())]
+    healed = [cz.daily_answer(zone_daily(cz.zone_days())), *cz.first_run_requests()]
 
     done = port.run(
         cloudflare_zone_traffic, CONFIG, replace(first, seed={FILE: partial}, responses=healed), tmp_path / "two"
@@ -195,7 +207,7 @@ def test_a_part_that_failed_last_night_is_filled_by_the_next_run(tmp_path: Path)
 
 def test_a_list_that_fails_keeps_the_value_an_earlier_run_of_the_day_got(tmp_path: Path) -> None:
     base = port.scenario(NAME, "first_run_fills_the_history_and_yesterday")
-    paths = cz.per_request(cz.path_groups(), cz.totals_groups(), failing=("clientRequestPath",))
+    paths = cz.first_run_requests(failing=("paths",))
     scenario = replace(
         base,
         seed={FILE: cz.stored(cz.YESTERDAY, **cz.DAY_0)},
@@ -284,10 +296,10 @@ def test_a_list_the_token_may_not_read_is_critical_once_and_leaves_the_row_parti
             CLOUDFLARE_GRAPHQL,
             "",
             method="POST",
-            sent=cz.sent(spec.list_query(cz.ZONE, dimension, cz.WINDOW_START, cz.YESTERDAY)),
+            sent=cz.sent(spec.list_query(cz.ZONE, field, cz.WINDOW_START, cz.YESTERDAY)),
             status=403,
         )
-        for dimension in ("clientRequestPath", "userAgent")
+        for field in ("paths", "user_agents")
     ]
     base = port.scenario(NAME, "a_quiet_zone_writes_zeros_for_yesterday")
     answers = [r for r in base.responses if not any(r["request"]["body"] == q["request"]["body"] for q in refused)]
@@ -304,17 +316,17 @@ def test_a_list_the_token_may_not_read_is_critical_once_and_leaves_the_row_parti
 
 
 @pytest.mark.parametrize(
-    ("dimension", "field", "reason"),
+    ("field", "reason"),
     [
-        ("clientRequestPath", "paths", "paths answer was unreadable: groups is not a list of objects"),
-        ("userAgent", "user_agents", "user_agents answer was unreadable: groups is not a list of objects"),
+        ("paths", "paths answer was unreadable: groups is not a list of objects"),
+        ("user_agents", "user_agents answer was unreadable: groups is not a list of objects"),
     ],
 )
 def test_a_list_answer_that_cannot_be_read_is_a_part_failure_not_a_crash(
-    tmp_path: Path, dimension: str, field: str, reason: str
+    tmp_path: Path, field: str, reason: str
 ) -> None:
     base = port.scenario(NAME, "a_quiet_zone_writes_zeros_for_yesterday")
-    query = spec.list_query(cz.ZONE, dimension, cz.WINDOW_START, cz.YESTERDAY)
+    query = spec.list_query(cz.ZONE, field, cz.WINDOW_START, cz.YESTERDAY)
     broken = exchange(
         CLOUDFLARE_GRAPHQL,
         {"data": {"viewer": {"zones": [{"groups": ["not a group"]}]}}, "errors": None},
@@ -439,7 +451,7 @@ def test_check_reports_api_trouble_as_a_finding_never_a_crash(tmp_path: Path, re
 # --- the summary ---
 
 
-def test_its_summary_shows_the_days_counts_the_two_lists_and_the_week_of_error_responses(tmp_path: Path) -> None:
+def test_its_summary_shows_the_days_counts_the_two_lists_and_the_week_of_refused_requests(tmp_path: Path) -> None:
     lines = port.summary(cloudflare_zone_traffic, CONFIG, "first_run_fills_the_history_and_yesterday", tmp_path)
 
     # A day's counts show once 7 rows are there; the two lists show from the first, and no other list does.
@@ -448,5 +460,6 @@ def test_its_summary_shows_the_days_counts_the_two_lists_and_the_week_of_error_r
         "### cloudflare_zone_traffic: example",
         "",
         "- Status codes: 200 120 · 404 30",
-        "- Error responses (4xx), 7d: 60 of 370",
+        "- Refused (4xx), 7d: 60 of 370",
+        "- Refused paths, 7d: /wp-admin 25 · /wp-login.php 25 · /.env 5 · /config/.env 5",
     ]

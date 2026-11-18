@@ -285,7 +285,7 @@ def _read_requests(
         ("totals", None, spec.totals_query(zone, start, end), [*spec.TOTALS])
     ]
     queries += [
-        (field, dimension, spec.list_query(zone, dimension, start, end), [field]) for field, dimension in spec.LISTS
+        (field, dimension, spec.list_query(zone, field, start, end), [field]) for field, dimension, _ in spec.LISTS
     ]
     for name, dimension, query, fields in queries:
         try:
@@ -378,7 +378,7 @@ def _requests_of(
         return {}
     nulls = {field for fields in null.values() for field in fields}
     fields: Fields = {}
-    names = [*spec.TOTALS, *(field for field, _ in spec.LISTS)]
+    names = [*spec.TOTALS, *(field for field, *_ in spec.LISTS)]
     for name in names:
         if name in nulls:
             fields[name] = None

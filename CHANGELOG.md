@@ -3,6 +3,15 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions
 follow [SemVer](https://semver.org/).
 
+## Unreleased
+
+- `cloudflare_zone_traffic` records `refused_paths`, each day's top paths
+  of the requests refused with a 4xx status: mostly scanners probing for
+  files the site does not have. The next run adds it to the last 28 days'
+  rows. The default summary counts refused requests on their own line,
+  `Refused (4xx), 7d`, in place of `Error responses (4xx), 7d`, and names
+  the week's 5 most refused paths.
+
 ## 0.9.4 - 2026-11-17
 
 - A new source, `cloudflare_workers`, records each Cloudflare Worker's daily

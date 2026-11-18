@@ -9,7 +9,7 @@
 - **Requests:** Cloudflare's GraphQL Analytics API, one query for the daily
   dataset (the whole year on the first run, then the last 28 days) and one for
   each of the per-request dataset's parts (the day's visits and origin
-  response times, and each of 13 lists), for the last 28 days. `check` asks
+  response times, and each of 14 lists), for the last 28 days. `check` asks
   for one day of the zone.
 - **Credentials:** `CLOUDFLARE_API_TOKEN`; the source is skipped while it is
   unset. The token needs the zone permission Analytics: Read
@@ -41,6 +41,7 @@ largest first, with the name deciding a tie, and an item with no name is
 | `status_codes`, `browser_page_views`, `content_types`, `content_type_bytes`, `http_versions`, `ssl_protocols`, `ip_classes`, `threat_paths` | the daily dataset | requests (page views for `browser_page_views`, bytes for `content_type_bytes`) by status code, browser family, content type, HTTP version, SSL protocol, class of address (`clean`, `botnet`, and so on) and kind of threat |
 | `visits`, `origin_response_ms` | the per-request dataset | the day's visits, and the origin's mean (`avg`) and 50th, 95th and 99th percentile (`p50`, `p95`, `p99`) response time in milliseconds; a mean of `-1`, which Cloudflare gives a day with no origin responses, is no mean |
 | `paths`, `hosts`, `user_agents`, `browsers`, `operating_systems`, `device_types`, `data_centers`, `cache_statuses`, `methods`, `bot_categories`, `security_actions`, `security_sources`, `request_sources` | the per-request dataset | the top `top` values by request count |
+| `refused_paths` | the per-request dataset | the top `top` paths of the requests refused with a 4xx status (mostly scanners probing for files the site does not have) |
 
 The daily dataset gives exact totals for a whole day. The per-request dataset
 is sampled by Cloudflare, so its counts are estimates, and it keeps 31 days,
@@ -82,7 +83,10 @@ that puts a personal value in its URLs (an email address, an id) would see it in
 The trends page draws the day's requests, page views, visits, unique visitors,
 threats, bytes, cached requests and cached bytes, and stacks of the status
 codes, countries, cache statuses, HTTP versions, browsers, operating systems,
-device types, data centers, hosts, paths and content types, and the origin's
-response time as lines. The default summary shows the day's counts, the
-status codes, and the week's error responses (4xx) as a share of its requests: most are probes for files the site
-does not have, so page views and visits, above them, are the visitors. The other fields are in the file for the reports that name them.
+device types, data centers, hosts, paths, refused paths and content types, and
+the origin's response time as lines. The default summary shows the day's
+counts, the status codes, and the week's refused requests (4xx) on their own
+lines: their count as a share of all requests, and the 5 paths they asked for
+most. Most are scanners probing for files the site does not have, so they are
+not counted as the site's errors, and page views and visits, above them, are
+the visitors. The other fields are in the file for the reports that name them.

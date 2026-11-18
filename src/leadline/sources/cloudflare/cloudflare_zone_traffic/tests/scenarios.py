@@ -51,13 +51,13 @@ def daily_failure(start: date = HISTORY_START) -> Exchange:
     return failed(CLOUDFLARE_GRAPHQL, method="POST", sent=sent(spec.daily_query(ZONE, start, YESTERDAY)))
 
 
-def list_answer(dimension: str, body: Any, status: int = 200) -> Exchange:
-    query = spec.list_query(ZONE, dimension, WINDOW_START, YESTERDAY)
+def list_answer(field: str, body: Any, status: int = 200) -> Exchange:
+    query = spec.list_query(ZONE, field, WINDOW_START, YESTERDAY)
     return exchange(CLOUDFLARE_GRAPHQL, body, method="POST", sent=sent(query), status=status)
 
 
-def list_failure(dimension: str) -> Exchange:
-    query = spec.list_query(ZONE, dimension, WINDOW_START, YESTERDAY)
+def list_failure(field: str) -> Exchange:
+    query = spec.list_query(ZONE, field, WINDOW_START, YESTERDAY)
     return failed(CLOUDFLARE_GRAPHQL, method="POST", sent=sent(query))
 
 
@@ -73,15 +73,15 @@ def per_request(
     failing: tuple[str, ...] = (),
     others: dict[str, list[Any]] | None = None,
 ) -> list[Exchange]:
-    """The answers to the totals query and the 13 list queries: `paths` and `totals` as given, any list in `others`
-    (by its dimension), the rest empty; a list named in `failing` has its connection fail, all three attempts."""
-    groups = {"clientRequestPath": paths or [], **(others or {})}
+    """The answers to the totals query and the list queries: `paths` and `totals` as given, any list in `others`
+    (by its row field), the rest empty; a list named in `failing` has its connection fail, all three attempts."""
+    groups = {"paths": paths or [], **(others or {})}
     answers = [totals_answer(zone_requests(totals or []))]
-    for _, dimension in spec.LISTS:
-        if dimension in failing:
-            answers += [list_failure(dimension)] * 3
+    for field, *_ in spec.LISTS:
+        if field in failing:
+            answers += [list_failure(field)] * 3
         else:
-            answers.append(list_answer(dimension, zone_requests(groups.get(dimension, []))))
+            answers.append(list_answer(field, zone_requests(groups.get(field, []))))
     return answers
 
 
@@ -129,6 +129,21 @@ def path_groups() -> list[Any]:
     ]
 
 
+def refused_groups() -> list[Any]:
+    """The paths of the requests refused with a 4xx: the 404s of zone_days()."""
+    return [
+        zone_request_group(day(2), 25, clientRequestPath="/wp-admin"),
+        zone_request_group(day(2), 5, clientRequestPath="/.env"),
+        zone_request_group(day(0), 25, clientRequestPath="/wp-login.php"),
+        zone_request_group(day(0), 5, clientRequestPath="/config/.env"),
+    ]
+
+
+def first_run_requests(failing: tuple[str, ...] = ()) -> list[Exchange]:
+    """The per-request answers of a first run: paths, refused paths and totals; `failing` as in per_request."""
+    return per_request(path_groups(), totals_groups(), failing=failing, others={"refused_paths": refused_groups()})
+
+
 def totals_groups() -> list[Any]:
     return [zone_totals_group(day(2), 20, 100.4, 90, 250, 400), zone_totals_group(day(0), 40, 120.6, 100.2, 300, 450)]
 
@@ -162,6 +177,7 @@ def row(when: date, backfilled: bool = False, *, omit: tuple[str, ...] = (), **f
         "visits": 0,
         "origin_response_ms": {},
         "paths": {},
+        "refused_paths": {},
         "hosts": {},
         "user_agents": {},
         "browsers": {},
@@ -187,7 +203,7 @@ def row(when: date, backfilled: bool = False, *, omit: tuple[str, ...] = (), **f
     return json.dumps(base) + "\n"
 
 
-# The rows zone_days(), path_groups() and totals_groups() give, as a first run writes them.
+# The rows zone_days(), path_groups(), refused_groups() and totals_groups() give, as a first run writes them.
 DAY_2: dict[str, Any] = {
     "requests": 100,
     "cached_requests": 40,
@@ -212,6 +228,7 @@ DAY_2: dict[str, Any] = {
     "visits": 20,
     "origin_response_ms": {"avg": 100, "p50": 90, "p95": 250, "p99": 400},
     "paths": {"/": 50, "/privacy": 10},
+    "refused_paths": {"/wp-admin": 25, "/.env": 5},
 }
 DAY_1: dict[str, Any] = {
     "requests": 120,
@@ -232,13 +249,21 @@ DAY_0: dict[str, Any] = {
     "visits": 40,
     "origin_response_ms": {"avg": 121, "p50": 100, "p95": 300, "p99": 450},
     "paths": {"/": 80, "/about": 80, "/config/.env": 5},
+    "refused_paths": {"/wp-login.php": 25, "/config/.env": 5},
 }
 FIRST_RUN = row(day(2), True, **DAY_2) + row(day(1), True, **DAY_1) + row(day(0), **DAY_0)
 
 
-def stored(when: date, backfilled: bool = False, **fields: Any) -> str:
+def stored(when: date, backfilled: bool = False, *, omit: tuple[str, ...] = (), **fields: Any) -> str:
     """A row an earlier run wrote (the same text as `row`, its clock an earlier night's)."""
-    return row(when, backfilled, **fields).replace(NOW, "2026-09-22T23:30:02+00:00")
+    return row(when, backfilled, omit=omit, **fields).replace(NOW, "2026-09-22T23:30:02+00:00")
+
+
+def gained(text: str, **fields: Any) -> str:
+    """A stored row as this run leaves it: `fields` added after its own, its clock this run's."""
+    found = json.loads(text)
+    del found["captured_at"]
+    return json.dumps({**found, **fields, "captured_at": NOW}) + "\n"
 
 
 def failure_row(when: date, captured: bool = False) -> str:
@@ -264,7 +289,7 @@ SCENARIOS = [
     Scenario(
         "first_run_fills_the_history_and_yesterday",
         [],
-        [daily_answer(zone_daily(zone_days())), *per_request(path_groups(), totals_groups())],
+        [daily_answer(zone_daily(zone_days())), *first_run_requests()],
         expected={FILE: FIRST_RUN},
     ),
     Scenario(
@@ -291,7 +316,7 @@ SCENARIOS = [
         [],
         [
             daily_answer(zone_daily(zone_days()), start=WINDOW_START),
-            *per_request(path_groups(), totals_groups()),
+            *first_run_requests(),
         ],
         seed={
             FILE: stored(day(60), True, requests=11)  # older than the 28 days: the year was read before
@@ -306,9 +331,25 @@ SCENARIOS = [
         },
     ),
     Scenario(
+        "a_row_from_before_a_list_existed_gains_it",
+        [],
+        [daily_answer(zone_daily(zone_days()), start=WINDOW_START), *first_run_requests()],
+        seed={
+            FILE: stored(day(60), True, requests=11)
+            + stored(day(2), True, omit=("refused_paths",), **DAY_2)
+            + stored(day(1), True, omit=("refused_paths",), **DAY_1)
+        },
+        expected={
+            FILE: stored(day(60), True, requests=11)
+            + gained(stored(day(2), True, omit=("refused_paths",), **DAY_2), refused_paths=DAY_2["refused_paths"])
+            + gained(stored(day(1), True, omit=("refused_paths",), **DAY_1), refused_paths={})
+            + row(day(0), **DAY_0)
+        },
+    ),
+    Scenario(
         "fills_a_failed_day_and_a_day_with_no_row",
         [],
-        [daily_answer(zone_daily(zone_days()), start=WINDOW_START), *per_request(path_groups(), totals_groups())],
+        [daily_answer(zone_daily(zone_days()), start=WINDOW_START), *first_run_requests()],
         seed={FILE: stored(day(60), True, requests=11) + failure_row(day(1))},
         expected={
             FILE: stored(day(60), True, requests=11)
@@ -322,7 +363,7 @@ SCENARIOS = [
         [],
         [
             daily_answer(zone_daily(zone_days())),
-            *per_request(path_groups(), totals_groups(), failing=("clientRequestPath",)),
+            *first_run_requests(failing=("paths",)),
         ],
         expected={
             FILE: row(day(2), True, omit=("paths",), **DAY_2)

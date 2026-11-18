@@ -50,23 +50,26 @@ MAPS = (
     ("threat_paths", "threatPathingMap", "threatPathingName", "requests"),
 )
 
-# The per-request dataset (httpRequestsAdaptiveGroups), which Cloudflare samples and keeps 31 days: a row field and
-# the dimension its counts are grouped by. A visitor's address (clientIP, originIP) is never asked for: leadline
-# keeps counts, not who made the requests (ADR: zone traffic is kept as counts).
+# The per-request dataset (httpRequestsAdaptiveGroups), which Cloudflare samples and keeps 31 days: a row field, the
+# dimension its counts are grouped by, and the requests it counts (a filter; all of them where empty). A visitor's
+# address (clientIP, originIP) is never asked for: leadline keeps counts, not who made the requests (ADR: zone traffic
+# is kept as counts).
+REFUSED = "edgeResponseStatus_geq: 400, edgeResponseStatus_lt: 500"  # the requests refused with a 4xx
 LISTS = (
-    ("paths", "clientRequestPath"),
-    ("hosts", "clientRequestHTTPHost"),
-    ("user_agents", "userAgent"),
-    ("browsers", "userAgentBrowser"),
-    ("operating_systems", "userAgentOS"),
-    ("device_types", "clientDeviceType"),
-    ("data_centers", "coloCode"),
-    ("cache_statuses", "cacheStatus"),
-    ("methods", "clientRequestHTTPMethodName"),
-    ("bot_categories", "verifiedBotCategory"),
-    ("security_actions", "securityAction"),
-    ("security_sources", "securitySource"),
-    ("request_sources", "requestSource"),
+    ("paths", "clientRequestPath", ""),
+    ("refused_paths", "clientRequestPath", REFUSED),
+    ("hosts", "clientRequestHTTPHost", ""),
+    ("user_agents", "userAgent", ""),
+    ("browsers", "userAgentBrowser", ""),
+    ("operating_systems", "userAgentOS", ""),
+    ("device_types", "clientDeviceType", ""),
+    ("data_centers", "coloCode", ""),
+    ("cache_statuses", "cacheStatus", ""),
+    ("methods", "clientRequestHTTPMethodName", ""),
+    ("bot_categories", "verifiedBotCategory", ""),
+    ("security_actions", "securityAction", ""),
+    ("security_sources", "securitySource", ""),
+    ("request_sources", "requestSource", ""),
 )
 VISITS = "visits"
 ORIGIN_MS = "origin_response_ms"  # the origin's response time: its mean and the 50th, 95th and 99th percentiles
@@ -131,7 +134,7 @@ LIST = """
     zones(filter: {zoneTag: "%s"}) {
       groups: httpRequestsAdaptiveGroups(
         limit: %d
-        filter: {date_geq: "%s", date_leq: "%s"}
+        filter: {date_geq: "%s", date_leq: "%s"%s}
         orderBy: [count_DESC]
       ) {
         count
@@ -197,9 +200,11 @@ def daily_query(zone: str, start: date, end: date) -> str:
     return DAILY % (zone, HISTORY_DAYS + 1, start.isoformat(), end.isoformat(), _sum_fields())
 
 
-def list_query(zone: str, dimension: str, start: date, end: date) -> str:
-    """The per-request dataset's request count for each (day, `dimension` value), the most requested first."""
-    return LIST % (zone, PAGE, start.isoformat(), end.isoformat(), dimension)
+def list_query(zone: str, field: str, start: date, end: date) -> str:
+    """The per-request dataset's request count for each (day, value of the dimension of the list `field`), of the
+    requests it counts, the most requested first."""
+    dimension, where = next((dimension, where) for name, dimension, where in LISTS if name == field)
+    return LIST % (zone, PAGE, start.isoformat(), end.isoformat(), f", {where}" if where else "", dimension)
 
 
 def totals_query(zone: str, start: date, end: date) -> str:
@@ -215,6 +220,7 @@ def probe_query(zone: str, day: date) -> str:
 # --- the summary ---
 
 LABEL = "Zone traffic"  # what trends heads its sections with
+TOP_REFUSED = 5  # the refused paths the summary names
 
 # The default summary: a day's counts and the two lists a reader checks first.
 SHOWN = (
@@ -249,6 +255,7 @@ CHARTS = (
     _breakdown("data_centers", "Data centers"),
     _breakdown("hosts", "Hosts"),
     _breakdown("paths", "Paths"),
+    _breakdown("refused_paths", "Refused paths"),
     _breakdown("content_types", "Content types"),
     config.Shown(ORIGIN_MS, "Origin response time (ms)", "breakdown", lines=True, half=True),
 )
@@ -259,15 +266,12 @@ def summary(cfg: Any) -> list[config.Section]:
 
 
 def _section(entry: Any) -> config.Section:
-    """The entry's section: `SHOWN`, and the week's error responses (4xx) among all its requests, most of which are
-    probes for files the site does not have. Page views and visits, above, are the visitors."""
-    errors = {
-        "from": file_name(entry),
-        "field": "status_codes",
-        "aggregate": "counts",
-        "days": 7,
-        "match": {"key": "^4"},
-        "as_of": "",
-        "text": "- Error responses (4xx), 7d: {total} of {all}",
-    }
-    return config.Section(NAME, entry["label"], file_name(entry), SHOWN, LABEL, lines=[errors], charts=CHARTS)
+    """The entry's section: `SHOWN`, then the week's refused requests (4xx) among all its requests, and the paths they
+    asked for: most are scanners probing for files the site does not have, so they are counted on their own line, not
+    as the site's errors. Page views and visits, above, are the visitors."""
+    week = {"from": file_name(entry), "aggregate": "counts", "days": 7, "as_of": ""}
+    refused = {**week, "field": "status_codes", "match": {"key": "^4"}}
+    refused["text"] = "- Refused (4xx), 7d: {total} of {all}"
+    paths = {**week, "field": "refused_paths", "count": TOP_REFUSED, "join": " · "}
+    paths["text"] = "- Refused paths, 7d: {items}"
+    return config.Section(NAME, entry["label"], file_name(entry), SHOWN, LABEL, lines=[refused, paths], charts=CHARTS)
