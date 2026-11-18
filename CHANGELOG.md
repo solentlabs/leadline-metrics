@@ -3,7 +3,7 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions
 follow [SemVer](https://semver.org/).
 
-## Unreleased
+## 0.9.5 - 2026-11-17
 
 - `cloudflare_zone_traffic` records `refused_paths`, each day's top paths
   of the requests refused with a 4xx status: mostly scanners probing for
