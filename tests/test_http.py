@@ -407,7 +407,7 @@ CHALLENGE = "<!DOCTYPE html><html><head><title>Just a moment...</title></head></
     ids=["the page", "the header", "both"],
 )
 def test_a_bot_challenge_is_recoverable_never_unfixable(body: str, headers: dict[str, str]) -> None:
-    """Live 2026-10-21: the forum's host answered the NAS a 403 challenge page; no credential was wrong."""
+    """A forum host may answer a scheduled run a 403 challenge page; no credential was wrong."""
     error = HttpError("u", 403, body, headers)
 
     assert (error.rate_limited, error.unfixable) == (False, False)

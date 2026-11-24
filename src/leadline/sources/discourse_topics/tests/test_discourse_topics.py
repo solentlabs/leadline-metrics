@@ -406,7 +406,7 @@ CHALLENGE = "<!DOCTYPE html><html><head><title>Just a moment...</title></head><b
 
 
 def test_a_bot_challenge_is_recoverable_not_critical(tmp_path: Path) -> None:
-    """Live 2026-10-21: the forum's host challenged the NAS; one failed night recovers (ADR)."""
+    """A forum host that challenges the run fails one night, which recovers (ADR)."""
     done = run(tmp_path, *thrice(exchange(dt.topic_url(1001), CHALLENGE, status=403)))
 
     assert done.rows == {

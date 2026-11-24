@@ -1,4 +1,4 @@
-"""The runtime stays stdlib-only: the NAS that runs leadline has Python 3.8 and no pip."""
+"""The runtime stays stdlib-only: a NAS that runs leadline may have Python 3.8 and no pip."""
 
 from __future__ import annotations
 
