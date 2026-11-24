@@ -380,7 +380,8 @@ too; any other, a spent rate limit (`RATE_LIMITED`) or an error with no
 type, is recoverable (`github.GraphqlError.unfixable`). A GoatCounter 404
 is recoverable, and retried like any other failure (the request names it
 `recoverable`): GoatCounter answers 404 at times for a site that exists and
-the token can read, and a wrong site still shows, as its check's error that
+the token can read, often on a run's first request, which the retry
+recovers; a wrong site still shows, as its check's error that
 night and as critical on the second failed night. A source that crashes on
 an unexpected exception is a bug, which waiting can't fix either: it is
 critical on its first night, and the next source still runs.
