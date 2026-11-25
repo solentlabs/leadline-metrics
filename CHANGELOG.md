@@ -3,6 +3,14 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions
 follow [SemVer](https://semver.org/).
 
+## 0.9.6 - 2026-11-25
+
+- A page of trends shows only the checks of the files it shows. Each
+  `check()` finding names its entry's file, and `health.jsonl` keeps it with
+  the check as `file` (null for a finding of no one file, shown wherever its
+  source is). Before, a check of one entry showed on every page with any
+  section of its source, so one project's warning showed on another's page.
+
 ## 0.9.5 - 2026-11-17
 
 - `cloudflare_zone_traffic` records `refused_paths`, each day's top paths
