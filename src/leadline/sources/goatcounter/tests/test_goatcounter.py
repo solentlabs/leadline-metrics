@@ -757,7 +757,9 @@ def check(tmp_path: Path, *responses: Any) -> list[Finding]:
 
 
 def test_check_finds_the_site_and_that_the_token_can_read_it(tmp_path: Path) -> None:
-    assert check(tmp_path, gc.total(gc.THREE)) == [Finding("ok", f"{SITE}: the site exists and the token can read it")]
+    assert check(tmp_path, gc.total(gc.THREE)) == [
+        Finding("ok", f"{SITE}: the site exists and the token can read it", FILE)
+    ]
 
 
 @pytest.mark.parametrize(
@@ -765,21 +767,21 @@ def test_check_finds_the_site_and_that_the_token_can_read_it(tmp_path: Path) -> 
     [
         (
             exchange(gc.TOTAL, '{"error":"unauthorized"}', status=401),
-            Finding("error", f"{SITE}: HTTP 401: the site doesn't exist, or the token can't read it"),
+            Finding("error", f"{SITE}: HTTP 401: the site doesn't exist, or the token can't read it", FILE),
         ),
         (
             exchange(gc.TOTAL, '{"error":"forbidden"}', status=403),
-            Finding("error", f"{SITE}: HTTP 403: the site doesn't exist, or the token can't read it"),
+            Finding("error", f"{SITE}: HTTP 403: the site doesn't exist, or the token can't read it", FILE),
         ),
         (
             exchange(gc.TOTAL, "", status=404),
-            Finding("error", f"{SITE}: HTTP 404: the site doesn't exist, or the token can't read it"),
+            Finding("error", f"{SITE}: HTTP 404: the site doesn't exist, or the token can't read it", FILE),
         ),
-        (exchange(gc.TOTAL, "", status=429), Finding("warn", f"{SITE}: could not read the site: HTTP 429")),
-        (failed(gc.TOTAL), Finding("warn", f"{SITE}: could not read the site: HTTP 0")),
+        (exchange(gc.TOTAL, "", status=429), Finding("warn", f"{SITE}: could not read the site: HTTP 429", FILE)),
+        (failed(gc.TOTAL), Finding("warn", f"{SITE}: could not read the site: HTTP 0", FILE)),
         (
             exchange(gc.TOTAL, "<html>maintenance</html>"),
-            Finding("warn", f"{SITE}: could not read the site: total response was not JSON"),
+            Finding("warn", f"{SITE}: could not read the site: total response was not JSON", FILE),
         ),
     ],
     ids=["unauthorized", "forbidden", "not found", "rate limited", "no connection", "not JSON"],

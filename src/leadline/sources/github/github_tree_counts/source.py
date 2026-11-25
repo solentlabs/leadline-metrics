@@ -43,8 +43,10 @@ def check(ctx: Context, cfg: Any) -> list[Finding]:
 
     A repo or ref that doesn't exist fails every night; a pattern that matches nothing counts 0 every
     night, which looks like an empty catalog rather than a wrong pattern.
+
+    Each finding is about its entry's file.
     """
-    return [_finding(ctx, entry) for entry in cfg]
+    return [_finding(ctx, entry).about(spec.file_name(entry)) for entry in cfg]
 
 
 def _where(entry: Any) -> str:

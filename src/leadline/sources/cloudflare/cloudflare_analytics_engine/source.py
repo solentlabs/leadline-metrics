@@ -267,13 +267,15 @@ def _row(dataset: str, day: str, got: dict[str, Any], queries: list[_Query]) -> 
 
 
 def check(ctx: Context, cfg: Any) -> list[Finding]:
-    """Whether each entry's dataset answers, with events in its window; writes nothing, never raises for the API.
+    """Whether each entry's dataset answers, with events in its window, each finding about its entry's file; writes
+    nothing, never raises for the API.
 
     A misspelled dataset reads as no events every night. The query selects no column but the total.
     """
     findings = []
     for entry in cfg:
         dataset, days = entry["dataset"], entry.get("refetch_days", spec.REFETCH_DAYS)
+        file = spec.file_name(entry)
         window = _window(_midnight(ctx.date - timedelta(days=days)), _midnight(ctx.date))
         sql = f"SELECT SUM(_sample_interval) AS n FROM {dataset} WHERE {window} FORMAT JSON"  # noqa: S608 (validated)
         try:
@@ -286,15 +288,15 @@ def check(ctx: Context, cfg: Any) -> list[Finding]:
                 raise _UnreadableError(status, UNEXPECTED) from None
         except HttpError as e:
             level = "error" if e.unfixable else "warn"
-            findings.append(Finding(level, f"{dataset}: could not query the dataset: HTTP {e.code}"))
+            findings.append(Finding(level, f"{dataset}: could not query the dataset: HTTP {e.code}", file))
             continue
         except _UnreadableError as e:
-            findings.append(Finding("warn", f"{dataset}: could not read the answer: {e.reason}"))
+            findings.append(Finding("warn", f"{dataset}: could not read the answer: {e.reason}", file))
             continue
         if events:
-            findings.append(Finding("ok", f"{dataset}: the dataset has events in the last {days} days"))
+            findings.append(Finding("ok", f"{dataset}: the dataset has events in the last {days} days", file))
         else:
             findings.append(
-                Finding("warn", f"{dataset}: no events in the last {days} days; is the dataset's name right?")
+                Finding("warn", f"{dataset}: no events in the last {days} days; is the dataset's name right?", file)
             )
     return findings

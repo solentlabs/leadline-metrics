@@ -41,36 +41,37 @@ def collect(ctx: Context, cfg: Any) -> None:
 
 
 def check(ctx: Context, cfg: Any) -> list[Finding]:
-    """Whether the token can read each Worker's metrics, and the Worker had invocations in the last 7 days; writes
-    nothing, never raises for the API. A misspelled script name reads as a Worker with no invocations every night."""
+    """Whether the token can read each Worker's metrics, and the Worker had invocations in the last 7 days, each
+    finding about its entry's file; writes nothing, never raises for the API. A misspelled script name reads as a
+    Worker with no invocations every night."""
     yesterday = ctx.date - timedelta(days=1)
     start = yesterday - timedelta(days=spec.CHECK_DAYS - 1)
     findings = []
     for entry in cfg:
-        script = entry["script"]
+        script, file = entry["script"], spec.file_name(entry)
         query = spec.query(os.environ["CLOUDFLARE_ACCOUNT_ID"], script, start, yesterday)
         try:
             response = _post(ctx, query, attempts=1)
             days = _read(_account(json.loads(response.body.decode("utf-8", "replace"))), start, yesterday)
         except HttpError as e:
             level = "error" if e.unfixable else "warn"
-            findings.append(Finding(level, f"{script}: could not query the Workers metrics: HTTP {e.code}"))
+            findings.append(Finding(level, f"{script}: could not query the Workers metrics: HTTP {e.code}", file))
             continue
         except _FailureRowError as e:
             reason = e.fields["reason"]
             findings.append(
-                Finding("error", f"{script}: the token cannot read the account's Workers metrics: {reason}")
+                Finding("error", f"{script}: the token cannot read the account's Workers metrics: {reason}", file)
             )
             continue
         except (ValueError, _UnreadableError):
-            findings.append(Finding("warn", f"{script}: could not read the Workers metrics answer"))
+            findings.append(Finding("warn", f"{script}: could not read the Workers metrics answer", file))
             continue
         invocations = sum(fields["requests"] for fields in days.values())
         if invocations:
-            findings.append(Finding("ok", f"{script}: {invocations} invocations in {spec.CHECK_DAYS} days"))
+            findings.append(Finding("ok", f"{script}: {invocations} invocations in {spec.CHECK_DAYS} days", file))
         else:
             message = f"{script}: no invocations in {spec.CHECK_DAYS} days; is it the Worker's script name?"
-            findings.append(Finding("warn", message))
+            findings.append(Finding("warn", message, file))
     return findings
 
 

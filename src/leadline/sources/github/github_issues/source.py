@@ -49,6 +49,8 @@ def check(ctx: Context, cfg: Any) -> list[Finding]:
     It writes nothing. The repo and its first page of open issues are what collection asks for, so a
     run reuses those answers; a maintainer's login and a queue's label cost one request each. A login
     that doesn't exist, or is spelled otherwise, would misread every night without a failure (MISREAD).
+
+    Each finding is about its entry's file.
     """
     findings = []
     for entry in cfg:
@@ -64,7 +66,7 @@ def check(ctx: Context, cfg: Any) -> list[Finding]:
                 found.append(github.check_maintainer(ctx, repo, entry["maintainer"], misread=MISREAD))
             if "queue" in entry:
                 found.append(_check_label(ctx, repo, entry["queue"]["label"]))
-        findings += found
+        findings += [f.about(spec.file_name(entry)) for f in found]
     return findings
 
 

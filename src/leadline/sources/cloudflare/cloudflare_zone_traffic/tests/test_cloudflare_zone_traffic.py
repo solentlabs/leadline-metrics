@@ -424,7 +424,7 @@ def probe(body: Any, status: int = 200) -> Any:
 def test_check_finds_a_zone_the_token_can_read(tmp_path: Path) -> None:
     found = check(tmp_path, CONFIG, probe({"data": {"viewer": {"zones": [{"daily": []}]}}, "errors": None}))
 
-    assert found == [Finding("ok", "example: the token can read the zone's analytics")]
+    assert found == [Finding("ok", "example: the token can read the zone's analytics", FILE)]
 
 
 @pytest.mark.parametrize(
@@ -432,15 +432,17 @@ def test_check_finds_a_zone_the_token_can_read(tmp_path: Path) -> None:
     [
         (
             probe({"data": None, "errors": [{"message": "not authorized to access this zone"}]}),
-            Finding("error", "example: the token cannot read the zone's analytics: not authorized to access this zone"),
+            Finding(
+                "error", "example: the token cannot read the zone's analytics: not authorized to access this zone", FILE
+            ),
         ),
         (
             probe({"data": {"viewer": {"zones": []}}, "errors": None}),
-            Finding("error", "example: the token cannot read the zone's analytics: zone filter matched nothing"),
+            Finding("error", "example: the token cannot read the zone's analytics: zone filter matched nothing", FILE),
         ),
-        (probe("", status=403), Finding("error", "example: could not query the zone's analytics: HTTP 403")),
-        (probe("", status=502), Finding("warn", "example: could not query the zone's analytics: HTTP 502")),
-        (probe("not json"), Finding("warn", "example: could not read the zone's analytics answer")),
+        (probe("", status=403), Finding("error", "example: could not query the zone's analytics: HTTP 403", FILE)),
+        (probe("", status=502), Finding("warn", "example: could not query the zone's analytics: HTTP 502", FILE)),
+        (probe("not json"), Finding("warn", "example: could not read the zone's analytics answer", FILE)),
     ],
     ids=["not authorized", "no such zone", "rejected", "unavailable", "unreadable"],
 )

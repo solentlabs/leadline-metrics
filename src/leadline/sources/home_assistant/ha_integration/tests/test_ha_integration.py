@@ -392,6 +392,7 @@ def test_no_connection_is_recorded_as_000_and_is_recoverable(tmp_path: Path) -> 
 # --- check() ---
 
 FEED = "Home Assistant's custom integrations analytics"
+MINE = "ha-integration-mine.jsonl"  # the file of the entry {"integration": "mine"}
 
 
 def check(tmp_path: Path, cfg: Any, *responses: Any) -> list[Finding]:
@@ -408,7 +409,7 @@ def test_check_finds_the_integration_in_the_feed(tmp_path: Path) -> None:
     feed = exchange(HA_INTEGRATIONS_URL, {"other": ha_integration_entry(5), "mine": ha_integration_entry(9)})
 
     assert check(tmp_path, [{"integration": "mine"}], feed) == [
-        Finding("ok", f"mine: listed in {FEED}, with 9 installs")
+        Finding("ok", f"mine: listed in {FEED}, with 9 installs", MINE)
     ]
 
 
@@ -421,6 +422,7 @@ def test_check_finds_an_integration_the_feed_does_not_list(tmp_path: Path) -> No
             "error",
             f"mine: not listed in {FEED}, so every night reads as no installs; "
             "the entry names an integration by its domain",
+            MINE,
         )
     ]
 
@@ -430,21 +432,31 @@ def test_check_reads_the_feed_once_for_every_entry(tmp_path: Path) -> None:
 
     findings = check(tmp_path, [{"integration": "a"}, {"integration": "b"}, {"integration": "c"}], feed)
 
-    assert [f.level for f in findings] == ["ok", "warn", "error"]
-    assert findings[1] == Finding("warn", f"b: could not read {FEED}: unexpected answer")
+    assert [(f.level, f.file) for f in findings] == [
+        ("ok", "ha-integration-a.jsonl"),
+        ("warn", "ha-integration-b.jsonl"),
+        ("error", "ha-integration-c.jsonl"),
+    ]
+    assert findings[1] == Finding("warn", f"b: could not read {FEED}: unexpected answer", "ha-integration-b.jsonl")
 
 
 @pytest.mark.parametrize(
     ("response", "finding"),
     [
-        (exchange(HA_INTEGRATIONS_URL, "", status=503), Finding("warn", f"mine: could not fetch {FEED}: HTTP 503")),
-        (failed(HA_INTEGRATIONS_URL), Finding("warn", f"mine: could not fetch {FEED}: HTTP 0")),
-        (exchange(HA_INTEGRATIONS_URL, "", status=404), Finding("error", f"mine: could not fetch {FEED}: HTTP 404")),
-        (exchange(HA_INTEGRATIONS_URL, "<html>"), Finding("warn", f"mine: could not read {FEED}: not JSON")),
-        (exchange(HA_INTEGRATIONS_URL, [1]), Finding("warn", f"mine: could not read {FEED}: unexpected answer")),
+        (
+            exchange(HA_INTEGRATIONS_URL, "", status=503),
+            Finding("warn", f"mine: could not fetch {FEED}: HTTP 503", MINE),
+        ),
+        (failed(HA_INTEGRATIONS_URL), Finding("warn", f"mine: could not fetch {FEED}: HTTP 0", MINE)),
+        (
+            exchange(HA_INTEGRATIONS_URL, "", status=404),
+            Finding("error", f"mine: could not fetch {FEED}: HTTP 404", MINE),
+        ),
+        (exchange(HA_INTEGRATIONS_URL, "<html>"), Finding("warn", f"mine: could not read {FEED}: not JSON", MINE)),
+        (exchange(HA_INTEGRATIONS_URL, [1]), Finding("warn", f"mine: could not read {FEED}: unexpected answer", MINE)),
         (
             exchange(HA_INTEGRATIONS_URL, {}),
-            Finding("warn", f"mine: could not read {FEED}: the feed lists no integrations"),
+            Finding("warn", f"mine: could not read {FEED}: the feed lists no integrations", MINE),
         ),
     ],
     ids=["unavailable", "no connection", "gone", "not JSON", "not an object", "empty"],

@@ -32,14 +32,17 @@ def collect(ctx: Context, cfg: Any) -> None:
 
 
 def check(ctx: Context, cfg: Any) -> list[Finding]:
-    """Whether each entry's repo exists, and then whether the token can read its traffic; writes nothing."""
+    """Whether each entry's repo exists, and then whether the token can read its traffic; writes nothing.
+
+    Each finding is about its entry's file.
+    """
     findings = []
     for entry in cfg:
         repo = entry["repo"]
-        found = github.check_repo(ctx, repo)
-        findings.append(found)
-        if found.level == "ok":
-            findings.append(github.check_traffic(ctx, repo))
+        found = [github.check_repo(ctx, repo)]
+        if found[-1].level == "ok":
+            found.append(github.check_traffic(ctx, repo))
+        findings += [f.about(spec.file_name(entry)) for f in found]
     return findings
 
 

@@ -41,6 +41,8 @@ def check(ctx: Context, cfg: Any) -> list[Finding]:
     It writes nothing. The repo is what other GitHub sources ask for, so a run reuses that answer; the
     query, with the login asked for in it, costs one request. A login that doesn't exist, or is spelled
     otherwise, would misread every night without a failure (MISREAD).
+
+    Each finding is about its entry's file.
     """
     findings = []
     for entry in cfg:
@@ -51,7 +53,7 @@ def check(ctx: Context, cfg: Any) -> list[Finding]:
             found += github.check_query(
                 ctx, repo, CHECKED, fetching=f"its {KIND}", ok=ok, maintainer=maintainer, misread=MISREAD
             )
-        findings += found
+        findings += [f.about(spec.file_name(entry)) for f in found]
     return findings
 
 

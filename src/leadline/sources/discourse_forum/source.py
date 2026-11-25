@@ -21,27 +21,28 @@ def collect(ctx: Context, cfg: Any) -> None:
 
 
 def check(ctx: Context, cfg: Any) -> list[Finding]:
-    """Whether each entry's forum answers with its site statistics; writes nothing, never raises for the API.
+    """Whether each entry's forum answers with its site statistics, each finding about its entry's file; writes
+    nothing, never raises for the API.
 
     It asks as collection does, so a run reuses the answers.
     """
     findings = []
     for entry in cfg:
-        base_url = entry["base_url"]
+        base_url, file = entry["base_url"], spec.file_name(entry)
         try:
             found = _read(ctx, base_url)
         except HttpError as e:
             if e.code == 0:
-                findings.append(Finding("warn", f"{base_url}: the forum did not answer: HTTP 0"))
+                findings.append(Finding("warn", f"{base_url}: the forum did not answer: HTTP 0", file))
             elif e.code == 404:
-                findings.append(Finding("warn", f"{base_url}: no about.json: HTTP 404"))
+                findings.append(Finding("warn", f"{base_url}: no about.json: HTTP 404", file))
             else:
                 level = "error" if e.unfixable else "warn"
-                findings.append(Finding(level, f"{base_url}: could not read about.json: HTTP {e.code}"))
+                findings.append(Finding(level, f"{base_url}: could not read about.json: HTTP {e.code}", file))
         except UnusableError as e:
-            findings.append(Finding("warn", f"{base_url}: could not read about.json: {e}"))
+            findings.append(Finding("warn", f"{base_url}: could not read about.json: {e}", file))
         else:
-            findings.append(Finding("ok", f"{base_url}: about.json gives {len(found)} site statistics"))
+            findings.append(Finding("ok", f"{base_url}: about.json gives {len(found)} site statistics", file))
     return findings
 
 

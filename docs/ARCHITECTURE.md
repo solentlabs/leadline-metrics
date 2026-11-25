@@ -395,9 +395,12 @@ from its `__init__.py`:
   failed request or an unusable answer writes a failure row and moves on
   to the next entry; it never raises, since an exception is a crash.
 - **`check`**: returns `context.Finding`s, each a level (`ok`, `warn` or
-  `error`) and a message, such as "the configured site_tag is the site's
-  beacon token; its site tag is X". A failed or rate-limited request is a
-  finding, never an exception.
+  `error`), a message, such as "the configured site_tag is the site's
+  beacon token; its site tag is X", and the file of the entry it concerns
+  (`Finding.about(file)`), so a page of trends shows it only beside that
+  file; a finding of no one file (`file` None) shows wherever the source
+  does. An entry writes one file, so its file names it. A failed or
+  rate-limited request is a finding, never an exception.
 - **`summary`**: a section per entry, a `config.Section`: the source's
   name and the entry's id, which title it (`github_repo_stats:
   owner/repo`), the source's `label`, a short readable name that heads
@@ -659,7 +662,7 @@ gap_window_days, gap_count, gaps, checks, critical, corrections, captured_at
 | `stale` | each file whose newest row is more than a day behind its expected date: `file`, `last`, `age_days` (both null for a file with no dated row) |
 | `failed` | each file whose newest row is a failure row: `file`, `last`, `status`, `streak`, `since` |
 | `gaps` | each file's missing and empty days in the last 14, from its first row to its newest: `file`, `window`, the counts, and the first ten of each |
-| `checks` | each `check()` finding, in order, as `{"source", "level", "message"}` |
+| `checks` | each `check()` finding, in order, as `{"source", "level", "message", "file"}`; `file` is null for a finding of no one file, and absent in rows written before findings named one |
 | `critical` | everything critical so far, in the order recorded, as `{"source", "file", "reason"}` (`file` null for a crash) |
 | `corrections` | the run's corrections, in order, as `{"source", "file", "date", "old", "new", "second_key"}` |
 

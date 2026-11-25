@@ -35,8 +35,11 @@ def collect(ctx: Context, cfg: Any) -> None:
 
 
 def check(ctx: Context, cfg: Any) -> list[Finding]:
-    """Whether each entry's repo exists and the token can read it; writes nothing, never raises for the API."""
-    return [github.check_repo(ctx, entry["repo"]) for entry in cfg]
+    """Whether each entry's repo exists and the token can read it; writes nothing, never raises for the API.
+
+    Each finding is about its entry's file.
+    """
+    return [github.check_repo(ctx, entry["repo"]).about(spec.file_name(entry)) for entry in cfg]
 
 
 def _objects(kind: str, answer: Any) -> list[dict[str, Any]]:

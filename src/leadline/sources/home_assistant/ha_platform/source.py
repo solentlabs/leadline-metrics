@@ -55,24 +55,27 @@ def collect(ctx: Context, cfg: Any) -> None:
     store.write_failure(file, {"date": day, **failure}, ctx.now)
 
 
-def check(ctx: Context, cfg: Any) -> list[Finding]:  # noqa: ARG001 (the contract's signature; nothing in cfg to check)
-    """Whether the analytics answer with every field the source reads; writes nothing, never raises for the API.
+def check(ctx: Context, cfg: Any) -> list[Finding]:
+    """Whether the analytics answer with every field the source reads, each finding about the source's one file;
+    writes nothing, never raises for the API.
 
     A field the answer lacks reads as 0 or null every night, so the rows would look quiet, not broken.
     """
+    file = spec.file_name(cfg)
     try:
         data = ctx.http.get_json(FEED)
         _row(data, ctx.date.isoformat())
     except HttpError as e:
-        return [Finding("error" if e.unfixable else "warn", f"could not fetch {ANALYTICS}: HTTP {e.code}")]
+        return [Finding("error" if e.unfixable else "warn", f"could not fetch {ANALYTICS}: HTTP {e.code}", file)]
     except ValueError:
-        return [Finding("warn", f"could not read {ANALYTICS}: not JSON")]
+        return [Finding("warn", f"could not read {ANALYTICS}: not JSON", file)]
     except _UnreadableError:
-        return [Finding("warn", f"could not read {ANALYTICS}: unexpected answer")]
+        return [Finding("warn", f"could not read {ANALYTICS}: unexpected answer", file)]
     missing = [field for field in FIELDS if field not in data["current"]]
     if missing:
-        return [Finding("error", f"{ANALYTICS} lack {', '.join(missing)}, which every row then reads as 0 or null")]
-    return [Finding("ok", f"{ANALYTICS} answer with every field the source reads")]
+        lack = f"{ANALYTICS} lack {', '.join(missing)}, which every row then reads as 0 or null"
+        return [Finding("error", lack, file)]
+    return [Finding("ok", f"{ANALYTICS} answer with every field the source reads", file)]
 
 
 def _number(value: Any) -> Any:

@@ -36,7 +36,7 @@ that could break a reader is a new format number; a new key is not.
 | --- | ---- | ----- |
 | `date` | string | the health row's date |
 | `stale`, `failed`, `critical` | lists | the health row's lists, each item as [health](ARCHITECTURE.md#health) writes it |
-| `checks` | list | the row's check findings at `warn` or `error`, each `{"source", "level", "message"}` |
+| `checks` | list | the row's check findings at `warn` or `error`, each `{"source", "level", "message", "file"}`, `file` null or absent as health writes it |
 
 All sources are current when `stale` and `failed` are both empty.
 
@@ -179,8 +179,8 @@ read a file beside it, so the page holds the data itself, in a
 nothing in it closes the element: `trends.json`'s, with only the sections of
 its projects, in its `projects`' order, and their sections in each project's
 order, and only the health that concerns them: the stale, failed and
-critical items of the files its sections read, and the checks of their
-sources; and on every page, each crash (a critical item with no file) and
+critical items of the files its sections read, and the checks of those
+files (a check of no one file, of their sources); and on every page, each crash (a critical item with no file) and
 each critical item of the reports and trends. So a page carries its own
 portfolio's numbers and none of another's, and is no larger than they make
 it. `trends.html`, without `pages`, holds all of it, the whole run's

@@ -41,14 +41,14 @@ class Written(NamedTuple):
 def write(
     ctx: Context,
     written: Mapping[str, Written],
-    checks: Sequence[Mapping[str, str]],
+    checks: Sequence[Mapping[str, Any]],
     config_hash: str | None,
     watches: Sequence[config.Watch] = (),
 ) -> None:
     """Write the run's health row, after recording each critical source file on the context.
 
     `written` maps each file a configured source writes to its source; `checks` are the findings of
-    every source's check(), each with its source's name; `watches` are the config's counts that make the
+    every source's check(), each with its source's name and its file; `watches` are the config's counts that make the
     run critical (`_watched`).
     """
     ctx.log.info("Checking metrics freshness...")

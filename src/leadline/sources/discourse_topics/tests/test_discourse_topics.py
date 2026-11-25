@@ -492,34 +492,37 @@ def test_check_finds_each_topic(tmp_path: Path) -> None:
     findings = check(tmp_path, config(TWO), dt.topic(1001, 5400, 61, 88), dt.topic(1002, 700, 5, 2))
 
     assert findings == [
-        Finding("ok", f"{BASE}: topic 1001 (main) exists"),
-        Finding("ok", f"{BASE}: topic 1002 (other-thread) exists"),
+        Finding("ok", f"{BASE}: topic 1001 (main) exists", FILE),
+        Finding("ok", f"{BASE}: topic 1002 (other-thread) exists", FILE),
     ]
 
 
 @pytest.mark.parametrize(
     ("responses", "finding"),
     [
-        ([exchange(dt.topic_url(1001), "", status=404)], Finding("warn", f"{BASE}: no topic 1001 (main): HTTP 404")),
+        (
+            [exchange(dt.topic_url(1001), "", status=404)],
+            Finding("warn", f"{BASE}: no topic 1001 (main): HTTP 404", FILE),
+        ),
         (
             [exchange(dt.topic_url(1001), "", status=403)],
-            Finding("error", f"{BASE}: could not read topic 1001 (main): HTTP 403"),
+            Finding("error", f"{BASE}: could not read topic 1001 (main): HTTP 403", FILE),
         ),
         (
             thrice(exchange(dt.topic_url(1001), "", status=429)),
-            Finding("warn", f"{BASE}: could not read topic 1001 (main): HTTP 429"),
+            Finding("warn", f"{BASE}: could not read topic 1001 (main): HTTP 429", FILE),
         ),
         (
             thrice(exchange(dt.topic_url(1001), CHALLENGE, status=403)),
-            Finding("warn", f"{BASE}: could not read topic 1001 (main): HTTP 403"),
+            Finding("warn", f"{BASE}: could not read topic 1001 (main): HTTP 403", FILE),
         ),
         (
             [exchange(dt.topic_url(1001), "<html>Oops</html>")],
-            Finding("warn", f"{BASE}: could not read topic 1001 (main): topic response was not JSON"),
+            Finding("warn", f"{BASE}: could not read topic 1001 (main): topic response was not JSON", FILE),
         ),
         (
             [exchange(dt.topic_url(1001), [1])],
-            Finding("warn", f"{BASE}: could not read topic 1001 (main): topic response had an unexpected shape"),
+            Finding("warn", f"{BASE}: could not read topic 1001 (main): topic response had an unexpected shape", FILE),
         ),
     ],
     ids=["missing", "private", "rate limited", "bot challenge", "not JSON", "not a topic"],
@@ -527,14 +530,14 @@ def test_check_finds_each_topic(tmp_path: Path) -> None:
 def test_check_reports_each_topics_trouble_and_goes_on(tmp_path: Path, responses: list[Any], finding: Finding) -> None:
     findings = check(tmp_path, config(TWO), *responses, dt.topic(1002, 700, 5, 2))
 
-    assert findings == [finding, Finding("ok", f"{BASE}: topic 1002 (other-thread) exists")]
+    assert findings == [finding, Finding("ok", f"{BASE}: topic 1002 (other-thread) exists", FILE)]
 
 
 def test_check_finds_a_forum_that_does_not_answer_once(tmp_path: Path) -> None:
     """No answer at all is the base_url's trouble, not each topic's: one finding, and no more requests."""
     findings = check(tmp_path, config(TWO), *thrice(failed(dt.topic_url(1001))))
 
-    assert findings == [Finding("warn", f"{BASE}: the forum did not answer: HTTP 0")]
+    assert findings == [Finding("warn", f"{BASE}: the forum did not answer: HTTP 0", FILE)]
 
 
 # --- the summary ---

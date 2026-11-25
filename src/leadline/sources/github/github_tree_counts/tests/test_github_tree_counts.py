@@ -474,19 +474,21 @@ WHERE = f"{REPO}@main"
 
 def test_check_finds_the_paths_the_pattern_matches(tmp_path: Path) -> None:
     assert check(tmp_path, CONFIG, *tc.tree(tc.MODEMS + tc.NOT_MODEMS)) == [
-        Finding("ok", f"{WHERE}: the pattern matches 5 paths in the tree")
+        Finding("ok", f"{WHERE}: the pattern matches 5 paths in the tree", FILE)
     ]
 
 
 def test_check_warns_when_the_pattern_matches_nothing(tmp_path: Path) -> None:
     assert check(tmp_path, CONFIG, *tc.tree(tc.NOT_MODEMS)) == [
-        Finding("warn", f"{WHERE}: the pattern matches no path in the tree, so every night counts 0")
+        Finding("warn", f"{WHERE}: the pattern matches no path in the tree, so every night counts 0", FILE)
     ]
 
 
 def test_check_warns_of_a_truncated_tree(tmp_path: Path) -> None:
     assert check(tmp_path, CONFIG, *tc.tree(tc.MODEMS, truncated=True)) == [
-        Finding("warn", f"{WHERE}: the tree is truncated, so the counts are floors; the pattern matches 5 paths in it")
+        Finding(
+            "warn", f"{WHERE}: the tree is truncated, so the counts are floors; the pattern matches 5 paths in it", FILE
+        )
     ]
 
 
@@ -495,20 +497,23 @@ def test_check_warns_of_a_truncated_tree(tmp_path: Path) -> None:
     [
         (
             exchange(tc.TREE_URL, '{"message":"Not Found"}', status=404),
-            Finding("error", f"{WHERE}: HTTP 404: the repo or its ref doesn't exist, or the token can't read it"),
+            Finding("error", f"{WHERE}: HTTP 404: the repo or its ref doesn't exist, or the token can't read it", FILE),
         ),
         (
             exchange(tc.TREE_URL, "", status=401),
-            Finding("error", f"{WHERE}: HTTP 401: the repo or its ref doesn't exist, or the token can't read it"),
+            Finding("error", f"{WHERE}: HTTP 401: the repo or its ref doesn't exist, or the token can't read it", FILE),
         ),
         (
             thrice(exchange(tc.TREE_URL, "", status=403, headers={"X-RateLimit-Remaining": "0"})),
-            Finding("warn", f"{WHERE}: could not fetch the tree: HTTP 403, rate limited"),
+            Finding("warn", f"{WHERE}: could not fetch the tree: HTTP 403, rate limited", FILE),
         ),
-        (exchange(tc.TREE_URL, "", status=502), Finding("warn", f"{WHERE}: could not fetch the tree: HTTP 502")),
-        (failed(tc.TREE_URL), Finding("warn", f"{WHERE}: could not fetch the tree: HTTP 0")),
-        (exchange(tc.TREE_URL, "<html>"), Finding("warn", f"{WHERE}: could not read the tree: not JSON")),
-        (exchange(tc.TREE_URL, {"sha": "0"}), Finding("warn", f"{WHERE}: could not read the tree: unexpected answer")),
+        (exchange(tc.TREE_URL, "", status=502), Finding("warn", f"{WHERE}: could not fetch the tree: HTTP 502", FILE)),
+        (failed(tc.TREE_URL), Finding("warn", f"{WHERE}: could not fetch the tree: HTTP 0", FILE)),
+        (exchange(tc.TREE_URL, "<html>"), Finding("warn", f"{WHERE}: could not read the tree: not JSON", FILE)),
+        (
+            exchange(tc.TREE_URL, {"sha": "0"}),
+            Finding("warn", f"{WHERE}: could not read the tree: unexpected answer", FILE),
+        ),
     ],
     ids=["not found", "rejected", "rate limited", "unavailable", "no connection", "not JSON", "no tree"],
 )
@@ -519,6 +524,7 @@ def test_check_reports_api_trouble_as_a_finding_never_a_crash(tmp_path: Path, re
 
 
 def test_check_checks_every_entry(tmp_path: Path) -> None:
+    other_file = "github-tree-counts-other.jsonl"  # the a/other entry's file
     other_url = "https://api.github.com/repos/a/other/git/trees/HEAD?recursive=1"
     findings = check(
         tmp_path,
@@ -527,7 +533,7 @@ def test_check_checks_every_entry(tmp_path: Path) -> None:
         exchange(other_url, "", status=404),
     )
 
-    assert [f.level for f in findings] == ["ok", "error"]
+    assert [(f.level, f.file) for f in findings] == [("ok", FILE), ("error", other_file)]
     assert findings[1].message.startswith("a/other@HEAD: HTTP 404")
 
 
@@ -1114,7 +1120,7 @@ def test_the_check_counts_the_paths_the_patterns_count(tmp_path: Path) -> None:
     files = ["lib/items/a/b/item.yaml", "items/a/b/item.yaml", "src/a/c.py"]
 
     assert check(tmp_path, [MOVED], *tc.tree(files)) == [
-        Finding("ok", f"{WHERE}: the patterns match 2 paths in the tree")
+        Finding("ok", f"{WHERE}: the patterns match 2 paths in the tree", FILE)
     ]
 
 

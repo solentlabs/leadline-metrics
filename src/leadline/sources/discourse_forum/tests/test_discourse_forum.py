@@ -285,23 +285,26 @@ def check(tmp_path: Path, cfg: Any, *responses: Any) -> list[Finding]:
 def test_check_finds_the_forums_site_statistics(tmp_path: Path) -> None:
     findings = check(tmp_path, df.LEADLINE_CONFIG, df.about())
 
-    assert findings == [Finding("ok", f"{BASE}: about.json gives 25 site statistics")]
+    assert findings == [Finding("ok", f"{BASE}: about.json gives 25 site statistics", FILE)]
 
 
 @pytest.mark.parametrize(
     ("answers", "finding"),
     [
-        (thrice(failed(URL)), Finding("warn", f"{BASE}: the forum did not answer: HTTP 0")),
-        ([exchange(URL, "", status=404)], Finding("warn", f"{BASE}: no about.json: HTTP 404")),
-        ([exchange(URL, "", status=403)], Finding("error", f"{BASE}: could not read about.json: HTTP 403")),
-        (thrice(exchange(URL, CHALLENGE, status=403)), Finding("warn", f"{BASE}: could not read about.json: HTTP 403")),
+        (thrice(failed(URL)), Finding("warn", f"{BASE}: the forum did not answer: HTTP 0", FILE)),
+        ([exchange(URL, "", status=404)], Finding("warn", f"{BASE}: no about.json: HTTP 404", FILE)),
+        ([exchange(URL, "", status=403)], Finding("error", f"{BASE}: could not read about.json: HTTP 403", FILE)),
+        (
+            thrice(exchange(URL, CHALLENGE, status=403)),
+            Finding("warn", f"{BASE}: could not read about.json: HTTP 403", FILE),
+        ),
         (
             [exchange(URL, "<html>Oops</html>")],
-            Finding("warn", f"{BASE}: could not read about.json: about response was not JSON"),
+            Finding("warn", f"{BASE}: could not read about.json: about response was not JSON", FILE),
         ),
         (
             [exchange(URL, {"about": {}})],
-            Finding("warn", f"{BASE}: could not read about.json: about response has no stats object"),
+            Finding("warn", f"{BASE}: could not read about.json: about response has no stats object", FILE),
         ),
     ],
     ids=["no answer", "missing", "private", "bot challenge", "not JSON", "no stats"],
@@ -313,13 +316,13 @@ def test_check_reports_each_forums_trouble(tmp_path: Path, answers: list[Any], f
 
 def test_check_goes_on_to_the_next_forum(tmp_path: Path) -> None:
     other = "https://other.example"
-    cfg = [{"base_url": BASE}, {"base_url": other}]
+    cfg = [{"base_url": BASE, "file": FILE}, {"base_url": other, "file": "other.jsonl"}]
 
     findings = check(tmp_path, cfg, exchange(URL, "", status=404), exchange(f"{other}/about.json", ABOUT))
 
     assert findings == [
-        Finding("warn", f"{BASE}: no about.json: HTTP 404"),
-        Finding("ok", f"{other}: about.json gives 25 site statistics"),
+        Finding("warn", f"{BASE}: no about.json: HTTP 404", FILE),
+        Finding("ok", f"{other}: about.json gives 25 site statistics", "other.jsonl"),
     ]
 
 

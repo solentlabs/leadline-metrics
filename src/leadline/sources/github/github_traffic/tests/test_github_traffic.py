@@ -601,7 +601,9 @@ def check(tmp_path: Path, cfg: Any, *responses: Any) -> list[Finding]:
 
 
 def test_check_finds_the_token_can_read_the_traffic(tmp_path: Path) -> None:
-    assert check(tmp_path, CONFIG, gt.responses()[0]) == [Finding("ok", f"{REPO}: the token can read its traffic")]
+    assert check(tmp_path, CONFIG, gt.responses()[0]) == [
+        Finding("ok", f"{REPO}: the token can read its traffic", FILE)
+    ]
 
 
 @pytest.mark.parametrize(
@@ -609,22 +611,25 @@ def test_check_finds_the_token_can_read_the_traffic(tmp_path: Path) -> None:
     [
         (
             [exchange(gt.VIEWS, '{"message":"Must have push access to repository"}', status=403)],
-            Finding("error", f"{REPO}: HTTP 403: the token can't read its traffic, which needs push access"),
+            Finding("error", f"{REPO}: HTTP 403: the token can't read its traffic, which needs push access", FILE),
         ),
         (
             [exchange(gt.VIEWS, '{"message":"Not Found"}', status=404)],
-            Finding("error", f"{REPO}: HTTP 404: the repo doesn't exist, or the token can't read it"),
+            Finding("error", f"{REPO}: HTTP 404: the repo doesn't exist, or the token can't read it", FILE),
         ),
         (
             [exchange(gt.VIEWS, "", status=401)],
-            Finding("error", f"{REPO}: HTTP 401: the repo doesn't exist, or the token can't read it"),
+            Finding("error", f"{REPO}: HTTP 401: the repo doesn't exist, or the token can't read it", FILE),
         ),
         (
             thrice(exchange(gt.VIEWS, "", status=403, headers={"X-RateLimit-Remaining": "0"})),
-            Finding("warn", f"{REPO}: could not fetch its traffic: HTTP 403, rate limited"),
+            Finding("warn", f"{REPO}: could not fetch its traffic: HTTP 403, rate limited", FILE),
         ),
-        (thrice(exchange(gt.VIEWS, "", status=503)), Finding("warn", f"{REPO}: could not fetch its traffic: HTTP 503")),
-        (thrice(failed(gt.VIEWS)), Finding("warn", f"{REPO}: could not fetch its traffic: HTTP 0")),
+        (
+            thrice(exchange(gt.VIEWS, "", status=503)),
+            Finding("warn", f"{REPO}: could not fetch its traffic: HTTP 503", FILE),
+        ),
+        (thrice(failed(gt.VIEWS)), Finding("warn", f"{REPO}: could not fetch its traffic: HTTP 0", FILE)),
     ],
     ids=["no push access", "not found", "rejected", "rate limited", "unavailable", "no connection"],
 )
@@ -636,10 +641,11 @@ def test_check_reports_api_trouble_as_a_finding_never_a_crash(
 
 
 def test_check_checks_every_entry(tmp_path: Path) -> None:
+    other_file = "github-traffic-other.jsonl"  # the a/other entry's file
     other = f"{GITHUB_API}/repos/a/other/traffic/views"
     findings = check(tmp_path, [*CONFIG, {"repo": "a/other"}], gt.responses()[0], exchange(other, "", status=404))
 
-    assert [f.level for f in findings] == ["ok", "error"]
+    assert [(f.level, f.file) for f in findings] == [("ok", FILE), ("error", other_file)]
 
 
 # --- the summary ---

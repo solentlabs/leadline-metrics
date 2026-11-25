@@ -57,24 +57,26 @@ def retry(ctx: Context, cfg: Any) -> None:
 
 
 def check(ctx: Context, cfg: Any) -> list[Finding]:
-    """Whether PyPI has each package; writes nothing, never raises for the API, and never asks pypistats.
+    """Whether PyPI has each package, each finding about its file; writes nothing, never raises for the API, and
+    never asks pypistats.
 
     It asks for the metadata collection asks for, so a run reuses that answer.
     """
     findings = []
     for package in cfg["packages"]:
+        file = spec.file_name(cfg, package)
         try:
             metadata = _metadata(read_json("metadata", ctx.http.request(_project_url(package))))
         except HttpError as e:
             if e.unfixable:
                 message = f"HTTP {e.code} from PyPI: the package doesn't exist, or PyPI refuses it"
-                findings.append(Finding("error", f"{package}: {message}"))
+                findings.append(Finding("error", f"{package}: {message}", file))
             else:
-                findings.append(Finding("warn", f"{package}: could not read PyPI: HTTP {e.code}"))
+                findings.append(Finding("warn", f"{package}: could not read PyPI: HTTP {e.code}", file))
         except UnusableError as e:
-            findings.append(Finding("warn", f"{package}: could not read PyPI: {e}"))
+            findings.append(Finding("warn", f"{package}: could not read PyPI: {e}", file))
         else:
-            findings.append(Finding("ok", f"{package}: PyPI has the package, at version {metadata.version}"))
+            findings.append(Finding("ok", f"{package}: PyPI has the package, at version {metadata.version}", file))
     return findings
 
 

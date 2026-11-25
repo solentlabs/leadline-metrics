@@ -301,7 +301,7 @@ def probe(body: Any, status: int = 200) -> Any:
 def test_check_finds_a_worker_with_invocations(tmp_path: Path) -> None:
     found = check(tmp_path, probe(workers_metrics([workers_day(cw.day(3), 5)])))
 
-    assert found == [Finding("ok", "example-worker: 5 invocations in 7 days")]
+    assert found == [Finding("ok", "example-worker: 5 invocations in 7 days", FILE)]
 
 
 @pytest.mark.parametrize(
@@ -309,13 +309,14 @@ def test_check_finds_a_worker_with_invocations(tmp_path: Path) -> None:
     [
         (
             probe(workers_metrics()),
-            Finding("warn", "example-worker: no invocations in 7 days; is it the Worker's script name?"),
+            Finding("warn", "example-worker: no invocations in 7 days; is it the Worker's script name?", FILE),
         ),
         (
             probe({"data": None, "errors": [{"message": "not authorized for this account"}]}),
             Finding(
                 "error",
                 "example-worker: the token cannot read the account's Workers metrics: not authorized for this account",
+                FILE,
             ),
         ),
         (
@@ -323,14 +324,18 @@ def test_check_finds_a_worker_with_invocations(tmp_path: Path) -> None:
             Finding(
                 "error",
                 "example-worker: the token cannot read the account's Workers metrics: account filter matched nothing",
+                FILE,
             ),
         ),
-        (probe("", status=403), Finding("error", "example-worker: could not query the Workers metrics: HTTP 403")),
-        (probe("", status=502), Finding("warn", "example-worker: could not query the Workers metrics: HTTP 502")),
-        (probe("not json"), Finding("warn", "example-worker: could not read the Workers metrics answer")),
+        (
+            probe("", status=403),
+            Finding("error", "example-worker: could not query the Workers metrics: HTTP 403", FILE),
+        ),
+        (probe("", status=502), Finding("warn", "example-worker: could not query the Workers metrics: HTTP 502", FILE)),
+        (probe("not json"), Finding("warn", "example-worker: could not read the Workers metrics answer", FILE)),
         (
             probe(workers_metrics([NOT_A_GROUP])),
-            Finding("warn", "example-worker: could not read the Workers metrics answer"),
+            Finding("warn", "example-worker: could not read the Workers metrics answer", FILE),
         ),
     ],
     ids=["no invocations", "not authorized", "no such account", "rejected", "unavailable", "not json", "unreadable"],

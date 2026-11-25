@@ -28,31 +28,32 @@ def collect(ctx: Context, cfg: Any) -> None:
 
 
 def check(ctx: Context, cfg: Any) -> list[Finding]:
-    """Whether each entry's forum answers and each of its topics exists; writes nothing, never raises for the API.
+    """Whether each entry's forum answers and each of its topics exists, each finding about its entry's file;
+    writes nothing, never raises for the API.
 
     It asks for each topic, as collection does, so a run reuses those answers. A forum that doesn't
     answer at all is one finding, and its other topics aren't asked for.
     """
     findings = []
     for entry in cfg:
-        base_url = entry["base_url"]
+        base_url, file = entry["base_url"], spec.file_name(entry)
         for topic in entry["topics"]:
             which = f"topic {topic['id']} ({topic['label']})"
             try:
                 _read(ctx, base_url, topic["id"])
             except HttpError as e:
                 if e.code == 0:
-                    findings.append(Finding("warn", f"{base_url}: the forum did not answer: HTTP 0"))
+                    findings.append(Finding("warn", f"{base_url}: the forum did not answer: HTTP 0", file))
                     break
                 if e.code == 404:
-                    findings.append(Finding("warn", f"{base_url}: no {which}: HTTP 404"))
+                    findings.append(Finding("warn", f"{base_url}: no {which}: HTTP 404", file))
                 else:
                     level = "error" if e.unfixable else "warn"
-                    findings.append(Finding(level, f"{base_url}: could not read {which}: HTTP {e.code}"))
+                    findings.append(Finding(level, f"{base_url}: could not read {which}: HTTP {e.code}", file))
             except UnusableError as e:
-                findings.append(Finding("warn", f"{base_url}: could not read {which}: {e}"))
+                findings.append(Finding("warn", f"{base_url}: could not read {which}: {e}", file))
             else:
-                findings.append(Finding("ok", f"{base_url}: {which} exists"))
+                findings.append(Finding("ok", f"{base_url}: {which} exists", file))
     return findings
 
 

@@ -55,7 +55,8 @@ def collect(ctx: Context, cfg: Any) -> None:
 
 
 def check(ctx: Context, cfg: Any) -> list[Finding]:
-    """Whether the token can read each zone's analytics; writes nothing, never raises for the API.
+    """Whether the token can read each zone's analytics, each finding about its entry's file; writes nothing, never
+    raises for the API.
 
     A token without Zone > Analytics > Read, or one for another account, reads every night as an error; a zone tag
     the token can't see reads as a zone that matched nothing.
@@ -63,21 +64,21 @@ def check(ctx: Context, cfg: Any) -> list[Finding]:
     day = ctx.date - timedelta(days=1)
     findings = []
     for entry in cfg:
-        label, zone = entry["label"], entry["zone"]
+        label, zone, file = entry["label"], entry["zone"], spec.file_name(entry)
         try:
             data = json.loads(_post(ctx, spec.probe_query(zone, day), attempts=1).body.decode("utf-8", "replace"))
             _zone(data)
         except HttpError as e:
             level = "error" if e.unfixable else "warn"
-            findings.append(Finding(level, f"{label}: could not query the zone's analytics: HTTP {e.code}"))
+            findings.append(Finding(level, f"{label}: could not query the zone's analytics: HTTP {e.code}", file))
         except _FailureRowError as e:
             findings.append(
-                Finding("error", f"{label}: the token cannot read the zone's analytics: {e.fields['reason']}")
+                Finding("error", f"{label}: the token cannot read the zone's analytics: {e.fields['reason']}", file)
             )
         except (ValueError, _UnreadableError):
-            findings.append(Finding("warn", f"{label}: could not read the zone's analytics answer"))
+            findings.append(Finding("warn", f"{label}: could not read the zone's analytics answer", file))
         else:
-            findings.append(Finding("ok", f"{label}: the token can read the zone's analytics"))
+            findings.append(Finding("ok", f"{label}: the token can read the zone's analytics", file))
     return findings
 
 

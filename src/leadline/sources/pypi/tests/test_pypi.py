@@ -613,7 +613,7 @@ def check(tmp_path: Path, *responses: Any) -> list[Finding]:
 def test_check_finds_the_package_on_pypi(tmp_path: Path) -> None:
     findings = check(tmp_path, sc.project(PACKAGE, "2026-05-01"))
 
-    assert findings == [Finding("ok", f"{PACKAGE}: PyPI has the package, at version 0.2.0")]
+    assert findings == [Finding("ok", f"{PACKAGE}: PyPI has the package, at version 0.2.0", FILE)]
 
 
 @pytest.mark.parametrize(
@@ -621,24 +621,24 @@ def test_check_finds_the_package_on_pypi(tmp_path: Path) -> None:
     [
         (
             [exchange(sc.project_url(PACKAGE), '{"message": "Not Found"}', status=404)],
-            Finding("error", f"{PACKAGE}: HTTP 404 from PyPI: the package doesn't exist, or PyPI refuses it"),
+            Finding("error", f"{PACKAGE}: HTTP 404 from PyPI: the package doesn't exist, or PyPI refuses it", FILE),
         ),
         (
             [exchange(sc.project_url(PACKAGE), "", status=403)],
-            Finding("error", f"{PACKAGE}: HTTP 403 from PyPI: the package doesn't exist, or PyPI refuses it"),
+            Finding("error", f"{PACKAGE}: HTTP 403 from PyPI: the package doesn't exist, or PyPI refuses it", FILE),
         ),
         (
             thrice(exchange(sc.project_url(PACKAGE), "", status=429)),
-            Finding("warn", f"{PACKAGE}: could not read PyPI: HTTP 429"),
+            Finding("warn", f"{PACKAGE}: could not read PyPI: HTTP 429", FILE),
         ),
-        (thrice(failed(sc.project_url(PACKAGE))), Finding("warn", f"{PACKAGE}: could not read PyPI: HTTP 0")),
+        (thrice(failed(sc.project_url(PACKAGE))), Finding("warn", f"{PACKAGE}: could not read PyPI: HTTP 0", FILE)),
         (
             [exchange(sc.project_url(PACKAGE), "<html>maintenance</html>")],
-            Finding("warn", f"{PACKAGE}: could not read PyPI: metadata response was not JSON"),
+            Finding("warn", f"{PACKAGE}: could not read PyPI: metadata response was not JSON", FILE),
         ),
         (
             [exchange(sc.project_url(PACKAGE), [])],
-            Finding("warn", f"{PACKAGE}: could not read PyPI: metadata response had an unexpected shape"),
+            Finding("warn", f"{PACKAGE}: could not read PyPI: metadata response had an unexpected shape", FILE),
         ),
     ],
     ids=["not found", "forbidden", "rate limited", "no connection", "not JSON", "not an object"],

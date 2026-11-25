@@ -54,7 +54,8 @@ def collect(ctx: Context, cfg: Any) -> None:
 
 
 def check(ctx: Context, cfg: Any) -> list[Finding]:
-    """Each entry's integration against the feed, read once; writes nothing, never raises for the API.
+    """Each entry's integration against the feed, read once, each finding about its entry's file; writes nothing,
+    never raises for the API.
 
     The feed lists an integration by its domain. A name it doesn't list reads as no installs every
     night, which looks like a quiet integration rather than a wrong name.
@@ -63,10 +64,12 @@ def check(ctx: Context, cfg: Any) -> list[Finding]:
         feed = ctx.http.get_json(FEED)
     except HttpError as e:
         level = "error" if e.unfixable else "warn"
-        return [Finding(level, f"{entry['integration']}: could not fetch {ANALYTICS}: HTTP {e.code}") for entry in cfg]
+        trouble = f"could not fetch {ANALYTICS}: HTTP {e.code}"
+        return [Finding(level, f"{entry['integration']}: {trouble}", spec.file_name(entry)) for entry in cfg]
     except ValueError:
-        return [Finding("warn", f"{entry['integration']}: could not read {ANALYTICS}: not JSON") for entry in cfg]
-    return [_finding(feed, entry["integration"], ctx.date.isoformat()) for entry in cfg]
+        trouble = f"could not read {ANALYTICS}: not JSON"
+        return [Finding("warn", f"{entry['integration']}: {trouble}", spec.file_name(entry)) for entry in cfg]
+    return [_finding(feed, entry["integration"], ctx.date.isoformat()).about(spec.file_name(entry)) for entry in cfg]
 
 
 def _finding(feed: Any, integration: str, day: str) -> Finding:

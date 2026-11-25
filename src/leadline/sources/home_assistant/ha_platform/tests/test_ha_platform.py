@@ -484,7 +484,7 @@ def test_check_finds_every_field_the_source_reads(tmp_path: Path) -> None:
     body = ha_platform_builder(random.Random(4), active=500, reports_integrations=400, countries={"AA": 3})
 
     assert check(tmp_path, exchange(HA_PLATFORM_URL, body)) == [
-        Finding("ok", f"{FEED} answer with every field the source reads")
+        Finding("ok", f"{FEED} answer with every field the source reads", FILE)
     ]
 
 
@@ -497,6 +497,7 @@ def test_check_names_the_fields_the_answer_lacks(tmp_path: Path) -> None:
             "error",
             f"{FEED} lack reports_integrations, reports_addons, reports_statistics, installation_types, "
             "which every row then reads as 0 or null",
+            FILE,
         )
     ]
 
@@ -504,11 +505,14 @@ def test_check_names_the_fields_the_answer_lacks(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("response", "finding"),
     [
-        (exchange(HA_PLATFORM_URL, "", status=503), Finding("warn", f"could not fetch {FEED}: HTTP 503")),
-        (failed(HA_PLATFORM_URL), Finding("warn", f"could not fetch {FEED}: HTTP 0")),
-        (exchange(HA_PLATFORM_URL, "", status=404), Finding("error", f"could not fetch {FEED}: HTTP 404")),
-        (exchange(HA_PLATFORM_URL, "<html>"), Finding("warn", f"could not read {FEED}: not JSON")),
-        (exchange(HA_PLATFORM_URL, {"current": None}), Finding("warn", f"could not read {FEED}: unexpected answer")),
+        (exchange(HA_PLATFORM_URL, "", status=503), Finding("warn", f"could not fetch {FEED}: HTTP 503", FILE)),
+        (failed(HA_PLATFORM_URL), Finding("warn", f"could not fetch {FEED}: HTTP 0", FILE)),
+        (exchange(HA_PLATFORM_URL, "", status=404), Finding("error", f"could not fetch {FEED}: HTTP 404", FILE)),
+        (exchange(HA_PLATFORM_URL, "<html>"), Finding("warn", f"could not read {FEED}: not JSON", FILE)),
+        (
+            exchange(HA_PLATFORM_URL, {"current": None}),
+            Finding("warn", f"could not read {FEED}: unexpected answer", FILE),
+        ),
     ],
     ids=["unavailable", "no connection", "gone", "not JSON", "no current"],
 )

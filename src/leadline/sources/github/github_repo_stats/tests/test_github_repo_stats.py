@@ -477,8 +477,8 @@ def check(tmp_path: Path, cfg: Any, *responses: Any) -> list[Finding]:
 
 def test_check_finds_the_repo_and_that_the_token_can_read_its_traffic(tmp_path: Path) -> None:
     assert check(tmp_path, CONFIG, REPOSITORY, VIEWS) == [
-        Finding("ok", f"{REPO}: the repo exists"),
-        Finding("ok", f"{REPO}: the token can read its traffic"),
+        Finding("ok", f"{REPO}: the repo exists", FILE),
+        Finding("ok", f"{REPO}: the token can read its traffic", FILE),
     ]
 
 
@@ -487,24 +487,24 @@ def test_check_finds_the_repo_and_that_the_token_can_read_its_traffic(tmp_path: 
     [
         (
             [exchange(grs.REPO_URL, '{"message":"Not Found"}', status=404)],
-            [Finding("error", f"{REPO}: HTTP 404: the repo doesn't exist, or the token can't read it")],
+            [Finding("error", f"{REPO}: HTTP 404: the repo doesn't exist, or the token can't read it", FILE)],
         ),
         (
             thrice(exchange(grs.REPO_URL, "", status=403, headers={"Retry-After": "60"})),
-            [Finding("warn", f"{REPO}: could not fetch the repo: HTTP 403, rate limited")],
+            [Finding("warn", f"{REPO}: could not fetch the repo: HTTP 403, rate limited", FILE)],
         ),
         (
             [REPOSITORY, exchange(grs.VIEWS, '{"message":"Must have push access to repository"}', status=403)],
             [
-                Finding("ok", f"{REPO}: the repo exists"),
-                Finding("error", f"{REPO}: HTTP 403: the token can't read its traffic, which needs push access"),
+                Finding("ok", f"{REPO}: the repo exists", FILE),
+                Finding("error", f"{REPO}: HTTP 403: the token can't read its traffic, which needs push access", FILE),
             ],
         ),
         (
             [REPOSITORY, *thrice(failed(grs.VIEWS))],
             [
-                Finding("ok", f"{REPO}: the repo exists"),
-                Finding("warn", f"{REPO}: could not fetch its traffic: HTTP 0"),
+                Finding("ok", f"{REPO}: the repo exists", FILE),
+                Finding("warn", f"{REPO}: could not fetch its traffic: HTTP 0", FILE),
             ],
         ),
     ],
@@ -517,10 +517,11 @@ def test_check_reports_api_trouble_as_a_finding_never_a_crash(
 
 
 def test_check_checks_every_entry(tmp_path: Path) -> None:
+    other_file = "github-repo-stats-other.jsonl"  # the a/other entry's file
     other = f"{GITHUB_API}/repos/a/other"
     findings = check(tmp_path, [*CONFIG, {"repo": "a/other"}], REPOSITORY, VIEWS, exchange(other, "", status=404))
 
-    assert [f.level for f in findings] == ["ok", "ok", "error"]
+    assert [(f.level, f.file) for f in findings] == [("ok", FILE), ("ok", FILE), ("error", other_file)]
 
 
 # --- the summary ---

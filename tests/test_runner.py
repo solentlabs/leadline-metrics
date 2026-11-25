@@ -400,7 +400,9 @@ def test_checks_run_after_collection_and_the_retry_pass_for_each_source_not_skip
     """ADR: check() runs on every run, after collection. A skipped source has no credentials to check with."""
     monkeypatch.delenv("TOKEN_UNSET", raising=False)
     events: list[str] = []
-    a = RetryingSource("a", events=events, findings=[Finding("ok", "the repo exists"), Finding("warn", "slow")])
+    a = RetryingSource(
+        "a", events=events, findings=[Finding("ok", "the repo exists", "a.jsonl"), Finding("warn", "slow")]
+    )
     b = FakeSource("b", events=events, findings=[Finding("error", "no such site")])
     skipped = FakeSource("skipped", ENV=("TOKEN_UNSET",), events=events)
 
@@ -411,9 +413,9 @@ def test_checks_run_after_collection_and_the_retry_pass_for_each_source_not_skip
     assert [call[1] for call in b.checked + a.checked] == [{"x": 1}, [2]]
     assert b.checked[0][0] is b.calls[0][0]  # the run's one context
     assert health_row(tmp_path)["checks"] == [
-        {"source": "b", "level": "error", "message": "no such site"},
-        {"source": "a", "level": "ok", "message": "the repo exists"},
-        {"source": "a", "level": "warn", "message": "slow"},
+        {"source": "b", "level": "error", "message": "no such site", "file": None},
+        {"source": "a", "level": "ok", "message": "the repo exists", "file": "a.jsonl"},
+        {"source": "a", "level": "warn", "message": "slow", "file": None},
     ]
     log = log_text(tmp_path)
     assert "ERROR: check b: no such site" in log
@@ -431,7 +433,7 @@ def test_a_check_that_crashes_is_critical_and_the_next_check_runs(tmp_path: Path
     assert len(after.checked) == 1
     row = health_row(tmp_path)
     assert row["critical"] == [{"source": "bad", "file": None, "reason": "crashed in its check: RuntimeError: boom"}]
-    assert row["checks"] == [{"source": "after", "level": "ok", "message": "fine"}]
+    assert row["checks"] == [{"source": "after", "level": "ok", "message": "fine", "file": None}]
     assert "ERROR: bad crashed in its check: RuntimeError: boom" in log_text(tmp_path)
 
 

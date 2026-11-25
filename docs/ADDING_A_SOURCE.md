@@ -198,8 +198,8 @@ def test_rows_match_the_scripts(scenario: Scenario, tmp_path: Path) -> None:
   exit status, the row files, the waits, the log and the context, with
   what the source reported (`corrections`, `critical`).
 - `check` is tested on its own: `port.context` with `http.SavedResponses`
-  and `port.credentials`, one test per finding, and API trouble as a
-  finding.
+  and `port.credentials`, one test per finding, each naming its entry's
+  file, and API trouble as a finding.
 
 ## 5. Write the package
 
@@ -227,7 +227,8 @@ A GitHub source uses `github` (`from leadline.sources.github import api as githu
 `github.graphql` for a GraphQL query (its `GraphqlError` handed to
 `ctx.record_unfixable` like an `HttpError`), and `github.check_repo`,
 `github.check_traffic`, `github.check_access`, `github.check_query` or
-`github.failed_finding` in `check`. Its `spec.py` takes `repo_problems` (for
+`github.failed_finding` in `check`, each finding marked with its entry's
+file (`.about(spec.file_name(entry))`). Its `spec.py` takes `repo_problems` (for
 `validate`) and `file_fields` (for `config.file_name`) from
 `leadline.sources.github.spec`, which imports no request code.
 `github_releases` is the shortest example, and `github_discussions` the

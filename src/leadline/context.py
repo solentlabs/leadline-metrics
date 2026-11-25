@@ -14,7 +14,7 @@ import logging
 import re
 import sys
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterator, Mapping, Protocol
@@ -38,14 +38,23 @@ LEVELS = ("ok", "warn", "error")
 
 @dataclass(frozen=True)
 class Finding:
-    """One thing `check()` found about a source's config against the live API."""
+    """One thing `check()` found about a source's config against the live API.
+
+    `file` is the file of the entry it concerns, None when it concerns the source as a whole; a page of
+    trends shows a finding with a file only when it shows that file (docs/TRENDS.md).
+    """
 
     level: str  # one of LEVELS
     message: str
+    file: str | None = None
 
     def __post_init__(self) -> None:
         if self.level not in LEVELS:
             raise ValueError(f"level must be ok, warn or error, not {self.level!r}")
+
+    def about(self, file: str) -> Finding:
+        """This finding, as one concerning `file`, an entry's: how a check() names the entry's file."""
+        return replace(self, file=file)
 
 
 @dataclass(frozen=True)

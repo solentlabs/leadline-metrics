@@ -1088,8 +1088,8 @@ REPOSITORY = exchange(REPO_URL, {"full_name": REPO})
 
 def test_check_finds_the_repo_and_that_the_token_can_read_its_issues(tmp_path: Path) -> None:
     assert check(tmp_path, CONFIG, REPOSITORY, exchange(ISSUES, [])) == [
-        Finding("ok", f"{REPO}: the repo exists"),
-        Finding("ok", f"{REPO}: the token can read its issues"),
+        Finding("ok", f"{REPO}: the repo exists", FILE),
+        Finding("ok", f"{REPO}: the token can read its issues", FILE),
     ]
 
 
@@ -1098,21 +1098,24 @@ def test_check_finds_the_repo_and_that_the_token_can_read_its_issues(tmp_path: P
     [
         (
             [exchange(REPO_URL, '{"message":"Not Found"}', status=404)],
-            [Finding("error", f"{REPO}: HTTP 404: the repo doesn't exist, or the token can't read it")],
+            [Finding("error", f"{REPO}: HTTP 404: the repo doesn't exist, or the token can't read it", FILE)],
         ),
         (
             thrice(exchange(REPO_URL, "", status=403, headers={"Retry-After": "60"})),
-            [Finding("warn", f"{REPO}: could not fetch the repo: HTTP 403, rate limited")],
+            [Finding("warn", f"{REPO}: could not fetch the repo: HTTP 403, rate limited", FILE)],
         ),
         (
             [REPOSITORY, failed(ISSUES)],
-            [Finding("ok", f"{REPO}: the repo exists"), Finding("warn", f"{REPO}: could not fetch its issues: HTTP 0")],
+            [
+                Finding("ok", f"{REPO}: the repo exists", FILE),
+                Finding("warn", f"{REPO}: could not fetch its issues: HTTP 0", FILE),
+            ],
         ),
         (
             [REPOSITORY, exchange(ISSUES, "", status=403)],
             [
-                Finding("ok", f"{REPO}: the repo exists"),
-                Finding("error", f"{REPO}: HTTP 403: the repo doesn't exist, or the token can't read it"),
+                Finding("ok", f"{REPO}: the repo exists", FILE),
+                Finding("error", f"{REPO}: HTTP 403: the repo doesn't exist, or the token can't read it", FILE),
             ],
         ),
     ],
@@ -1125,16 +1128,17 @@ def test_check_reports_api_trouble_as_a_finding_never_a_crash(
 
 
 def test_check_checks_every_entry(tmp_path: Path) -> None:
+    other_file = "github-contributor-locations-other.jsonl"  # the a/other entry's file
     other = f"{GITHUB_API}/repos/a/other"
     cfg = [*CONFIG, {"repo": "a/other", "regions": gcl.REGIONS}]
 
     findings = check(tmp_path, cfg, REPOSITORY, exchange(ISSUES, []), exchange(other, "", status=404))
 
-    assert [f.level for f in findings] == ["ok", "ok", "error"]
+    assert [(f.level, f.file) for f in findings] == [("ok", FILE), ("ok", FILE), ("error", other_file)]
 
 
 ANSWERS = "regions_from_issue_form_answers"
-UNMATCHED = Finding("warn", f"{REPO}: answers no region rule matches: Example Fibre (2)")
+UNMATCHED = Finding("warn", f"{REPO}: answers no region rule matches: Example Fibre (2)", FILE)
 
 
 def test_check_names_the_answers_no_rule_matches_and_the_rules_a_profile_disagrees_with(tmp_path: Path) -> None:
@@ -1149,10 +1153,10 @@ def test_check_names_the_answers_no_rule_matches_and_the_rules_a_profile_disagre
         findings = source.check(ctx, CONFIG)
 
     assert findings == [
-        Finding("ok", f"{REPO}: the repo exists"),
-        Finding("ok", f"{REPO}: the token can read its issues"),
+        Finding("ok", f"{REPO}: the repo exists", FILE),
+        Finding("ok", f"{REPO}: the token can read its issues", FILE),
         UNMATCHED,
-        Finding("warn", f"{REPO}: rule 'ziggo' gives NL for an answer where a profile says DE (1)"),
+        Finding("warn", f"{REPO}: rule 'ziggo' gives NL for an answer where a profile says DE (1)", FILE),
     ]
     assert transport.unmatched == transport.never_served() == []
     assert (tmp_path / FILE).read_text(encoding="utf-8") == stored  # a check writes no rows
@@ -1172,9 +1176,9 @@ def test_check_names_each_modem_rule_that_disagrees_with_an_answer(tmp_path: Pat
         findings = source.check(ctx, CONFIG)
 
     assert findings[2:] == [
-        Finding("warn", f"{REPO}: answers no region rule matches: Exodus (1)"),  # the modem places the other
-        Finding("warn", f"{REPO}: rule 'ex' gives UK for an answer where a profile says DE (1)"),
-        Finding("warn", f"{REPO}: model 'mx4236' gives NL where an answer says UK (1)"),
+        Finding("warn", f"{REPO}: answers no region rule matches: Exodus (1)", FILE),  # the modem places the other
+        Finding("warn", f"{REPO}: rule 'ex' gives UK for an answer where a profile says DE (1)", FILE),
+        Finding("warn", f"{REPO}: model 'mx4236' gives NL where an answer says UK (1)", FILE),
     ]
 
 
@@ -1183,8 +1187,8 @@ def test_check_counts_people_not_issues(tmp_path: Path) -> None:
     again = [gcl.opened(n, "whiskey-user", body=body) for n, body in enumerate([disagreeing, unmatched] * 2, 1)]
 
     assert check(tmp_path, CONFIG, REPOSITORY, *issues(*again))[2:] == [
-        Finding("warn", f"{REPO}: answers no region rule matches: Exodus (1)"),
-        Finding("warn", f"{REPO}: model 'mx4236' gives NL where an answer says UK (1)"),
+        Finding("warn", f"{REPO}: answers no region rule matches: Exodus (1)", FILE),
+        Finding("warn", f"{REPO}: model 'mx4236' gives NL where an answer says UK (1)", FILE),
     ]
 
 

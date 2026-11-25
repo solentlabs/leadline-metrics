@@ -189,9 +189,10 @@ def collect(ctx: Context, config: Config, names: Sequence[str], by_name: Mapping
     return [name for name in names if name not in skipped]
 
 
-def _checks(ctx: Context, config: Config, by_name: Mapping[str, Source], names: Sequence[str]) -> list[dict[str, str]]:
-    """Each source's check() in turn, isolated; its findings, each with its source's name, logged."""
-    found: list[dict[str, str]] = []
+def _checks(ctx: Context, config: Config, by_name: Mapping[str, Source], names: Sequence[str]) -> list[dict[str, Any]]:
+    """Each source's check() in turn, isolated; its findings, each with its source's name and its file (None for
+    no one file), logged."""
+    found: list[dict[str, Any]] = []
     for name in names:
 
         def check(ctx: Context, cfg: Any, name: str = name) -> None:

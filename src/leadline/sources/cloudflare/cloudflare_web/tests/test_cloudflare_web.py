@@ -701,6 +701,7 @@ def test_a_failing_entry_does_not_stop_the_next(tmp_path: Path) -> None:
 
 SITES_URL = f"{CLOUDFLARE_API}/accounts/{scenarios.CREDENTIALS['CLOUDFLARE_ACCOUNT_ID']}/rum/site_info/list"
 TAG, TOKEN = "0123456789abcdef0123456789abcdef", "fedcba9876543210fedcba9876543210"
+EXAMPLE = "cloudflare-web-example.jsonl"  # the file of the entry labeled "example"
 
 
 def check(tmp_path: Path, cfg: Any, *responses: Any) -> list[Finding]:
@@ -724,14 +725,18 @@ def page(n: int, sites: list[Any], total: int) -> Any:
 def test_check_finds_the_site_tag(tmp_path: Path) -> None:
     findings = check(tmp_path, [entry(TAG)], page(1, [rum_site("a" * 32, "b" * 32), rum_site(TAG, TOKEN)], 2))
 
-    assert findings == [Finding("ok", f"example: site tag {TAG} is a Web Analytics site in the account")]
+    assert findings == [Finding("ok", f"example: site tag {TAG} is a Web Analytics site in the account", EXAMPLE)]
 
 
 def test_check_tells_a_beacon_token_from_the_site_tag(tmp_path: Path) -> None:
     findings = check(tmp_path, [entry(TOKEN)], page(1, [rum_site(TAG, TOKEN)], 1))
 
     assert findings == [
-        Finding("error", f"example: the configured site_tag {TOKEN} is the site's beacon token; its site tag is {TAG}")
+        Finding(
+            "error",
+            f"example: the configured site_tag {TOKEN} is the site's beacon token; its site tag is {TAG}",
+            EXAMPLE,
+        )
     ]
 
 
@@ -743,6 +748,7 @@ def test_check_finds_an_unknown_site_tag(tmp_path: Path) -> None:
             "error",
             "example: unknown site tag nope: "
             "no Web Analytics site in the account has it as its site tag or beacon token",
+            EXAMPLE,
         )
     ]
 
@@ -755,7 +761,10 @@ def test_check_reads_every_page_of_sites(tmp_path: Path) -> None:
         page(2, [rum_site(TAG, TOKEN)], 2),
     )
 
-    assert [f.level for f in findings] == ["ok", "error"]
+    assert [(f.level, f.file) for f in findings] == [
+        ("ok", "cloudflare-web-a.jsonl"),
+        ("error", "cloudflare-web-b.jsonl"),
+    ]
 
 
 @pytest.mark.parametrize(
@@ -763,19 +772,19 @@ def test_check_reads_every_page_of_sites(tmp_path: Path) -> None:
     [
         (
             thrice(exchange(f"{SITES_URL}?page=1", "", status=429)),
-            Finding("warn", "example: could not list the account's Web Analytics sites: HTTP 429"),
+            Finding("warn", "example: could not list the account's Web Analytics sites: HTTP 429", EXAMPLE),
         ),
         (
             thrice(failed(f"{SITES_URL}?page=1")),
-            Finding("warn", "example: could not list the account's Web Analytics sites: HTTP 0"),
+            Finding("warn", "example: could not list the account's Web Analytics sites: HTTP 0", EXAMPLE),
         ),
         (
             [exchange(f"{SITES_URL}?page=1", "", status=403)],
-            Finding("error", "example: could not list the account's Web Analytics sites: HTTP 403"),
+            Finding("error", "example: could not list the account's Web Analytics sites: HTTP 403", EXAMPLE),
         ),
         (
             [exchange(f"{SITES_URL}?page=1", "<html>")],
-            Finding("warn", "example: could not read the account's Web Analytics sites: not JSON"),
+            Finding("warn", "example: could not read the account's Web Analytics sites: not JSON", EXAMPLE),
         ),
         (
             [
@@ -784,7 +793,7 @@ def test_check_reads_every_page_of_sites(tmp_path: Path) -> None:
                     {"success": False, "errors": [{"code": 10000, "message": "Authentication error"}], "result": None},
                 )
             ],
-            Finding("warn", "example: could not read the account's Web Analytics sites: unexpected answer"),
+            Finding("warn", "example: could not read the account's Web Analytics sites: unexpected answer", EXAMPLE),
         ),
     ],
     ids=["rate limited", "no connection", "credentials rejected", "not JSON", "an unsuccessful answer"],

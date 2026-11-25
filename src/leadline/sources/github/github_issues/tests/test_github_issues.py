@@ -1495,8 +1495,8 @@ def check(tmp_path: Path, cfg: Any, *responses: Any, http: Http | None = None) -
 REPOSITORY = exchange(gi.REPO_URL, github_repo(REPO))
 OPEN_PAGE = exchange(OPEN_URL, [])
 WITH_QUEUE = [{**ENTRY, "queue": gi.QUEUE}]
-EXISTS = Finding("ok", f"{REPO}: the repo exists")
-READABLE = Finding("ok", f"{REPO}: the token can read its issues")
+EXISTS = Finding("ok", f"{REPO}: the repo exists", FILE)
+READABLE = Finding("ok", f"{REPO}: the token can read its issues", FILE)
 USER_SENT = graphql_body("query($m:String!){user(login:$m){login}}", {"m": gi.MAINTAINER})
 NO_SUCH_USER = {"type": "NOT_FOUND", "path": ["user"], "message": "Could not resolve to a User"}
 
@@ -1506,7 +1506,7 @@ def user_answer(body: Any, status: int = 200) -> Any:
 
 
 USER = user_answer({"data": {"user": {"login": gi.MAINTAINER}}})
-MAINTAINER_EXISTS = Finding("ok", f'{REPO}: the maintainer login "{gi.MAINTAINER}" exists')
+MAINTAINER_EXISTS = Finding("ok", f'{REPO}: the maintainer login "{gi.MAINTAINER}" exists', FILE)
 
 
 def test_check_finds_the_repo_its_issues_and_the_maintainers_login(tmp_path: Path) -> None:
@@ -1525,7 +1525,7 @@ def test_check_finds_a_missing_maintainer_login(tmp_path: Path) -> None:
 
     misread = "every issue and pull request would count as the community's"
     message = f'{REPO}: the maintainer login "{gi.MAINTAINER}" doesn\'t exist, so {misread}'
-    assert findings == [EXISTS, READABLE, Finding("error", message)]
+    assert findings == [EXISTS, READABLE, Finding("error", message, FILE)]
 
 
 def test_check_still_finds_the_label_when_the_login_cant_be_asked_for(tmp_path: Path) -> None:
@@ -1533,8 +1533,13 @@ def test_check_still_finds_the_label_when_the_login_cant_be_asked_for(tmp_path: 
 
     findings = check(tmp_path, WITH_QUEUE, REPOSITORY, OPEN_PAGE, *thrice(user_answer("", status=502)), label)
 
-    unavailable = Finding("warn", f"{REPO}: could not fetch the maintainer's login: HTTP 502")
-    assert findings == [EXISTS, READABLE, unavailable, Finding("ok", f'{REPO}: the queue\'s label "{gi.LABEL}" exists')]
+    unavailable = Finding("warn", f"{REPO}: could not fetch the maintainer's login: HTTP 502", FILE)
+    assert findings == [
+        EXISTS,
+        READABLE,
+        unavailable,
+        Finding("ok", f'{REPO}: the queue\'s label "{gi.LABEL}" exists', FILE),
+    ]
 
 
 def test_check_finds_the_queues_label(tmp_path: Path) -> None:
@@ -1546,7 +1551,7 @@ def test_check_finds_the_queues_label(tmp_path: Path) -> None:
         EXISTS,
         READABLE,
         MAINTAINER_EXISTS,
-        Finding("ok", f'{REPO}: the queue\'s label "{gi.LABEL}" exists'),
+        Finding("ok", f'{REPO}: the queue\'s label "{gi.LABEL}" exists', FILE),
     ]
 
 
@@ -1556,7 +1561,7 @@ def test_check_warns_when_the_repo_has_no_such_label(tmp_path: Path) -> None:
     findings = check(tmp_path, WITH_QUEUE, REPOSITORY, OPEN_PAGE, USER, missing)
 
     message = f'{REPO}: the repo has no label "{gi.LABEL}", so its queue is always empty'
-    assert findings == [EXISTS, READABLE, MAINTAINER_EXISTS, Finding("warn", message)]
+    assert findings == [EXISTS, READABLE, MAINTAINER_EXISTS, Finding("warn", message, FILE)]
 
 
 @pytest.mark.parametrize(
@@ -1564,20 +1569,20 @@ def test_check_warns_when_the_repo_has_no_such_label(tmp_path: Path) -> None:
     [
         (
             [exchange(gi.REPO_URL, '{"message":"Not Found"}', status=404)],
-            Finding("error", f"{REPO}: HTTP 404: the repo doesn't exist, or the token can't read it"),
+            Finding("error", f"{REPO}: HTTP 404: the repo doesn't exist, or the token can't read it", FILE),
         ),
         (
             thrice(exchange(gi.REPO_URL, "", status=403, headers={"X-RateLimit-Remaining": "0"})),
-            Finding("warn", f"{REPO}: could not fetch the repo: HTTP 403, rate limited"),
+            Finding("warn", f"{REPO}: could not fetch the repo: HTTP 403, rate limited", FILE),
         ),
         (
             [REPOSITORY, exchange(OPEN_URL, "", status=403)],
-            Finding("error", f"{REPO}: HTTP 403: the repo doesn't exist, or the token can't read it"),
+            Finding("error", f"{REPO}: HTTP 403: the repo doesn't exist, or the token can't read it", FILE),
         ),
-        ([REPOSITORY, *thrice(failed(OPEN_URL))], Finding("warn", f"{REPO}: could not fetch its issues: HTTP 0")),
+        ([REPOSITORY, *thrice(failed(OPEN_URL))], Finding("warn", f"{REPO}: could not fetch its issues: HTTP 0", FILE)),
         (
             [REPOSITORY, OPEN_PAGE, USER, *thrice(exchange(LABEL_URL, "", status=503))],
-            Finding("warn", f'{REPO}: could not fetch its label "{gi.LABEL}": HTTP 503'),
+            Finding("warn", f'{REPO}: could not fetch its label "{gi.LABEL}": HTTP 503', FILE),
         ),
     ],
     ids=["no repo", "rate limited", "issues refused", "issues unreachable", "label unreachable"],
@@ -1596,18 +1601,19 @@ def test_check_asks_only_for_the_login_and_the_label_after_a_collection(tmp_path
         source.collect(ctx, WITH_QUEUE)
         findings = source.check(ctx, WITH_QUEUE)
 
-    assert [f.level for f in findings] == ["ok", "ok", "ok", "ok"]
+    assert [(f.level, f.file) for f in findings] == [("ok", FILE)] * 4
     assert transport.unmatched == transport.never_served() == []
 
 
 def test_check_checks_every_entry(tmp_path: Path) -> None:
+    other_file = "github-issues-other.jsonl"  # the a/other entry's file
     other = f"{GITHUB_API}/repos/a/other"
 
     responses = [REPOSITORY, OPEN_PAGE, USER, exchange(other, "", status=404)]
 
     findings = check(tmp_path, [ENTRY, {"repo": "a/other"}], *responses)
 
-    assert [f.level for f in findings] == ["ok", "ok", "ok", "error"]
+    assert [(f.level, f.file) for f in findings] == [("ok", FILE), ("ok", FILE), ("ok", FILE), ("error", other_file)]
 
 
 # --- the summary ---

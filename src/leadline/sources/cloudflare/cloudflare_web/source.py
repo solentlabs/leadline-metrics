@@ -93,7 +93,8 @@ def collect(ctx: Context, cfg: Any) -> None:
 
 
 def check(ctx: Context, cfg: Any) -> list[Finding]:
-    """Each entry's `site_tag` against the account's Web Analytics sites; writes nothing, never raises for the API.
+    """Each entry's `site_tag` against the account's Web Analytics sites, each finding about its entry's file; writes
+    nothing, never raises for the API.
 
     The GraphQL query needs a site's tag. Its beacon token, from the snippet on the site's pages,
     looks the same and matches nothing, so every night would read as zero traffic.
@@ -103,24 +104,24 @@ def check(ctx: Context, cfg: Any) -> list[Finding]:
     except HttpError as e:
         level = "error" if e.unfixable else "warn"
         trouble = f"could not list the account's Web Analytics sites: HTTP {e.code}"
-        return [Finding(level, f"{entry['label']}: {trouble}") for entry in cfg]
+        return [Finding(level, f"{entry['label']}: {trouble}", spec.file_name(entry)) for entry in cfg]
     except _UnreadableError as e:
         trouble = f"could not read the account's Web Analytics sites: {e}"
-        return [Finding("warn", f"{entry['label']}: {trouble}") for entry in cfg]
+        return [Finding("warn", f"{entry['label']}: {trouble}", spec.file_name(entry)) for entry in cfg]
     findings = []
     for entry in cfg:
-        label, given = entry["label"], entry["site_tag"]
+        label, given, file = entry["label"], entry["site_tag"], spec.file_name(entry)
         tagged = [site for site in sites if site.get("site_tag") == given]
         tokened = [site for site in sites if site.get("site_token") == given]
         if tagged:
-            findings.append(Finding("ok", f"{label}: site tag {given} is a Web Analytics site in the account"))
+            findings.append(Finding("ok", f"{label}: site tag {given} is a Web Analytics site in the account", file))
         elif tokened:
             tag = tokened[0].get("site_tag")
             message = f"{label}: the configured site_tag {given} is the site's beacon token; its site tag is {tag}"
-            findings.append(Finding("error", message))
+            findings.append(Finding("error", message, file))
         else:
             unknown = "no Web Analytics site in the account has it as its site tag or beacon token"
-            findings.append(Finding("error", f"{label}: unknown site tag {given}: {unknown}"))
+            findings.append(Finding("error", f"{label}: unknown site tag {given}: {unknown}", file))
     return findings
 
 

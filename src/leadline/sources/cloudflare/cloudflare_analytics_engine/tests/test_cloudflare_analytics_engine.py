@@ -569,8 +569,8 @@ def test_check_finds_events_in_each_dataset(tmp_path: Path) -> None:
     findings = check(tmp_path, cfg, check_query(ae.SCREENS, 2, result(12)), check_query(ae.DIAGNOSTICS, 2, result("3")))
 
     assert findings == [
-        Finding("ok", f"{ae.SCREENS}: the dataset has events in the last 2 days"),
-        Finding("ok", f"{ae.DIAGNOSTICS}: the dataset has events in the last 2 days"),
+        Finding("ok", f"{ae.SCREENS}: the dataset has events in the last 2 days", ae.SCREENS_FILE),
+        Finding("ok", f"{ae.DIAGNOSTICS}: the dataset has events in the last 2 days", ae.DIAGNOSTICS_FILE),
     ]
 
 
@@ -582,7 +582,9 @@ def test_check_finds_events_in_each_dataset(tmp_path: Path) -> None:
 def test_check_warns_of_a_dataset_with_no_events(tmp_path: Path, answer: Any) -> None:
     findings = check(tmp_path, ae.NEW_LAYOUT["totals_a_measure_by_a_dimension"], check_query(ae.SCREENS, 2, answer))
 
-    assert findings == [Finding("warn", f"{ae.SCREENS}: no events in the last 2 days; is the dataset's name right?")]
+    assert findings == [
+        Finding("warn", f"{ae.SCREENS}: no events in the last 2 days; is the dataset's name right?", ae.SCREENS_FILE)
+    ]
 
 
 @pytest.mark.parametrize(
@@ -590,23 +592,25 @@ def test_check_warns_of_a_dataset_with_no_events(tmp_path: Path, answer: Any) ->
     [
         (
             check_query(ae.SCREENS, 2, "slow down", status=429),
-            Finding("warn", f"{ae.SCREENS}: could not query the dataset: HTTP 429"),
+            Finding("warn", f"{ae.SCREENS}: could not query the dataset: HTTP 429", ae.SCREENS_FILE),
         ),
         (
             check_query(ae.SCREENS, 2, "denied", status=403),
-            Finding("error", f"{ae.SCREENS}: could not query the dataset: HTTP 403"),
+            Finding("error", f"{ae.SCREENS}: could not query the dataset: HTTP 403", ae.SCREENS_FILE),
         ),
         (
             check_query(ae.SCREENS, 2, "<html>", status=200),
-            Finding("warn", f"{ae.SCREENS}: could not read the answer: response was not JSON"),
+            Finding("warn", f"{ae.SCREENS}: could not read the answer: response was not JSON", ae.SCREENS_FILE),
         ),
         (
             check_query(ae.SCREENS, 2, "[]", status=200),
-            Finding("warn", f"{ae.SCREENS}: could not read the answer: response had no data array"),
+            Finding("warn", f"{ae.SCREENS}: could not read the answer: response had no data array", ae.SCREENS_FILE),
         ),
         (
             check_query(ae.SCREENS, 2, '{"data": [{"n": "many"}]}', status=200),
-            Finding("warn", f"{ae.SCREENS}: could not read the answer: response had an unexpected shape"),
+            Finding(
+                "warn", f"{ae.SCREENS}: could not read the answer: response had an unexpected shape", ae.SCREENS_FILE
+            ),
         ),
     ],
     ids=["rate limited", "credentials rejected", "not JSON", "not an object", "a count not a number"],
@@ -622,7 +626,7 @@ def test_check_reports_a_failed_connection_as_a_finding(tmp_path: Path) -> None:
         tmp_path, ae.NEW_LAYOUT["totals_a_measure_by_a_dimension"], failed(ae.SQL_URL, method="POST", sent=sent)
     )
 
-    assert findings == [Finding("warn", f"{ae.SCREENS}: could not query the dataset: HTTP 0")]
+    assert findings == [Finding("warn", f"{ae.SCREENS}: could not query the dataset: HTTP 0", ae.SCREENS_FILE)]
 
 
 # --- the summary ---

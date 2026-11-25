@@ -27,8 +27,11 @@ def collect(ctx: Context, cfg: Any) -> None:
 
 
 def check(ctx: Context, cfg: Any) -> list[Finding]:
-    """Whether each entry's token can read the repo's traffic; writes nothing, never raises for the API."""
-    return [github.check_traffic(ctx, entry["repo"]) for entry in cfg]
+    """Whether each entry's token can read the repo's traffic; writes nothing, never raises for the API.
+
+    Each finding is about its entry's file.
+    """
+    return [github.check_traffic(ctx, entry["repo"]).about(spec.file_name(entry)) for entry in cfg]
 
 
 def _totals(kind: str, answer: Any) -> tuple[int, int]:

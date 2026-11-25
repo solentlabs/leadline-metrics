@@ -404,7 +404,7 @@ CHECK_SENT = graphql_body(
     "user(login:$m){login}}",
     {"o": "solentlabs", "n": "example", "m": "example-maintainer"},
 )
-MAINTAINER_EXISTS = Finding("ok", f'{REPO}: the maintainer login "example-maintainer" exists')
+MAINTAINER_EXISTS = Finding("ok", f'{REPO}: the maintainer login "example-maintainer" exists', FILE)
 NO_SUCH_USER = {"type": "NOT_FOUND", "path": ["user"], "message": "Could not resolve to a User"}
 
 
@@ -430,8 +430,8 @@ def test_check_finds_the_repo_and_queries_its_issues(tmp_path: Path) -> None:
     )
 
     assert found == [
-        Finding("ok", f"{REPO}: the repo exists"),
-        Finding("ok", f"{REPO}: the token can query its issues"),
+        Finding("ok", f"{REPO}: the repo exists", FILE),
+        Finding("ok", f"{REPO}: the token can query its issues", FILE),
         MAINTAINER_EXISTS,
     ]
 
@@ -444,13 +444,13 @@ def test_check_finds_a_missing_maintainer_login_in_the_same_query(tmp_path: Path
 
     missing = f'{REPO}: the maintainer login "example-maintainer" doesn\'t exist, so '
     missing += "every issue would count as the community's and never answered"
-    assert found[-1] == Finding("error", missing)
+    assert found[-1] == Finding("error", missing, FILE)
 
 
 def test_check_stops_at_a_missing_repo(tmp_path: Path) -> None:
     found = check(tmp_path, exchange(REPO_URL, "", status=404))
 
-    assert found == [Finding("error", f"{REPO}: HTTP 404: the repo doesn't exist, or the token can't read it")]
+    assert found == [Finding("error", f"{REPO}: HTTP 404: the repo doesn't exist, or the token can't read it", FILE)]
 
 
 @pytest.mark.parametrize(
@@ -458,16 +458,16 @@ def test_check_stops_at_a_missing_repo(tmp_path: Path) -> None:
     [
         (
             query_answer({"data": None, "errors": [{"type": "INSUFFICIENT_SCOPES", "message": "needs repo scope"}]}),
-            Finding("error", f"{REPO}: could not query its issues: needs repo scope"),
+            Finding("error", f"{REPO}: could not query its issues: needs repo scope", FILE),
         ),
         (
             query_answer({"data": None, "errors": [{"type": "RATE_LIMITED", "message": "rate limit exceeded"}]}),
-            Finding("warn", f"{REPO}: could not query its issues: rate limit exceeded"),
+            Finding("warn", f"{REPO}: could not query its issues: rate limit exceeded", FILE),
         ),
-        (query_answer("", status=502), Finding("warn", f"{REPO}: could not fetch its issues: HTTP 502")),
+        (query_answer("", status=502), Finding("warn", f"{REPO}: could not fetch its issues: HTTP 502", FILE)),
         (
             query_answer("<html>"),
-            Finding("warn", f"{REPO}: its issues response was not JSON"),
+            Finding("warn", f"{REPO}: its issues response was not JSON", FILE),
         ),
     ],
     ids=["missing scopes", "rate limited", "unavailable", "not JSON"],

@@ -221,7 +221,11 @@ def test_each_run_has_its_own_http_so_no_answer_outlives_its_run(tmp_path: Path)
 def test_a_finding_is_a_level_and_a_message(level: str) -> None:
     finding = Finding(level, "m")
 
-    assert (finding.level, finding.message) == (level, "m")
+    assert (finding.level, finding.message, finding.file) == (level, "m", None)
+
+
+def test_about_marks_a_finding_with_the_file_it_concerns() -> None:
+    assert Finding("warn", "slow").about("a.jsonl") == Finding("warn", "slow", "a.jsonl")
 
 
 def test_a_finding_refuses_an_unknown_level() -> None:

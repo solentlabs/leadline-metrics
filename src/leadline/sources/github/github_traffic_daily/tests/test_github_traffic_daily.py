@@ -403,7 +403,9 @@ def check(tmp_path: Path, cfg: Any, *responses: Any) -> list[Finding]:
 
 
 def test_check_finds_the_token_can_read_the_traffic(tmp_path: Path) -> None:
-    assert check(tmp_path, CONFIG, gd.responses()[0]) == [Finding("ok", f"{REPO}: the token can read its traffic")]
+    assert check(tmp_path, CONFIG, gd.responses()[0]) == [
+        Finding("ok", f"{REPO}: the token can read its traffic", FILE)
+    ]
 
 
 @pytest.mark.parametrize(
@@ -411,17 +413,17 @@ def test_check_finds_the_token_can_read_the_traffic(tmp_path: Path) -> None:
     [
         (
             [exchange(gd.VIEWS, '{"message":"Must have push access to repository"}', status=403)],
-            Finding("error", f"{REPO}: HTTP 403: the token can't read its traffic, which needs push access"),
+            Finding("error", f"{REPO}: HTTP 403: the token can't read its traffic, which needs push access", FILE),
         ),
         (
             [exchange(gd.VIEWS, '{"message":"Not Found"}', status=404)],
-            Finding("error", f"{REPO}: HTTP 404: the repo doesn't exist, or the token can't read it"),
+            Finding("error", f"{REPO}: HTTP 404: the repo doesn't exist, or the token can't read it", FILE),
         ),
         (
             thrice(exchange(gd.VIEWS, "", status=429)),
-            Finding("warn", f"{REPO}: could not fetch its traffic: HTTP 429, rate limited"),
+            Finding("warn", f"{REPO}: could not fetch its traffic: HTTP 429, rate limited", FILE),
         ),
-        (thrice(failed(gd.VIEWS)), Finding("warn", f"{REPO}: could not fetch its traffic: HTTP 0")),
+        (thrice(failed(gd.VIEWS)), Finding("warn", f"{REPO}: could not fetch its traffic: HTTP 0", FILE)),
     ],
     ids=["no push access", "not found", "rate limited", "no connection"],
 )

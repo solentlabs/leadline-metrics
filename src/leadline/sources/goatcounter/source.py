@@ -51,26 +51,27 @@ def collect(ctx: Context, cfg: Any) -> None:
 
 
 def check(ctx: Context, cfg: Any) -> list[Finding]:
-    """Whether each entry's site exists and the token can read it; writes nothing, never raises for the API.
+    """Whether each entry's site exists and the token can read it, each finding about its entry's file; writes
+    nothing, never raises for the API.
 
     It asks for the week's total, as collection does, so a run reuses that answer. A 404 is an error
     here, so a wrong site shows the night it is wrong.
     """
     findings = []
     for entry in cfg:
-        site = entry["site"]
+        site, file = entry["site"], spec.file_name(entry)
         try:
             _total(ctx, site, recoverable=())
         except HttpError as e:
             if e.unfixable:
                 message = f"HTTP {e.code}: the site doesn't exist, or the token can't read it"
-                findings.append(Finding("error", f"{site}: {message}"))
+                findings.append(Finding("error", f"{site}: {message}", file))
             else:
-                findings.append(Finding("warn", f"{site}: could not read the site: HTTP {e.code}"))
+                findings.append(Finding("warn", f"{site}: could not read the site: HTTP {e.code}", file))
         except UnusableError as e:
-            findings.append(Finding("warn", f"{site}: could not read the site: {e}"))
+            findings.append(Finding("warn", f"{site}: could not read the site: {e}", file))
         else:
-            findings.append(Finding("ok", f"{site}: the site exists and the token can read it"))
+            findings.append(Finding("ok", f"{site}: the site exists and the token can read it", file))
     return findings
 
 

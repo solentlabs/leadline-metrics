@@ -364,7 +364,9 @@ def check(tmp_path: Path, cfg: Any, *responses: Any) -> list[Finding]:
 
 
 def test_check_finds_the_repo(tmp_path: Path) -> None:
-    assert check(tmp_path, CONFIG, exchange(REPO_URL, github_repo(REPO))) == [Finding("ok", f"{REPO}: the repo exists")]
+    assert check(tmp_path, CONFIG, exchange(REPO_URL, github_repo(REPO))) == [
+        Finding("ok", f"{REPO}: the repo exists", FILE)
+    ]
 
 
 @pytest.mark.parametrize(
@@ -372,18 +374,21 @@ def test_check_finds_the_repo(tmp_path: Path) -> None:
     [
         (
             [exchange(REPO_URL, '{"message":"Not Found"}', status=404)],
-            Finding("error", f"{REPO}: HTTP 404: the repo doesn't exist, or the token can't read it"),
+            Finding("error", f"{REPO}: HTTP 404: the repo doesn't exist, or the token can't read it", FILE),
         ),
         (
             [exchange(REPO_URL, "", status=401)],
-            Finding("error", f"{REPO}: HTTP 401: the repo doesn't exist, or the token can't read it"),
+            Finding("error", f"{REPO}: HTTP 401: the repo doesn't exist, or the token can't read it", FILE),
         ),
         (
             thrice(exchange(REPO_URL, "", status=403, headers={"Retry-After": "60"})),
-            Finding("warn", f"{REPO}: could not fetch the repo: HTTP 403, rate limited"),
+            Finding("warn", f"{REPO}: could not fetch the repo: HTTP 403, rate limited", FILE),
         ),
-        (thrice(exchange(REPO_URL, "", status=503)), Finding("warn", f"{REPO}: could not fetch the repo: HTTP 503")),
-        (thrice(failed(REPO_URL)), Finding("warn", f"{REPO}: could not fetch the repo: HTTP 0")),
+        (
+            thrice(exchange(REPO_URL, "", status=503)),
+            Finding("warn", f"{REPO}: could not fetch the repo: HTTP 503", FILE),
+        ),
+        (thrice(failed(REPO_URL)), Finding("warn", f"{REPO}: could not fetch the repo: HTTP 0", FILE)),
     ],
     ids=["not found", "rejected", "rate limited", "unavailable", "no connection"],
 )
@@ -394,12 +399,13 @@ def test_check_reports_api_trouble_as_a_finding_never_a_crash(
 
 
 def test_check_checks_every_entry(tmp_path: Path) -> None:
+    other_file = "github-releases-other.jsonl"  # the a/other entry's file
     other = f"{GITHUB_API}/repos/a/other"
     findings = check(
         tmp_path, [*CONFIG, {"repo": "a/other"}], exchange(REPO_URL, github_repo(REPO)), exchange(other, "", status=404)
     )
 
-    assert [f.level for f in findings] == ["ok", "error"]
+    assert [(f.level, f.file) for f in findings] == [("ok", FILE), ("error", other_file)]
 
 
 # --- the summary ---

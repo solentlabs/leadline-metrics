@@ -32,6 +32,8 @@ def check(ctx: Context, cfg: Any) -> list[Finding]:
     the answers no rule matches where no `models` rule matches the modem in the same form, each rule an answer
     matched that gives another region than a person's profile location in the day's row, and each `models` rule that
     gives another region than the answer in the same form.
+
+    Each finding is about its entry's file.
     """
     findings = []
     for entry in cfg:
@@ -44,7 +46,7 @@ def check(ctx: Context, cfg: Any) -> list[Finding]:
             )
         if found[-1].level == "ok" and {config.REGION_ANSWER, config.REGION_MODEL} & set(entry["regions"]):
             found += _form_findings(ctx, entry)
-        findings += found
+        findings += [f.about(spec.file_name(entry)) for f in found]
     return findings
 
 

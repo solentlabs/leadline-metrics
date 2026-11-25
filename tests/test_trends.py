@@ -1384,6 +1384,24 @@ def test_a_pages_health_keeps_only_what_concerns_it_and_every_crash_and_report_o
     }
 
 
+def test_a_pages_checks_are_those_of_its_files_and_its_sources_checks_of_no_one_file(tmp_path: Path) -> None:
+    """One.html shows source c's section for c.jsonl, not its other entry's file, c2.jsonl; a health row
+    written before checks named their file matches by source alone."""
+    checks = [
+        {"source": "c", "level": "warn", "message": "mine", "file": "c.jsonl"},
+        {"source": "c", "level": "error", "message": "another entry's", "file": "c2.jsonl"},
+        {"source": "c", "level": "warn", "message": "the source's", "file": None},
+        {"source": "c", "level": "warn", "message": "an older row's"},
+    ]
+    ctx = context(tmp_path)
+    sections = paged(tmp_path)
+    seed(tmp_path, HEALTH, [health_row(checks=checks)])
+
+    trends.write(ctx, sections, HEALTH, PAGED, PAGES)
+
+    assert embedded(tmp_path / "one.html")["health"]["checks"] == [checks[0], *checks[2:]]
+
+
 def test_a_page_whose_files_are_all_current_says_so(tmp_path: Path) -> None:
     ctx = context(tmp_path)
     sections = paged(tmp_path)

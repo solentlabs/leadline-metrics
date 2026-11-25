@@ -191,8 +191,8 @@ def _portfolio(data: Mapping[str, Any], projects: Sequence[str]) -> dict[str, An
 
 def _page_health(health: Mapping[str, Any] | None, sections: Sequence[Mapping[str, Any]]) -> dict[str, Any] | None:
     """The health findings that concern a page's `sections`: the stale, failed and critical items of the files they
-    read, and the checks of their sources; and every crash (critical with no file), and every critical of the reports
-    and trends."""
+    read, and the checks of those files (or, for a check of no one file, of their sources); and every crash (critical
+    with no file), and every critical of the reports and trends."""
     if health is None:
         return None
     files, sources = {s["file"] for s in sections}, {s["source"] for s in sections}
@@ -205,8 +205,14 @@ def _page_health(health: Mapping[str, Any] | None, sections: Sequence[Mapping[st
             for item in health["critical"]
             if item.get("file") is None or item.get("file") in files or item.get("source") in RUN_WIDE
         ],
-        "checks": [check for check in health["checks"] if check.get("source") in sources],
+        "checks": [check for check in health["checks"] if _concerns(check, files, sources)],
     }
+
+
+def _concerns(check: Mapping[str, Any], files: set[str], sources: set[str]) -> bool:
+    """Whether a check concerns a page: its file is the page's, or, with no file, its source is."""
+    file = check.get("file")
+    return file in files if file is not None else check.get("source") in sources
 
 
 # ---- trends.json ---------------------------------------------------------------------------------
