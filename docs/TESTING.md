@@ -427,7 +427,10 @@ writers. `tests/oracle/test_reports_oracle.py` (marked `oracle`) reads the
 - **Match rule.** A file of table blocks, its marker lines taken out, must
   be the script's file byte for byte, so the tables match and nothing
   outside them is lost. The lines file must hold, in its blocks with
-  something to show, a blank line apart, the script's lines file.
+  something to show, a blank line apart, every line of the script's lines
+  file in the script's order. Lines leadline adds between them pass: the
+  script is frozen, so a project added since has no counterpart there, and
+  the summary grows as leadline collects more.
 - **Allowed differences** are listed in the test, each with its reason:
   the script's stale line (it uses its own list of lagging files, where
   leadline uses [one definition](ARCHITECTURE.md#terms)); the version line

@@ -18,8 +18,9 @@ rewrites it whole. Then:
 
 - a file of table blocks, once its marker lines are taken out, is the script's file, byte for byte: the tables
   match and nothing outside them is lost;
-- the lines file holds, in its blocks with something to show, in order and a blank line apart, the script's
-  SCRIPT_LINES.
+- the lines file holds, in its blocks with something to show, in order and a blank line apart, every line of the
+  script's SCRIPT_LINES, in the script's order. Lines leadline adds between them pass: the script is frozen, so
+  a summary of a project it never knew has no counterpart, and the summary grows as leadline collects more.
 
 In the lines file only the differences in DECIDED may remain, lines that match one of its patterns left
 out on both sides, and the script's headings over nothing (EMPTY_SECTION).
@@ -65,6 +66,15 @@ def _decided(text: str) -> list[str]:
     # The script starts the file with a blank line when nothing is critical; leadline writes none.
     lines = EMPTY_SECTION.sub("", text).strip("\n").splitlines()
     return [line for line in lines if not any(re.search(pattern, line) for pattern in DECIDED)]
+
+
+def _missing(expected: Sequence[str], actual: Sequence[str]) -> list[str]:
+    """The lines of `expected` that `actual` doesn't hold in order: from the first it lacks, the rest."""
+    rest = iter(actual)
+    for i, line in enumerate(expected):
+        if line not in rest:
+            return list(expected[i:])
+    return []
 
 
 def _config() -> list[dict[str, Any]]:
@@ -164,6 +174,6 @@ def test_the_reports_config_gives_the_scripts_reports(tmp_path: Path) -> None:
         expected = (done.metrics / script_name.get(file, file)).read_text(encoding="utf-8")
         text = (out / file).read_text(encoding="utf-8")
         if file == lines_file:
-            assert _decided("\n".join(_blocks(text))) == _decided(expected), file
+            assert _missing(_decided(expected), _decided("\n".join(_blocks(text)))) == [], file
         else:
             assert _unmarked(text) == expected, file
