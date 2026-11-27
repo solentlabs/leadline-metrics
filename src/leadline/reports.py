@@ -26,7 +26,16 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, NamedTuple, Sequence, Tuple
 
 from leadline import store
-from leadline.config import Hide, Section, complement, plain_jsonl, section_lines, version_key
+from leadline.config import (
+    Hide,
+    Section,
+    complement,
+    plain_jsonl,
+    prerelease,
+    section_lines,
+    split_version,
+    version_key,
+)
 from leadline.context import Reporter
 from leadline.storage import File
 
@@ -836,12 +845,12 @@ def _versions(rows: Sequence[Row], piece: Mapping[str, Any], _outer: Fields, _st
     if "pick" not in piece:
         return _Found({"text": format_versions(versions)})
     newest_first = sorted(versions, key=version_key, reverse=True)
-    pre = [version for version in newest_first if "-" in version]
-    base = pre[0].partition("-")[0] if pre else None
+    pre = [version for version in newest_first if prerelease(version)]
+    base = split_version(pre[0])[0] if pre else None
     chosen = {
-        "releases": [version for version in newest_first if "-" not in version],
-        "newest_prereleases": [version for version in pre if version.partition("-")[0] == base],
-        "older_prereleases": [version for version in pre if version.partition("-")[0] != base],
+        "releases": [version for version in newest_first if not prerelease(version)],
+        "newest_prereleases": [version for version in pre if split_version(version)[0] == base],
+        "older_prereleases": [version for version in pre if split_version(version)[0] != base],
     }[piece["pick"]]
     everything = sum(versions.values())
     items = [_version_item(rows, piece, version, versions[version], everything) for version in chosen]
@@ -859,7 +868,7 @@ def _versions(rows: Sequence[Row], piece: Mapping[str, Any], _outer: Fields, _st
 def _version_item(rows: Sequence[Row], piece: Mapping[str, Any], version: str, count: int, everything: int) -> Row:
     """A version as an item: its base and prerelease tag, its count and share of all the counts, and with
     `trail` its count in each of the newest rows, 0 where a row doesn't have it, and the trail's change."""
-    base, _, tag = version.partition("-")
+    base, _, tag = split_version(version)
     item: Row = {"version": version, "base": base, "tag": tag or None, "count": count}
     item["share"] = round(100 * count / everything) if everything else None
     if "trail" in piece:
@@ -1100,14 +1109,15 @@ def format_versions(versions: Mapping[str, int]) -> str:
     into its base version and channel (`1.2.0-beta`), or shown as itself when alone. The counts add up to
     the total.
     """
-    pre = {version: n for version, n in versions.items() if "-" in version}
+    pre = {version: n for version, n in versions.items() if prerelease(version)}
     newest = max(pre, key=version_key) if pre else None
-    entries = [(version, n) for version, n in versions.items() if "-" not in version or version == newest]
+    entries = [(version, n) for version, n in versions.items() if version not in pre or version == newest]
     buckets: dict[str, list[tuple[str, int]]] = {}
     for version, n in pre.items():
         if version != newest:
-            base, _, tag = version.partition("-")
-            buckets.setdefault(f"{base}-{tag.split('.', 1)[0]}", []).append((version, n))
+            base, sep, tag = split_version(version)
+            channel = tag.split(".", 1)[0] if sep else tag.rstrip("0123456789")  # beta, of beta.2; b, of b2
+            buckets.setdefault(f"{base}{sep}{channel}", []).append((version, n))
     for label, members in buckets.items():
         entries.append(members[0] if len(members) == 1 else (label, sum(n for _, n in members)))
     return " ".join(f"**v{version}:** {n}" for version, n in sorted(entries, key=lambda e: version_key(e[0])))

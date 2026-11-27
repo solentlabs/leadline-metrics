@@ -197,6 +197,15 @@ def test_without_prereleases_a_breakdown_of_versions_has_none_drawn_or_added_to_
     assert (field["other"], field["prerelease"], field["betas"]["keys"]) == ([0], [0], [])
 
 
+def test_a_python_style_prerelease_is_a_prerelease_and_older_than_its_release(tmp_path: Path) -> None:
+    rows = [day(1, [release("v1.0.0", 5), release("v1.1.0", 1), release("v1.1.0b2", 2), release("v1.1.0rc10", 3)])]
+
+    field = stack(tmp_path, rows)
+
+    assert counts(field) == {"1.0.0": [5], "1.1.0": [1]}
+    assert (field["prerelease"], field["betas"]["keys"]) == ([5], ["1.1.0"])
+
+
 def test_a_hidden_item_is_in_no_line_and_not_in_older(tmp_path: Path) -> None:
     rows = [day(1, [release(f"v1.{n}.0", n) for n in range(1, 9)])]
     seed(tmp_path, "r.jsonl", rows)
@@ -314,6 +323,14 @@ def test_a_chart_since_skips_an_item_without_a_readable_start_and_honors_hide(tm
     assert counts(since(tmp_path, rows)) == {"1.3.0": [4, 6, *[None] * 6], "1.4.0": [1, *[None] * 7]}
     hide = [Hide("releases", "tag", frozenset({"1.3.0"}))]
     assert counts(since(tmp_path / "hidden", rows, hide)) == {"1.4.0": [1, *[None] * 7]}
+
+
+def test_a_chart_since_leaves_out_python_style_prereleases_and_keeps_the_releases_after_them(tmp_path: Path) -> None:
+    at = "2026-09-02T08:00:00Z"
+    betas = [published(f"v0.1.0b{n}", at, n) for n in range(1, 6)]
+    rows = [day(1, []), day(2, [*betas, published("v0.1.0", at, 4), published("v0.1.1", at, 9)])]
+
+    assert sorted(counts(since(tmp_path, rows))) == ["0.1.0", "0.1.1"]
 
 
 def test_a_chart_since_ends_a_week_past_the_newest_items_age_however_old_the_older_ones_are(tmp_path: Path) -> None:

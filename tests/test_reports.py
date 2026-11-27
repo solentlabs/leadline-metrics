@@ -993,6 +993,14 @@ def test_a_versions_column_collapses_older_prereleases(tmp_path: Path) -> None:
     )
 
 
+def test_a_versions_column_reads_python_style_prereleases_as_prereleases(tmp_path: Path) -> None:
+    versions = {"1.0.0": 5, "1.1.0b1": 1, "1.1.0b2": 2, "1.1.0b10": 3, "1.1.0": 9}
+    seed(tmp_path / "out", "installs.jsonl", [{"date": "2026-09-24", "versions": versions}])
+    table = {"from": "installs.jsonl", "columns": [{"title": "Versions", "field": "versions", "aggregate": "versions"}]}
+
+    assert table_rows(tmp_path, table)[2] == "| **v1.0.0:** 5 **v1.1.0b:** 3 **v1.1.0b10:** 3 **v1.1.0:** 9 |"
+
+
 def test_a_column_text_combines_its_aggregates(tmp_path: Path) -> None:
     """A cell can show several aggregates of its values: `**last** (+change) · range low-high` where it varies."""
     seed(tmp_path / "out", "issues.jsonl", daily("open", OPEN))

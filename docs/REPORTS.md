@@ -248,7 +248,7 @@ The items aggregates:
   first. `pick` is `releases` (versions without a prerelease tag),
   `newest_prereleases` (the prereleases of the newest prerelease's
   version) or `older_prereleases` (the others).
-  - Item fields: `version`, `base`, `tag` (the prerelease tag, `beta.5`),
+  - Item fields: `version`, `base`, `tag` (the prerelease tag, `beta.5` or `b5`),
     `count`, `share` (its percent of all the counts, rounded); with
     `trail: N`, `trail`, its count in each of the newest N rows, 0 where a
     row doesn't have it (`24 45 56 60`), and `trail_change`, the last less

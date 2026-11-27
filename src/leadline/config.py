@@ -626,7 +626,9 @@ MINUS_KINDS = ("snapshot", "change", "value")  # the kinds a chart-only differen
 NOTES_MAX = 10  # the notes an entry may carry
 NOTE_TEXT_MAX = 60  # the characters of a note's text
 COLORS = ("s1", "s2", "s3", "s4", "s5", "s6")  # the theme tokens (--s1 ...) a field may be drawn in
-VERSION = re.compile(r"\d+(\.\d+)*(-[0-9A-Za-z.-]+)?")  # a version, as a breakdown's keys may be: 1.2.0, 2.0.0-beta.1
+# A version, as a breakdown's keys may be: 1.2.0, 2.0.0-beta.1, or with a Python prerelease tag, 0.1.0b1
+VERSION = re.compile(r"\d+(\.\d+)*(-[0-9A-Za-z.-]+|(a|b|rc)\d*)?")
+PYTHON_PRERELEASE = re.compile(r"(\d+(?:\.\d+)*)((?:a|b|rc)\d*)")  # 0.1.0b1, 1.2.0rc2: a release part and a tag
 
 
 class Shown(NamedTuple):
@@ -978,11 +980,26 @@ def _literal(text: str) -> str:
     return text.replace("{", "{{").replace("}", "}}")
 
 
+def split_version(version: str) -> tuple[str, str, str]:
+    """A version's release part, what joins its prerelease tag to it, and the tag, empty for a release: `2.0.0`, `-`,
+    `beta.1` for 2.0.0-beta.1, and `0.1.0`, ``, `b1` for Python's 0.1.0b1."""
+    base, sep, tag = version.partition("-")
+    python = None if sep else PYTHON_PRERELEASE.fullmatch(version)
+    return (python.group(1), "", python.group(2)) if python else (base, sep, tag)
+
+
+def prerelease(version: str) -> bool:
+    """Whether `version` is a prerelease version (`2.0.0-beta.1`, `0.1.0b1`)."""
+    return bool(VERSION.fullmatch(version)) and bool(split_version(version)[2])
+
+
 def version_key(version: str) -> tuple[Any, ...]:
-    """A version's order: numbers as numbers, and a prerelease before its release (1.2.0-beta.10 < 1.2.0)."""
-    base, _, tag = version.partition("-")
+    """A version's order: numbers as numbers, and a prerelease before its release (1.2.0-beta.10 < 1.2.0, and
+    1.2.0b2 < 1.2.0b10 < 1.2.0)."""
+    base, _, tag = split_version(version)
     return (_version_parts(base), 0 if tag else 1, _version_parts(tag))
 
 
 def _version_parts(text: str) -> tuple[tuple[int, Any], ...]:
-    return tuple((0, int(part)) if part.isdigit() else (1, part) for part in text.split(".") if part)
+    """The runs of digits and of other characters in `text`, dots apart: `b10` is `b`, 10."""
+    return tuple((0, int(part)) if part.isdigit() else (1, part) for part in re.findall(r"\d+|[^\d.]+", text))

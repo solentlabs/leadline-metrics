@@ -26,6 +26,8 @@ from leadline.config import (
     check_shown,
     complement,
     plain_file,
+    prerelease,
+    split_version,
     untagged,
     version_key,
 )
@@ -415,7 +417,7 @@ def _since(rows: Sequence[store.Row], shown: Shown) -> dict[str, Any]:
     starts = _starts(rows, shown)
     first, last = readings[0][0], readings[-1][0]
     drawn = {
-        name: start for name, start in starts.items() if start >= first and (shown.prereleases or not _prerelease(name))
+        name: start for name, start in starts.items() if start >= first and (shown.prereleases or not prerelease(name))
     }
     kept = sorted(drawn, key=version_key)[-BREAKDOWN_TOP:]
     days = [then for then, _ in readings]
@@ -503,7 +505,7 @@ def _breakdown(
         {
             key: n
             for key, n in obj.items()
-            if key and isinstance(n, (int, float)) and not isinstance(n, bool) and (prereleases or not _prerelease(key))
+            if key and isinstance(n, (int, float)) and not isinstance(n, bool) and (prereleases or not prerelease(key))
         }
         if isinstance(obj, dict)
         else None
@@ -519,16 +521,16 @@ def _breakdown(
     kept = [key for key in neutral if key in peak and not versions]
     if versions:
         extra["prerelease"] = [
-            None if row is None else sum(n for key, n in row.items() if "-" in key) for row in counts
+            None if row is None else sum(n for key, n in row.items() if prerelease(key)) for row in counts
         ]
         extra["betas"] = _betas(counts, peak)
         by_release = bands == "release"
         band = str if by_release else _release_line
         counts = [
-            None if row is None else _sum_by(band, {key: n for key, n in row.items() if "-" not in key})
+            None if row is None else _sum_by(band, {key: n for key, n in row.items() if not prerelease(key)})
             for row in counts
         ]
-        keys = sorted({band(key) for key in peak if "-" not in key}, key=version_key)
+        keys = sorted({band(key) for key in peak if not prerelease(key)}, key=version_key)
         keys = keys if by_release and not lines else keys[-BREAKDOWN_TOP:]
         if by_release:
             extra["bands"] = bands
@@ -549,22 +551,17 @@ def _breakdown(
     }
 
 
-def _prerelease(key: str) -> bool:
-    """Whether a breakdown's key is a prerelease version (`2.0.0-beta.1`)."""
-    return "-" in key and bool(VERSION.fullmatch(key))
-
-
 def _base(version: str) -> str:
     """A prerelease's base version: its release part (`3.14.0`, for 3.14.0-beta.11)."""
-    return version.partition("-")[0]
+    return split_version(version)[0]
 
 
 def _betas(counts: Sequence[Mapping[str, float] | None], peak: Mapping[str, float]) -> dict[str, Any]:
     """The prereleases' counts by base version, as `_breakdown` gives a breakdown: BREAKDOWN_TOP `keys`, the newest
     bases, oldest first, each key's count in each row (0 where the row lacks it), and `other`, the older bases'."""
-    keys = sorted({_base(key) for key in peak if "-" in key}, key=version_key)[-BREAKDOWN_TOP:]
+    keys = sorted({_base(key) for key in peak if prerelease(key)}, key=version_key)[-BREAKDOWN_TOP:]
     by_base = [
-        None if row is None else _sum_by(_base, {key: n for key, n in row.items() if "-" in key}) for row in counts
+        None if row is None else _sum_by(_base, {key: n for key, n in row.items() if prerelease(key)}) for row in counts
     ]
     return {
         "keys": keys,
