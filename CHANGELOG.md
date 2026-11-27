@@ -3,6 +3,14 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions
 follow [SemVer](https://semver.org/).
 
+## 0.9.7 - 2026-11-27
+
+- A Python prerelease tag (`0.1.0b1`, `1.2.0rc1`) counts as a prerelease, as
+  a dash-style tag (`1.2.0-beta.1`) already did. Before, such a beta was read
+  as a release that sorted after the next release, so "Downloads since
+  release" kept only the newest five betas and dropped the releases, and
+  "Downloads by version" drew the betas as versions of their own.
+
 ## 0.9.6 - 2026-11-25
 
 - A page of trends shows only the checks of the files it shows. Each
